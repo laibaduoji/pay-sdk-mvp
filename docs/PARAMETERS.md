@@ -146,6 +146,18 @@
 
 ## 8. 示例集
 
+可交互 demo 见 [`demo/`](../demo/)（`npm run demo`）。各页共用 [`demo/config.js`](../demo/config.js) 中的 gateway / publicKey / payment 等参数。
+
+| PARAMETERS | Demo 页面                                                              |
+| ---------- | ---------------------------------------------------------------------- |
+| 8.1        | [01-google-pay-gateway.html](../demo/01-google-pay-gateway.html)       |
+| 8.2        | [02-google-pay-direct.html](../demo/02-google-pay-direct.html)         |
+| 8.3        | [03-google-pay-billing.html](../demo/03-google-pay-billing.html)       |
+| 8.4        | [04-google-pay-production.html](../demo/04-google-pay-production.html) |
+| 8.5        | [05-apple-pay-basic.html](../demo/05-apple-pay-basic.html)             |
+| 8.6        | [06-apple-pay-billing.html](../demo/06-apple-pay-billing.html)         |
+| 8.7        | [07-lifecycle.html](../demo/07-lifecycle.html)                         |
+
 ### 8.1 Google Pay — 最简（PAYMENT_GATEWAY，TEST）
 
 ```js

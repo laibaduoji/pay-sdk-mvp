@@ -14,8 +14,31 @@ Written in **TypeScript**; bundled to a single IIFE file with Vite.
 npm install
 npm run build      # type-check, bundle dist/pay-sdk.js (global: window.PaySdk), emit dist/types/*.d.ts
 npm run typecheck  # type-check only (tsc --noEmit)
-npm run dev        # local demo server (index.html)
+npm run demo       # build + serve PARAMETERS examples at http://localhost:5173/
+npm run format     # prettier write
 ```
+
+## Demos
+
+示例页在 [`demo/`](demo/)，一一对应 [docs/PARAMETERS.md](docs/PARAMETERS.md) 第 8 节：
+
+| 文件                                                                     | 对应示例                    |
+| ------------------------------------------------------------------------ | --------------------------- |
+| [demo/index.html](demo/index.html)                                       | 目录页                      |
+| [demo/01-google-pay-gateway.html](demo/01-google-pay-gateway.html)       | 8.1 PAYMENT_GATEWAY         |
+| [demo/02-google-pay-direct.html](demo/02-google-pay-direct.html)         | 8.2 DIRECT                  |
+| [demo/03-google-pay-billing.html](demo/03-google-pay-billing.html)       | 8.3 账单地址                |
+| [demo/04-google-pay-production.html](demo/04-google-pay-production.html) | 8.4 PRODUCTION              |
+| [demo/05-apple-pay-basic.html](demo/05-apple-pay-basic.html)             | 8.5 Apple Pay 最简          |
+| [demo/06-apple-pay-billing.html](demo/06-apple-pay-billing.html)         | 8.6 Apple 账单地址          |
+| [demo/07-lifecycle.html](demo/07-lifecycle.html)                         | 8.7 ready → mount → destroy |
+
+共享测试参数写在 [`demo/config.js`](demo/config.js)（`gateway`、`gatewayMerchantId`、`publicKey`、`merchantName`、`validateMerchantUrl`、`payment` 等）。改一处即可让各示例复用。
+
+商户接入最简页（只引入 `pay-sdk.js`，参数写死在页面）：
+
+- [demo/merchant-google-pay.html](demo/merchant-google-pay.html)
+- [demo/merchant-apple-pay.html](demo/merchant-apple-pay.html)
 
 ## Usage
 

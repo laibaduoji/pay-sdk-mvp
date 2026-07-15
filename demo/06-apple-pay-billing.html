@@ -1,0 +1,51 @@
+<!doctype html>
+<html lang="zh-CN">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>8.6 Apple Pay — Billing</title>
+    <link rel="stylesheet" href="./common.css" />
+  </head>
+  <body>
+    <p class="meta"><a href="./index.html">← Demos</a> · PARAMETERS §8.6</p>
+    <h1>Apple Pay — 账单地址 + 自定义能力/卡组织/按钮</h1>
+    <p class="meta">需 Safari / iOS、HTTPS，以及已校验域名。</p>
+    <p id="status">Checking environment…</p>
+    <div id="pay-container"></div>
+    <pre id="output">Result will appear here.</pre>
+
+    <script src="/pay-sdk.js"></script>
+    <script src="./config.js"></script>
+    <script src="./demo-ui.js"></script>
+    <script>
+      const cfg = window.PaySdkDemoConfig
+      const ui = window.PaySdkDemoUI
+      const { onSuccess, onError, onCancel } = ui.handlers()
+
+      const sdk = PaySdk.init({
+        method: 'applePay',
+        container: '#pay-container',
+        billingAddressRequired: true,
+        payment: {
+          amount: '49.00',
+          currency: 'GBP',
+          countryCode: 'GB'
+        },
+        applePay: {
+          validateMerchantUrl: cfg.applePay.validateMerchantUrl,
+          merchantCapabilities: ['supports3DS'],
+          supportedNetworks: ['visa', 'masterCard', 'amex'],
+          button: { buttonstyle: 'white-outline', type: 'buy', locale: 'zh-CN' }
+        },
+        onSuccess(result) {
+          onSuccess(result)
+          console.log('billingContact', result.billingContact)
+        },
+        onError,
+        onCancel
+      })
+
+      ui.run(sdk)
+    </script>
+  </body>
+</html>

@@ -1,0 +1,42 @@
+<!doctype html>
+<html lang="zh-CN">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>8.1 Google Pay — PAYMENT_GATEWAY</title>
+    <link rel="stylesheet" href="./common.css" />
+  </head>
+  <body>
+    <p class="meta"><a href="./index.html">← Demos</a> · PARAMETERS §8.1</p>
+    <h1>Google Pay — 最简（PAYMENT_GATEWAY，TEST）</h1>
+    <p id="status">Checking environment…</p>
+    <div id="pay-container"></div>
+    <pre id="output">Result will appear here.</pre>
+
+    <script src="/pay-sdk.js"></script>
+    <script src="./config.js"></script>
+    <script src="./demo-ui.js"></script>
+    <script>
+      const cfg = window.PaySdkDemoConfig
+      const ui = window.PaySdkDemoUI
+
+      const sdk = PaySdk.init({
+        method: 'googlePay',
+        container: '#pay-container',
+        payment: { ...cfg.payment },
+        googlePay: {
+          tokenizationSpecification: {
+            type: 'PAYMENT_GATEWAY',
+            parameters: {
+              gateway: cfg.googlePay.gateway,
+              gatewayMerchantId: cfg.googlePay.gatewayMerchantId
+            }
+          }
+        },
+        ...ui.handlers()
+      })
+
+      ui.run(sdk)
+    </script>
+  </body>
+</html>

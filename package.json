@@ -5,7 +5,8 @@
   "type": "module",
   "types": "dist/types/index.d.ts",
   "scripts": {
-    "dev": "vite",
+    "dev": "vite --config vite.demo.config.ts",
+    "demo": "npm run build && vite --config vite.demo.config.ts",
     "typecheck": "tsc --noEmit",
     "build": "tsc --noEmit && vite build && tsc --emitDeclarationOnly",
     "preview": "vite preview",
