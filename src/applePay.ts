@@ -28,7 +28,7 @@ function buildPaymentRequest(config: PaySdkConfig): ApplePayJS.ApplePayPaymentRe
     merchantCapabilities: ap?.merchantCapabilities || DEFAULT_CAPABILITIES,
     supportedNetworks: ap?.supportedNetworks || DEFAULT_NETWORKS,
     total: {
-      label: payment.label || 'ALCHEMY GPS EUROPE UAB',
+      label: 'ALCHEMY GPS EUROPE UAB',
       type: 'final',
       amount: String(payment.amount)
     }
@@ -46,10 +46,7 @@ async function fetchMerchantSession(config: PaySdkConfig, validationURL: string)
   const res = await fetch(ap.validateMerchantUrl, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({
-      validationURL,
-      merchantIdentifier: ap.merchantIdentifier
-    })
+    body: JSON.stringify({ validationURL })
   })
 
   if (!res.ok) {

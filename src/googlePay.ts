@@ -72,7 +72,7 @@ function buildPaymentDataRequest(config: PaySdkConfig): google.payments.api.Paym
       currencyCode: payment.currency,
       totalPriceStatus: 'FINAL',
       totalPrice: String(payment.amount),
-      totalPriceLabel: payment.label || 'Total'
+      totalPriceLabel: 'Total'
     }
   }
 }

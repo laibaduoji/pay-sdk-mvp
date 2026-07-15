@@ -25,12 +25,13 @@
 
 ## 2. `payment`（交易信息）
 
-| 参数          | 类型     |  必传  | 默认值                                                | 说明                     |
-| ------------- | -------- | :----: | ----------------------------------------------------- | ------------------------ |
-| `amount`      | `string` | **是** | —                                                     | 金额字符串，如 `'10.00'` |
-| `currency`    | `string` | **是** | —                                                     | 货币代码，如 `'USD'`     |
-| `countryCode` | `string` | **是** | —                                                     | 国家代码，如 `'US'`      |
-| `label`       | `string` |   否   | Google: `'Total'` / Apple: `'ALCHEMY GPS EUROPE UAB'` | 支付单显示名称           |
+| 参数          | 类型     |  必传  | 默认值 | 说明                     |
+| ------------- | -------- | :----: | ------ | ------------------------ |
+| `amount`      | `string` | **是** | —      | 金额字符串，如 `'10.00'` |
+| `currency`    | `string` | **是** | —      | 货币代码，如 `'USD'`     |
+| `countryCode` | `string` | **是** | —      | 国家代码，如 `'US'`      |
+
+> 支付单展示名称由 SDK 固定默认：Google Pay `totalPriceLabel = 'Total'`，Apple Pay `total.label = 'ALCHEMY GPS EUROPE UAB'`，不可通过参数覆盖。
 
 ---
 
@@ -58,13 +59,12 @@
 
 ## 4. `applePay`
 
-| 参数                   | 类型                   |  必传  | 默认值                                               | 说明                                                                        |
-| ---------------------- | ---------------------- | :----: | ---------------------------------------------------- | --------------------------------------------------------------------------- |
-| `validateMerchantUrl`  | `string`               | **是** | —                                                    | 商户服务端域名校验接口，SDK 会 `POST { validationURL, merchantIdentifier }` |
-| `merchantIdentifier`   | `string`               |   否   | 省略                                                 | Apple Merchant ID，随校验请求一起发给你的服务端                             |
-| `merchantCapabilities` | `string[]`             |   否   | `['supports3DS', 'supportsCredit', 'supportsDebit']` | 商户能力                                                                    |
-| `supportedNetworks`    | `string[]`             |   否   | `['masterCard', 'visa']`                             | 支持的卡组织                                                                |
-| `button`               | `ApplePayButtonConfig` |   否   | 见下                                                 | 官方 `<apple-pay-button>` 展示                                              |
+| 参数                   | 类型                   |  必传  | 默认值                                               | 说明                                                    |
+| ---------------------- | ---------------------- | :----: | ---------------------------------------------------- | ------------------------------------------------------- |
+| `validateMerchantUrl`  | `string`               | **是** | —                                                    | 商户服务端域名校验接口，SDK 会 `POST { validationURL }` |
+| `merchantCapabilities` | `string[]`             |   否   | `['supports3DS', 'supportsCredit', 'supportsDebit']` | 商户能力                                                |
+| `supportedNetworks`    | `string[]`             |   否   | `['masterCard', 'visa']`                             | 支持的卡组织                                            |
+| `button`               | `ApplePayButtonConfig` |   否   | 见下                                                 | 官方 `<apple-pay-button>` 展示                          |
 
 ### `applePay.button`
 
@@ -175,8 +175,7 @@ PaySdk.init({
   payment: {
     amount: '25.00',
     currency: 'EUR',
-    countryCode: 'DE',
-    label: 'Order #123'
+    countryCode: 'DE'
   },
   googlePay: {
     merchantName: 'Demo Merchant',
@@ -241,11 +240,9 @@ PaySdk.init({
   payment: {
     amount: '10.00',
     currency: 'USD',
-    countryCode: 'US',
-    label: 'ALCHEMY GPS EUROPE UAB'
+    countryCode: 'US'
   },
   applePay: {
-    merchantIdentifier: 'merchant.com.demo',
     validateMerchantUrl: 'https://your-server.com/apple-pay/session'
   },
   onSuccess: (r) => console.log(r.token)
@@ -262,11 +259,9 @@ PaySdk.init({
   payment: {
     amount: '49.00',
     currency: 'GBP',
-    countryCode: 'GB',
-    label: 'Subscription'
+    countryCode: 'GB'
   },
   applePay: {
-    merchantIdentifier: 'merchant.com.demo',
     validateMerchantUrl: 'https://your-server.com/apple-pay/session',
     merchantCapabilities: ['supports3DS'],
     supportedNetworks: ['visa', 'masterCard', 'amex'],

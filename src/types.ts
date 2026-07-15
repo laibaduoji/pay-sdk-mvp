@@ -6,7 +6,6 @@ export interface PaymentConfig {
   amount: string
   currency: string
   countryCode: string
-  label?: string
 }
 
 export interface GooglePayButtonConfig {
@@ -32,7 +31,6 @@ export interface ApplePayButtonConfig {
 }
 
 export interface ApplePayConfig {
-  merchantIdentifier?: string
   validateMerchantUrl: string
   merchantCapabilities?: ApplePayJS.ApplePayMerchantCapability[]
   supportedNetworks?: string[]

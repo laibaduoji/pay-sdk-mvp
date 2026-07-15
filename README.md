@@ -31,8 +31,7 @@ npm run dev        # local demo server (index.html)
     payment: {
       amount: '10.00',
       currency: 'USD',
-      countryCode: 'US',
-      label: 'ALCHEMY GPS EUROPE UAB'
+      countryCode: 'US'
     },
     googlePay: {
       merchantName: 'Demo Merchant',
@@ -45,7 +44,6 @@ npm run dev        # local demo server (index.html)
       }
     },
     applePay: {
-      merchantIdentifier: 'merchant.com.demo',
       validateMerchantUrl: 'https://your-server.com/apple-pay/session',
       button: { buttonstyle: 'black', type: 'plain', locale: 'en-US' }
     },
@@ -120,9 +118,10 @@ browser). The SDK handles the client half:
 
 1. On button tap the SDK creates an `ApplePaySession` and calls `begin()`.
 2. In `onvalidatemerchant`, the SDK `POST`s to your `validateMerchantUrl` with
-   `{ validationURL, merchantIdentifier }`.
-3. Your server uses its **Merchant Identity Certificate** to request a session from
-   the `validationURL` and returns the opaque `merchantSession` JSON.
+   `{ validationURL }`.
+3. Your server uses its **Merchant Identity Certificate** and Merchant ID to
+   request a session from the `validationURL` and returns the opaque
+   `merchantSession` JSON.
 4. The SDK calls `completeMerchantValidation(merchantSession)` and the sheet appears.
 
 Your server / Apple Developer setup (not included in this repo):
