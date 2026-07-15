@@ -4,7 +4,8 @@ import { createGoogleButton } from './googlePay.js'
 const APPLE_BUTTON_STYLE_ID = 'pay-sdk-apple-button-style'
 
 export function resolveContainer(container: string | HTMLElement): HTMLElement {
-  const el = typeof container === 'string' ? document.querySelector<HTMLElement>(container) : container
+  const el =
+    typeof container === 'string' ? document.querySelector<HTMLElement>(container) : container
   if (!el) throw new Error(`Pay SDK container not found: ${String(container)}`)
   return el
 }
@@ -24,7 +25,11 @@ apple-pay-button {
   document.head.appendChild(style)
 }
 
-function renderAppleButton(el: HTMLElement, config: PaySdkConfig, onClick: () => void): HTMLElement {
+function renderAppleButton(
+  el: HTMLElement,
+  config: PaySdkConfig,
+  onClick: () => void
+): HTMLElement {
   injectAppleButtonStyle()
   const btn = config.applePay?.button || {}
 
@@ -38,7 +43,11 @@ function renderAppleButton(el: HTMLElement, config: PaySdkConfig, onClick: () =>
   return button
 }
 
-function renderGoogleButton(el: HTMLElement, config: PaySdkConfig, onClick: () => void): HTMLElement {
+function renderGoogleButton(
+  el: HTMLElement,
+  config: PaySdkConfig,
+  onClick: () => void
+): HTMLElement {
   const button = createGoogleButton(config, onClick)
   el.appendChild(button)
   return button

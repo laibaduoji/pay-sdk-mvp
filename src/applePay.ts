@@ -41,10 +41,7 @@ function buildPaymentRequest(config: PaySdkConfig): ApplePayJS.ApplePayPaymentRe
   return request
 }
 
-async function fetchMerchantSession(
-  config: PaySdkConfig,
-  validationURL: string
-): Promise<unknown> {
+async function fetchMerchantSession(config: PaySdkConfig, validationURL: string): Promise<unknown> {
   const ap = config.applePay!
   const res = await fetch(ap.validateMerchantUrl, {
     method: 'POST',

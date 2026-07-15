@@ -6,6 +6,8 @@ loaded via `<script>` in a browser or an app WebView.
 
 Written in **TypeScript**; bundled to a single IIFE file with Vite.
 
+完整的参数说明（必传/可选）与各场景示例见 [docs/PARAMETERS.md](docs/PARAMETERS.md)。
+
 ## Build
 
 ```bash
@@ -22,9 +24,9 @@ npm run dev        # local demo server (index.html)
 <script src="./dist/pay-sdk.js"></script>
 <script>
   const sdk = PaySdk.init({
-    method: 'googlePay',        // 'googlePay' | 'applePay'
+    method: 'googlePay', // 'googlePay' | 'applePay'
     container: '#pay-container',
-    environment: 'TEST',        // Google Pay: 'TEST' | 'PRODUCTION'
+    environment: 'TEST', // Google Pay: 'TEST' | 'PRODUCTION'
     billingAddressRequired: false,
     payment: {
       amount: '10.00',
@@ -35,22 +37,31 @@ npm run dev        # local demo server (index.html)
     googlePay: {
       merchantName: 'Demo Merchant',
       // merchantId: 'BCR2...',   // required in PRODUCTION
-      tokenizationSpecification: { /* see below */ },
-      button: { buttonColor: 'default', buttonType: 'plain', buttonSizeMode: 'fill' }
+      tokenizationSpecification: {/* see below */},
+      button: {
+        buttonColor: 'default',
+        buttonType: 'plain',
+        buttonSizeMode: 'fill'
+      }
     },
     applePay: {
       merchantIdentifier: 'merchant.com.demo',
       validateMerchantUrl: 'https://your-server.com/apple-pay/session',
       button: { buttonstyle: 'black', type: 'plain', locale: 'en-US' }
     },
-    onSuccess(result) { console.log(result.token) },
-    onError(err) { console.error(err) },
+    onSuccess(result) {
+      console.log(result.token)
+    },
+    onError(err) {
+      console.error(err)
+    },
     onCancel() {}
   })
 
   // Wait until wallet JS is loaded and the environment supports payment,
   // then render the button. This avoids clicks before the SDK is ready.
-  sdk.ready()
+  sdk
+    .ready()
     .then(() => sdk.mount())
     .catch((err) => console.warn('Payment unavailable:', err.message))
 </script>
@@ -58,12 +69,12 @@ npm run dev        # local demo server (index.html)
 
 ## API
 
-| Method | Description |
-|--------|-------------|
-| `PaySdk.init(config)` | Validates config, returns an SDK instance. |
-| `sdk.ready()` | Promise resolving once wallet JS is loaded and the environment can pay (Google `isReadyToPay`, Apple `canMakePayments`). Rejects if unsupported. |
-| `sdk.mount()` | Renders the official wallet button into `container` and wires up the click. |
-| `sdk.destroy()` | Clears the container. |
+| Method                | Description                                                                                                                                      |
+| --------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------ |
+| `PaySdk.init(config)` | Validates config, returns an SDK instance.                                                                                                       |
+| `sdk.ready()`         | Promise resolving once wallet JS is loaded and the environment can pay (Google `isReadyToPay`, Apple `canMakePayments`). Rejects if unsupported. |
+| `sdk.mount()`         | Renders the official wallet button into `container` and wires up the click.                                                                      |
+| `sdk.destroy()`       | Clears the container.                                                                                                                            |
 
 ## `tokenizationSpecification` (Google Pay)
 
