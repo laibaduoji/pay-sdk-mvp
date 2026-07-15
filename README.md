@@ -1,0 +1,134 @@
+# Pay SDK MVP
+
+An embeddable browser JS SDK that renders an official **Google Pay** or **Apple Pay**
+button into a container and returns the payment token to the merchant. Works when
+loaded via `<script>` in a browser or an app WebView.
+
+Written in **TypeScript**; bundled to a single IIFE file with Vite.
+
+## Build
+
+```bash
+npm install
+npm run build      # type-check, bundle dist/pay-sdk.js (global: window.PaySdk), emit dist/types/*.d.ts
+npm run typecheck  # type-check only (tsc --noEmit)
+npm run dev        # local demo server (index.html)
+```
+
+## Usage
+
+```html
+<div id="pay-container"></div>
+<script src="./dist/pay-sdk.js"></script>
+<script>
+  const sdk = PaySdk.init({
+    method: 'googlePay',        // 'googlePay' | 'applePay'
+    container: '#pay-container',
+    environment: 'TEST',        // Google Pay: 'TEST' | 'PRODUCTION'
+    billingAddressRequired: false,
+    payment: {
+      amount: '10.00',
+      currency: 'USD',
+      countryCode: 'US',
+      label: 'ALCHEMY GPS EUROPE UAB'
+    },
+    googlePay: {
+      merchantName: 'Demo Merchant',
+      // merchantId: 'BCR2...',   // required in PRODUCTION
+      tokenizationSpecification: { /* see below */ },
+      button: { buttonColor: 'default', buttonType: 'plain', buttonSizeMode: 'fill' }
+    },
+    applePay: {
+      merchantIdentifier: 'merchant.com.demo',
+      validateMerchantUrl: 'https://your-server.com/apple-pay/session',
+      button: { buttonstyle: 'black', type: 'plain', locale: 'en-US' }
+    },
+    onSuccess(result) { console.log(result.token) },
+    onError(err) { console.error(err) },
+    onCancel() {}
+  })
+
+  // Wait until wallet JS is loaded and the environment supports payment,
+  // then render the button. This avoids clicks before the SDK is ready.
+  sdk.ready()
+    .then(() => sdk.mount())
+    .catch((err) => console.warn('Payment unavailable:', err.message))
+</script>
+```
+
+## API
+
+| Method | Description |
+|--------|-------------|
+| `PaySdk.init(config)` | Validates config, returns an SDK instance. |
+| `sdk.ready()` | Promise resolving once wallet JS is loaded and the environment can pay (Google `isReadyToPay`, Apple `canMakePayments`). Rejects if unsupported. |
+| `sdk.mount()` | Renders the official wallet button into `container` and wires up the click. |
+| `sdk.destroy()` | Clears the container. |
+
+## `tokenizationSpecification` (Google Pay)
+
+Passed through to Google Pay unchanged. Two supported forms:
+
+```js
+// DIRECT
+{ type: 'DIRECT', parameters: { protocolVersion: 'ECv2', publicKey: '...' } }
+
+// PAYMENT_GATEWAY
+{ type: 'PAYMENT_GATEWAY', parameters: { gateway: '...', gatewayMerchantId: '...' } }
+```
+
+## Result shape (`onSuccess`)
+
+```js
+// Google Pay
+{
+  method: 'googlePay',
+  token: paymentData.paymentMethodData.tokenizationData.token,
+  paymentMethodData, billingAddress, email, raw
+}
+
+// Apple Pay
+{
+  method: 'applePay',
+  token: event.payment.token,
+  billingContact, shippingContact, raw
+}
+```
+
+## Billing address
+
+Set `billingAddressRequired: true` to request the billing address on both wallets:
+
+- Google Pay: adds `billingAddressRequired` + `billingAddressParameters.format = 'FULL'`
+- Apple Pay: adds `requiredBillingContactFields = ['name', 'postalAddress', 'phone', 'email']`
+
+## Apple Pay domain validation
+
+Apple requires that the merchant session be created **on your server** (never in the
+browser). The SDK handles the client half:
+
+1. On button tap the SDK creates an `ApplePaySession` and calls `begin()`.
+2. In `onvalidatemerchant`, the SDK `POST`s to your `validateMerchantUrl` with
+   `{ validationURL, merchantIdentifier }`.
+3. Your server uses its **Merchant Identity Certificate** to request a session from
+   the `validationURL` and returns the opaque `merchantSession` JSON.
+4. The SDK calls `completeMerchantValidation(merchantSession)` and the sheet appears.
+
+Your server / Apple Developer setup (not included in this repo):
+
+- Create a Merchant ID and upload a Merchant Identity Certificate.
+- Register and verify every domain that shows the Apple Pay button (host Apple's
+  verification file). Domains must be reachable over HTTPS without redirects.
+- Implement the `validateMerchantUrl` endpoint that talks to Apple's servers.
+
+Apple Pay only works over HTTPS in Safari on a verified domain; use Google Pay `TEST`
+for local development.
+
+## Notes
+
+- Official wallet scripts are loaded at runtime from their CDNs, not bundled:
+  Google `https://pay.google.com/gp/p/js/pay.js`,
+  Apple `https://applepay.cdn-apple.com/jsapi/1.latest/apple-pay-sdk.js`.
+- Type definitions ship in `dist/types/` (config types are exported from the entry).
+- MVP does not implement Google Pay dynamic price updates / `PAYMENT_AUTHORIZATION`
+  callbacks, shipping, or multi-wallet display.
