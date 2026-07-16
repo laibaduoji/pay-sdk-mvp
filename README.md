@@ -12,7 +12,7 @@ Written in **TypeScript**; bundled to a single IIFE file with Vite.
 
 ```bash
 npm install
-npm run build      # type-check, bundle dist/pay-sdk.js (global: window.PaySdk), emit dist/types/*.d.ts
+npm run build      # type-check, bundle dist/pay-sdk.js + copy to demo/pay-sdk.js (for GitHub Pages), emit dist/types/*.d.ts
 npm run typecheck  # type-check only (tsc --noEmit)
 npm run demo       # build + serve PARAMETERS examples at http://localhost:5173/
 npm run format     # prettier write
