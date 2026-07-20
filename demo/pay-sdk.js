@@ -277,7 +277,11 @@ apple-pay-button {
     if (!res.ok) {
       throw new Error(`Merchant validation failed with status ${res.status}`)
     }
-    return res.json()
+    const body = await res.json()
+    if (!(body == null ? void 0 : body.data) || typeof body.data !== 'object') {
+      throw new Error('Merchant validation response missing data')
+    }
+    return body
   }
   function payWithApple(config) {
     var _a
@@ -293,7 +297,7 @@ apple-pay-button {
       var _a2
       try {
         const merchantSession = await fetchMerchantSession(config, event.validationURL)
-        session.completeMerchantValidation(merchantSession)
+        session.completeMerchantValidation(merchantSession.data)
       } catch (err) {
         session.abort()
         ;(_a2 = config.onError) == null ? void 0 : _a2.call(config, toError(err))

@@ -143,9 +143,9 @@ browser). The SDK handles the client half:
 2. In `onvalidatemerchant`, the SDK `POST`s to your `validateMerchantUrl` with
    `{ validationURL }`.
 3. Your server uses its **Merchant Identity Certificate** and Merchant ID to
-   request a session from the `validationURL` and returns the opaque
-   `merchantSession` JSON.
-4. The SDK calls `completeMerchantValidation(merchantSession)` and the sheet appears.
+   request a session from the `validationURL` and returns JSON shaped as
+   `{ data: merchantSession }` (Apple's opaque session under `data`).
+4. The SDK calls `completeMerchantValidation(merchantSession.data)` and the sheet appears.
 
 Your server / Apple Developer setup (not included in this repo):
 

@@ -41,7 +41,15 @@ function buildPaymentRequest(config: PaySdkConfig): ApplePayJS.ApplePayPaymentRe
   return request
 }
 
-async function fetchMerchantSession(config: PaySdkConfig, validationURL: string): Promise<unknown> {
+/** Merchant endpoint wraps Apple's opaque session as `{ data: merchantSession }`. */
+interface MerchantValidationResponse {
+  data: object
+}
+
+async function fetchMerchantSession(
+  config: PaySdkConfig,
+  validationURL: string
+): Promise<MerchantValidationResponse> {
   const ap = config.applePay!
   const res = await fetch(ap.validateMerchantUrl, {
     method: 'POST',
@@ -52,7 +60,12 @@ async function fetchMerchantSession(config: PaySdkConfig, validationURL: string)
   if (!res.ok) {
     throw new Error(`Merchant validation failed with status ${res.status}`)
   }
-  return res.json()
+
+  const body = (await res.json()) as MerchantValidationResponse
+  if (!body?.data || typeof body.data !== 'object') {
+    throw new Error('Merchant validation response missing data')
+  }
+  return body
 }
 
 export function payWithApple(config: PaySdkConfig): void {
@@ -68,7 +81,7 @@ export function payWithApple(config: PaySdkConfig): void {
   session.onvalidatemerchant = async (event) => {
     try {
       const merchantSession = await fetchMerchantSession(config, event.validationURL)
-      session.completeMerchantValidation(merchantSession)
+      session.completeMerchantValidation(merchantSession.data)
     } catch (err) {
       session.abort()
       config.onError?.(toError(err))
