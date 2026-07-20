@@ -297,6 +297,7 @@ apple-pay-button {
       var _a2
       try {
         const merchantSession = await fetchMerchantSession(config, event.validationURL)
+        console.log('merchantSession', merchantSession)
         session.completeMerchantValidation(merchantSession.data)
       } catch (err) {
         session.abort()
