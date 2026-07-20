@@ -255,7 +255,7 @@ PaySdk.init({
     countryCode: 'US'
   },
   applePay: {
-    validateMerchantUrl: 'https://your-server.com/apple-pay/session'
+    validateMerchantUrl: 'https://api-test.alchemytech.cc/pay/apple/domainName/verify'
   },
   onSuccess: (r) => console.log(r.token)
 })
@@ -274,7 +274,7 @@ PaySdk.init({
     countryCode: 'GB'
   },
   applePay: {
-    validateMerchantUrl: 'https://your-server.com/apple-pay/session',
+    validateMerchantUrl: 'https://api-test.alchemytech.cc/pay/apple/domainName/verify',
     merchantCapabilities: ['supports3DS'],
     supportedNetworks: ['visa', 'masterCard', 'amex'],
     button: { buttonstyle: 'white-outline', type: 'buy', locale: 'zh-CN' }

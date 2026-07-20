@@ -25,6 +25,6 @@ window.PaySdkDemoConfig = {
   },
 
   applePay: {
-    validateMerchantUrl: 'https://your-server.com/apple-pay/session'
+    validateMerchantUrl: 'https://api-test.alchemytech.cc/pay/apple/domainName/verify'
   }
 }

@@ -67,7 +67,7 @@ npm run format     # prettier write
       }
     },
     applePay: {
-      validateMerchantUrl: 'https://your-server.com/apple-pay/session',
+      validateMerchantUrl: 'https://api-test.alchemytech.cc/pay/apple/domainName/verify',
       button: { buttonstyle: 'black', type: 'plain', locale: 'en-US' }
     },
     onSuccess(result) {
