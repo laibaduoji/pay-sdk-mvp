@@ -58,15 +58,15 @@ the SDK open frames / navigate:
 <script>
   const sdk = PaySdk.init({
     container: '#pay-container',
+    // omit or 'PRODUCTION' for live; 'TEST' → test API + Google Pay TEST + Checkout sandbox
+    environment: 'TEST',
     order: {
       amount: '10.00',
       currency: 'USD',
       countryCode: 'US'
     },
+    // optional — defaults from src/endpoints.ts by environment
     api: {
-      createOrderUrl: 'https://api.example.com/v1/pay/orders',
-      payUrl: 'https://api.example.com/v1/pay/payments',
-      queryOrderUrl: 'https://api.example.com/v1/pay/orders/{orderId}',
       headers: () => ({ Authorization: `Bearer ${getAccessToken()}` }),
       pollIntervalMs: 2000,
       pollTimeoutMs: 300000
@@ -99,8 +99,15 @@ the SDK open frames / navigate:
 </script>
 ```
 
+Built-in API hosts live in [`src/endpoints.ts`](src/endpoints.ts)
+(`TEST` → `api-test.alchemytech.cc`, `PRODUCTION` → `api.alchemypay.org`).
+Pass `environment` on `init`; omit `api` URLs unless you need a proxy override.
+Init `environment` also drives Google Pay and Checkout Risk (sandbox vs prod).
+Apple Pay merchant validation is built in too. If create-order returns
+`validateMerchantUrl`, that response value takes precedence.
+
 The backend create-order response selects Google Pay or Apple Pay and supplies
-the wallet `params`, `risk`, environment, and Apple validation URL. See
+the wallet `params`, `risk`, and Apple validation URL. See
 [`docs/pay-api/`](docs/pay-api/) for the four HTTP contracts.
 
 ### Wallet-only compatibility mode
@@ -155,7 +162,7 @@ the wallet `params`, `risk`, environment, and Apple validation URL. See
 
 | Method                   | Description                                                                                                     |
 | ------------------------ | --------------------------------------------------------------------------------------------------------------- |
-| `PaySdk.init(config)`    | Validates full-flow (`order + api`) or wallet-only configuration and returns an SDK instance.                   |
+| `PaySdk.init(config)`    | Validates full-flow (`order` + optional `environment` / `api`) or wallet-only configuration.                    |
 | `sdk.ready()`            | In full-flow mode creates the order first, then loads the selected wallet and checks availability.              |
 | `sdk.mount()`            | Renders the wallet button. It may be called before `ready()`; full-flow preparation then runs automatically.    |
 | `sdk.openAction(action)` | Opens a secondary action (challenge iframe / method iframe / navigate). Use after merchant / Bridge permission. |

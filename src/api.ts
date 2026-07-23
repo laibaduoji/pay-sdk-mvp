@@ -40,12 +40,16 @@ export class PayApiClient {
     return this.request<CreateOrderResponse>(this.config.createOrderUrl, 'POST', request)
   }
 
+  getValidateMerchantUrl(override?: string): string {
+    return override || this.config.validateMerchantUrl
+  }
+
   validateMerchant(
-    url: string,
+    url: string | undefined,
     orderId: string,
     validationURL: string
   ): Promise<Record<string, unknown>> {
-    return this.request<Record<string, unknown>>(url, 'POST', {
+    return this.request<Record<string, unknown>>(this.getValidateMerchantUrl(url), 'POST', {
       orderId,
       validationURL
     })

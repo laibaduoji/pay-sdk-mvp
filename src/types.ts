@@ -153,7 +153,8 @@ export interface CreateOrderResponseApplePay {
   method: 'applePay'
   environment?: Environment
   params: ApplePayParams
-  validateMerchantUrl: string
+  /** 可选覆盖；未下发时使用当前环境在 endpoints.ts 中的内置地址。 */
+  validateMerchantUrl?: string
   risk?: CreateOrderRisk
 }
 
@@ -185,6 +186,8 @@ export interface QueryOrderResponse {
 
 export interface PayApiConfig {
   createOrderUrl: string
+  /** Apple Pay 域名校验地址。 */
+  validateMerchantUrl: string
   payUrl: string
   /**
    * 查询地址。支持 `/orders/{orderId}` 模板；无占位符时自动追加
@@ -287,8 +290,17 @@ interface PaySdkBaseConfig extends PaySdkCallbacks {
 
 /** 完整支付编排：SDK 内创建订单、钱包授权、支付及查询状态。 */
 export interface ApiPaySdkConfig extends PaySdkBaseConfig {
-  api: PayApiConfig
   order: CreateOrderRequest
+  /**
+   * SDK 运行环境，默认 `PRODUCTION`。
+   * 决定内置 API 地址、Google Pay 环境、Checkout Risk 沙盒/生产等。
+   */
+  environment?: Environment
+  /**
+   * 可选。默认按 `environment` 使用内置四接口地址（见 `src/endpoints.ts`）。
+   * 可只传 `headers` / 轮询配置，或覆盖个别 URL（如本地代理）。
+   */
+  api?: Partial<PayApiConfig>
   /**
    * 二次动作默认 callback：只通知商户。
    * auto：尝试 openAction / SDK 内置打开。
@@ -301,7 +313,6 @@ export interface ApiPaySdkConfig extends PaySdkBaseConfig {
   openAction?: (action: PaymentAction) => boolean | void | Promise<boolean | void>
   method?: never
   payment?: never
-  environment?: never
   billingAddressRequired?: never
   googlePay?: never
   applePay?: never

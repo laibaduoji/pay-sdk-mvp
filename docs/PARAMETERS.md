@@ -10,10 +10,10 @@
 | ------------------------ | --------------------------- | :----: | -------------- | ------------------------------------------------------------------------- |
 | `container`              | `string \| HTMLElement`     | **是** | —              | 按钮渲染容器                                                              |
 | `order`                  | `CreateOrderRequest`        | 见说明 | —              | 完整编排模式必传；SDK 调接口 1 创建订单                                   |
-| `api`                    | `PayApiConfig`              | 见说明 | —              | 完整编排模式必传；四接口地址和请求配置                                    |
+| `environment`            | `'TEST' \| 'PRODUCTION'`    |   否   | `'PRODUCTION'` | 完整编排与钱包模式通用；决定内置 API / Google Pay / Checkout Risk         |
+| `api`                    | `Partial<PayApiConfig>`     |   否   | 按环境内置     | 完整编排可选；默认用 `src/endpoints.ts`；可只传 headers / 覆盖 URL        |
 | `method`                 | `'googlePay' \| 'applePay'` | 见说明 | —              | 仅钱包模式必传；完整模式由创建订单响应决定                                |
 | `payment`                | `PaymentConfig`             | 见说明 | —              | 仅钱包模式必传；完整模式由创建订单响应决定                                |
-| `environment`            | `'TEST' \| 'PRODUCTION'`    |   否   | `'PRODUCTION'` | 仅钱包模式配置；完整模式由创建订单响应决定                                |
 | `billingAddressRequired` | `boolean`                   |   否   | `false`        | 仅钱包模式配置；完整模式由钱包 params 决定                                |
 | `googlePay`              | `GooglePayConfig`           | 见说明 | —              | 仅钱包模式且 `method === 'googlePay'` 时必传                              |
 | `applePay`               | `ApplePayConfig`            | 见说明 | —              | 仅钱包模式且 `method === 'applePay'` 时必传                               |
@@ -28,18 +28,18 @@
 | `onError`                | `(error: Error) => void`    |   否   | —              | API、钱包或终态失败                                                       |
 | `onCancel`               | `() => void`                |   否   | —              | 用户取消钱包                                                              |
 
-完整编排与仅钱包模式二选一。完整编排传 `order + api`，不要再传 `method / payment / googlePay / applePay`。
+完整编排与仅钱包模式二选一。完整编排传 `order`（可选 `environment` / `api`），不要再传 `method / payment / googlePay / applePay`。
 
 ### 1.1 完整编排模式
 
 ```js
 const sdk = PaySdk.init({
   container: '#pay-container',
+  // 不传则默认 PRODUCTION；TEST 时使用测试 API / Google Pay TEST / Checkout 沙盒
+  environment: 'TEST',
   order: { amount: '10.00', currency: 'USD', countryCode: 'US' },
+  // api 可选：默认按 environment 取内置地址（src/endpoints.ts）
   api: {
-    createOrderUrl: '/v1/pay/orders',
-    payUrl: '/v1/pay/payments',
-    queryOrderUrl: '/v1/pay/orders/{orderId}',
     headers: () => ({ Authorization: `Bearer ${getAccessToken()}` }),
     pollIntervalMs: 2000,
     pollTimeoutMs: 300000
@@ -59,6 +59,17 @@ const sdk = PaySdk.init({
 
 sdk.ready().then(() => sdk.mount())
 ```
+
+内置地址（见 [`src/endpoints.ts`](../src/endpoints.ts)）：
+
+| 环境                 | API 根域名                        |
+| -------------------- | --------------------------------- |
+| `TEST`               | `https://api-test.alchemytech.cc` |
+| `PRODUCTION`（默认） | `https://api.alchemypay.org`      |
+
+路径：`/v1/pay/orders`、`/pay/apple/domainName/verify`（Apple Pay 域名校验）、
+`/v1/pay/payments`、`/v1/pay/orders/{orderId}`。本地代理时可在 `api` 里覆盖 URL。
+创建订单若返回 `validateMerchantUrl`，优先使用响应值；未返回则使用这里的环境地址。
 
 `ready()` 在完整模式中先创建订单，再加载响应指定的钱包；`mount()` 也可直接调用，它会自动完成这一步。四个 API 的统一响应须满足 `returnCode === '0000'`。轮询默认每 2 秒一次，最长 5 分钟，瞬时网络错误最多连续重试 4 次。
 
@@ -406,9 +417,10 @@ sdk
 
 ### 9.8 SDK 完整支付编排
 
-使用 `order + api` 模式，完整示例见
-[`08-managed-flow.html`](../demo/08-managed-flow.html)。创建订单响应决定钱包类型并下发
-钱包参数与风控配置。
+使用 `order` + 可选 `environment` / `api`，完整示例见
+[`08-managed-flow.html`](../demo/08-managed-flow.html)。`environment` 默认
+`PRODUCTION`；传 `TEST` 时 API、Google Pay、Checkout Risk 均走测试侧。四接口默认地址在
+[`src/endpoints.ts`](../src/endpoints.ts)。创建订单响应决定钱包类型并下发钱包参数与风控配置。
 
 默认 `actionMode: 'callback'`：二次动作通过 `onAction` 完整吐给商户（含 `MD` /
 `JWT` / `action` / `webUrl` / `methodUrl` 等），由商户在 WebView 内打开或经

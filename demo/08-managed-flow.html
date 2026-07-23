@@ -10,7 +10,9 @@
     <p class="meta"><a href="./index.html">← Demos</a> · PARAMETERS §9.8</p>
     <h1>SDK 完整支付编排</h1>
     <p class="meta">
-      示例使用同源 <code>/v1/pay/*</code> 地址，需要后端代理提供四个 API。<br />
+      <code>environment: 'TEST'</code> 时走测试 API / Google Pay TEST / Checkout 沙盒。<br />
+      Demo 用同源代理覆盖 URL；线上可省略
+      <code>api.createOrderUrl</code> 等，由 SDK 内置地址填充。<br />
       默认 <code>actionMode: 'callback'</code>：二次动作只经 <code>onAction</code> 吐出；Demo
       里演示授权后调用 <code>sdk.openAction(action)</code>。
     </p>
@@ -27,12 +29,14 @@
 
       const sdk = PaySdk.init({
         container: '#pay-container',
+        environment: 'TEST',
         // actionMode: 'callback', // default — WebView-friendly
         order: {
           amount: '10.00',
           currency: 'USD',
           countryCode: 'US'
         },
+        // 本地 demo：覆盖为同源代理；生产可省略这三个 URL
         api: {
           createOrderUrl: '/v1/pay/orders',
           payUrl: '/v1/pay/payments',

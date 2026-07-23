@@ -1116,8 +1116,11 @@ apple-pay-button {
     createOrder(request) {
       return this.request(this.config.createOrderUrl, "POST", request);
     }
+    getValidateMerchantUrl(override) {
+      return override || this.config.validateMerchantUrl;
+    }
     validateMerchant(url, orderId, validationURL) {
-      return this.request(url, "POST", {
+      return this.request(this.getValidateMerchantUrl(url), "POST", {
         orderId,
         validationURL
       });
@@ -1304,6 +1307,41 @@ apple-pay-button {
       }
     }
   }
+  const API_BASE = {
+    TEST: "https://api-test.alchemytech.cc",
+    PRODUCTION: "https://api.alchemypay.org"
+  };
+  const API_PATHS = {
+    createOrder: "/v1/pay/orders",
+    validateMerchant: "/pay/apple/domainName/verify",
+    pay: "/v1/pay/payments",
+    queryOrder: "/v1/pay/orders/{orderId}"
+  };
+  function getApiEndpoints(environment = "PRODUCTION") {
+    const base = API_BASE[environment];
+    return {
+      createOrderUrl: `${base}${API_PATHS.createOrder}`,
+      validateMerchantUrl: `${base}${API_PATHS.validateMerchant}`,
+      payUrl: `${base}${API_PATHS.pay}`,
+      queryOrderUrl: `${base}${API_PATHS.queryOrder}`
+    };
+  }
+  function resolvePayApiConfig(environment, overrides) {
+    const defaults = getApiEndpoints(environment);
+    return {
+      createOrderUrl: (overrides == null ? void 0 : overrides.createOrderUrl) || defaults.createOrderUrl,
+      validateMerchantUrl: (overrides == null ? void 0 : overrides.validateMerchantUrl) || defaults.validateMerchantUrl,
+      payUrl: (overrides == null ? void 0 : overrides.payUrl) || defaults.payUrl,
+      queryOrderUrl: (overrides == null ? void 0 : overrides.queryOrderUrl) || defaults.queryOrderUrl,
+      headers: overrides == null ? void 0 : overrides.headers,
+      fetch: overrides == null ? void 0 : overrides.fetch,
+      pollIntervalMs: overrides == null ? void 0 : overrides.pollIntervalMs,
+      pollTimeoutMs: overrides == null ? void 0 : overrides.pollTimeoutMs
+    };
+  }
+  function resolveEnvironment(environment) {
+    return environment === "TEST" ? "TEST" : "PRODUCTION";
+  }
   const SUPPORTED_METHODS = ["googlePay", "applePay"];
   function validateConfig(config) {
     var _a, _b;
@@ -1314,11 +1352,12 @@ apple-pay-button {
       throw new Error("config.container is required");
     }
     if (isApiConfig(config)) {
-      if (!config.api.createOrderUrl || !config.api.payUrl || !config.api.queryOrderUrl) {
-        throw new Error("api.createOrderUrl, api.payUrl and api.queryOrderUrl are required");
-      }
       if (!config.order || config.order.amount == null || !config.order.currency || !config.order.countryCode) {
         throw new Error("order.amount, order.currency and order.countryCode are required");
+      }
+      const api = resolvePayApiConfig(resolveEnvironment(config.environment), config.api);
+      if (!api.createOrderUrl || !api.payUrl || !api.queryOrderUrl) {
+        throw new Error("api.createOrderUrl, api.payUrl and api.queryOrderUrl are required");
       }
       return;
     }
@@ -1336,7 +1375,7 @@ apple-pay-button {
     }
   }
   function isApiConfig(config) {
-    return "api" in config && !!config.api;
+    return "order" in config && !!config.order;
   }
   function hasSecondaryAction(response) {
     return !!(response.webUrl || response.MD || response.JWT || response.action || response.threeDSMethodData || response.methodUrl);
@@ -1354,9 +1393,10 @@ apple-pay-button {
   }
   function runtimeConfigFromOrder(config, order, api, onWalletAuthorized) {
     var _a;
+    const environment = resolveEnvironment(config.environment || order.environment);
     const common = {
       container: config.container,
-      environment: order.environment || "PRODUCTION",
+      environment,
       risk: order.risk,
       onSuccess: onWalletAuthorized,
       onError: config.onError,
@@ -1390,6 +1430,7 @@ apple-pay-button {
         }
       };
     }
+    const validateMerchantUrl = api.getValidateMerchantUrl(order.validateMerchantUrl);
     return {
       ...common,
       method: "applePay",
@@ -1400,8 +1441,8 @@ apple-pay-button {
       },
       billingAddressRequired: (((_a = order.params.requiredBillingContactFields) == null ? void 0 : _a.length) || 0) > 0,
       applePay: {
-        validateMerchantUrl: order.validateMerchantUrl,
-        validateMerchant: (validationURL) => api.validateMerchant(order.validateMerchantUrl, order.orderId, validationURL),
+        validateMerchantUrl,
+        validateMerchant: (validationURL) => api.validateMerchant(validateMerchantUrl, order.orderId, validationURL),
         merchantCapabilities: order.params.merchantCapabilities,
         supportedNetworks: order.params.supportedNetworks,
         totalLabel: order.params.total.label,
@@ -1423,7 +1464,7 @@ apple-pay-button {
       this.paymentInFlight = false;
       this.destroyed = false;
       this.config = config;
-      this.api = isApiConfig(config) ? new PayApiClient(config.api) : null;
+      this.api = isApiConfig(config) ? new PayApiClient(resolvePayApiConfig(resolveEnvironment(config.environment), config.api)) : null;
       if (!isApiConfig(config)) this.runtimeConfig = config;
     }
     // Resolves once the wallet JS is loaded and the environment supports payment.
@@ -1552,8 +1593,8 @@ apple-pay-button {
     async pollOrder(walletResult, paymentResponse) {
       var _a, _b;
       const apiConfig = this.config.api;
-      const interval = apiConfig.pollIntervalMs || 2e3;
-      const timeoutMs = apiConfig.pollTimeoutMs ?? 3e5;
+      const interval = (apiConfig == null ? void 0 : apiConfig.pollIntervalMs) || 2e3;
+      const timeoutMs = (apiConfig == null ? void 0 : apiConfig.pollTimeoutMs) ?? 3e5;
       const startedAt = Date.now();
       const generation = ++this.pollGeneration;
       let lastS3dsUrl = "";
@@ -1670,7 +1711,10 @@ apple-pay-button {
   exports.PayApiError = PayApiError;
   exports.describePayResponse = describePayResponse;
   exports.describeS3ds = describeS3ds;
+  exports.getApiEndpoints = getApiEndpoints;
   exports.init = init;
+  exports.resolveEnvironment = resolveEnvironment;
+  exports.resolvePayApiConfig = resolvePayApiConfig;
   Object.defineProperty(exports, Symbol.toStringTag, { value: "Module" });
   return exports;
 }({});

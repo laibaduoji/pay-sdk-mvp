@@ -119,7 +119,7 @@ sequenceDiagram
 | `environment`         | 可选 `'TEST'` \| `'PRODUCTION'`，不传默认 `'PRODUCTION'` |
 | `params`              | 钱包原生唤起参数（见下）                                 |
 | `risk`                | 风控开关与可覆盖配置                                     |
-| `validateMerchantUrl` | 仅 Apple Pay：接口 2 的 URL                              |
+| `validateMerchantUrl` | 仅 Apple Pay，可选；有值则覆盖 SDK 当前环境的接口 2 地址 |
 
 #### `params` — Google Pay
 
@@ -135,7 +135,8 @@ sequenceDiagram
 #### `params` — Apple Pay
 
 创建 `ApplePaySession` 的 PaymentRequest（`countryCode` / `currencyCode` / `total` 等）。  
-域名校验 URL 在顶层 `validateMerchantUrl`，**不在** `params` 内。
+如需覆盖 SDK 内置地址，域名校验 URL 在顶层 `validateMerchantUrl`，**不在**
+`params` 内。未返回时，SDK 按 `init.environment` 使用 `src/endpoints.ts` 中的地址。
 
 #### `risk`（创建订单下发）
 
@@ -154,7 +155,7 @@ sequenceDiagram
 
 ## 4. 接口 2 — Apple Pay 域名校验
 
-**POST** `{validateMerchantUrl}`
+**POST** 创建订单返回的 `validateMerchantUrl`；未返回时使用当前环境的内置地址。
 
 ### 请求
 

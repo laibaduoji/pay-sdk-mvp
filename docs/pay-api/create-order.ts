@@ -128,8 +128,8 @@ export interface CreateOrderResponseApplePay {
   method: 'applePay'
   environment?: Environment
   params: ApplePayParams
-  /** Apple onvalidatemerchant 时调用的服务端地址（接口 2） */
-  validateMerchantUrl: string
+  /** 可选覆盖；未下发时 SDK 使用当前环境的内置接口 2 地址 */
+  validateMerchantUrl?: string
   risk?: CreateOrderRisk
 }
 

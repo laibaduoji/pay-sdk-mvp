@@ -17,6 +17,7 @@ import { payWithGoogle } from './googlePay.js'
 import { payWithApple } from './applePay.js'
 import { PayApiClient, PayApiError } from './api.js'
 import { describePayResponse, describeS3ds, PaymentActionView } from './actions.js'
+import { resolveEnvironment, resolvePayApiConfig } from './endpoints.js'
 import {
   normalizeAppleBillingAddress,
   normalizeAppleToken,
@@ -64,6 +65,7 @@ export type {
 
 export { PayApiError } from './api.js'
 export { describePayResponse, describeS3ds } from './actions.js'
+export { getApiEndpoints, resolvePayApiConfig, resolveEnvironment } from './endpoints.js'
 
 const SUPPORTED_METHODS: PayMethod[] = ['googlePay', 'applePay']
 
@@ -75,9 +77,6 @@ function validateConfig(config: PaySdkConfig): void {
     throw new Error('config.container is required')
   }
   if (isApiConfig(config)) {
-    if (!config.api.createOrderUrl || !config.api.payUrl || !config.api.queryOrderUrl) {
-      throw new Error('api.createOrderUrl, api.payUrl and api.queryOrderUrl are required')
-    }
     if (
       !config.order ||
       config.order.amount == null ||
@@ -85,6 +84,10 @@ function validateConfig(config: PaySdkConfig): void {
       !config.order.countryCode
     ) {
       throw new Error('order.amount, order.currency and order.countryCode are required')
+    }
+    const api = resolvePayApiConfig(resolveEnvironment(config.environment), config.api)
+    if (!api.createOrderUrl || !api.payUrl || !api.queryOrderUrl) {
+      throw new Error('api.createOrderUrl, api.payUrl and api.queryOrderUrl are required')
     }
     return
   }
@@ -103,7 +106,7 @@ function validateConfig(config: PaySdkConfig): void {
 }
 
 function isApiConfig(config: PaySdkConfig): config is ApiPaySdkConfig {
-  return 'api' in config && !!config.api
+  return 'order' in config && !!(config as ApiPaySdkConfig).order
 }
 
 function hasSecondaryAction(response: PayResponse): boolean {
@@ -139,9 +142,11 @@ function runtimeConfigFromOrder(
   api: PayApiClient,
   onWalletAuthorized: (result: PayResult) => void | Promise<void>
 ): WalletPaySdkConfig {
+  // init.environment 优先；否则用创建订单下发；默认 PRODUCTION
+  const environment = resolveEnvironment(config.environment || order.environment)
   const common = {
     container: config.container,
-    environment: order.environment || ('PRODUCTION' as const),
+    environment,
     risk: order.risk,
     onSuccess: onWalletAuthorized,
     onError: config.onError,
@@ -177,6 +182,7 @@ function runtimeConfigFromOrder(
     }
   }
 
+  const validateMerchantUrl = api.getValidateMerchantUrl(order.validateMerchantUrl)
   return {
     ...common,
     method: 'applePay',
@@ -187,9 +193,9 @@ function runtimeConfigFromOrder(
     },
     billingAddressRequired: (order.params.requiredBillingContactFields?.length || 0) > 0,
     applePay: {
-      validateMerchantUrl: order.validateMerchantUrl,
+      validateMerchantUrl,
       validateMerchant: (validationURL) =>
-        api.validateMerchant(order.validateMerchantUrl, order.orderId, validationURL),
+        api.validateMerchant(validateMerchantUrl, order.orderId, validationURL),
       merchantCapabilities: order.params.merchantCapabilities,
       supportedNetworks: order.params.supportedNetworks,
       totalLabel: order.params.total.label,
@@ -215,7 +221,9 @@ class PaySdk implements PaySdkInstance {
 
   constructor(config: PaySdkConfig) {
     this.config = config
-    this.api = isApiConfig(config) ? new PayApiClient(config.api) : null
+    this.api = isApiConfig(config)
+      ? new PayApiClient(resolvePayApiConfig(resolveEnvironment(config.environment), config.api))
+      : null
     if (!isApiConfig(config)) this.runtimeConfig = config
   }
 
@@ -359,8 +367,8 @@ class PaySdk implements PaySdkInstance {
 
   private async pollOrder(walletResult: PayResult, paymentResponse: PayResponse): Promise<void> {
     const apiConfig = (this.config as ApiPaySdkConfig).api
-    const interval = apiConfig.pollIntervalMs || 2_000
-    const timeoutMs = apiConfig.pollTimeoutMs ?? 300_000
+    const interval = apiConfig?.pollIntervalMs || 2_000
+    const timeoutMs = apiConfig?.pollTimeoutMs ?? 300_000
     const startedAt = Date.now()
     const generation = ++this.pollGeneration
     let lastS3dsUrl = ''
