@@ -817,17 +817,87 @@ var PaySdk = function(exports) {
     if (config.riskCollection) return config.riskCollection;
     return collectRisk(config.risk, config.environment);
   }
+  const GOOGLE_PAY_TEST_DEFAULTS = {
+    merchantId: "12345678901234567890",
+    merchantName: "Example Merchant",
+    gateway: "unlimint",
+    gatewayMerchantId: "googletest"
+  };
   const paymentsClients = /* @__PURE__ */ new WeakMap();
+  function applyGooglePayTestDefaults(params) {
+    var _a, _b;
+    const merchantInfo2 = {
+      ...params.merchantInfo,
+      merchantId: ((_a = params.merchantInfo) == null ? void 0 : _a.merchantId) || GOOGLE_PAY_TEST_DEFAULTS.merchantId,
+      merchantName: ((_b = params.merchantInfo) == null ? void 0 : _b.merchantName) || GOOGLE_PAY_TEST_DEFAULTS.merchantName
+    };
+    const allowedPaymentMethods = (params.allowedPaymentMethods || []).map((method) => {
+      var _a2, _b2;
+      const spec = method.tokenizationSpecification;
+      if (!spec) {
+        return {
+          ...method,
+          tokenizationSpecification: {
+            type: "PAYMENT_GATEWAY",
+            parameters: {
+              gateway: GOOGLE_PAY_TEST_DEFAULTS.gateway,
+              gatewayMerchantId: GOOGLE_PAY_TEST_DEFAULTS.gatewayMerchantId
+            }
+          }
+        };
+      }
+      if (spec.type !== "PAYMENT_GATEWAY") return method;
+      const parameters = {
+        ...spec.parameters,
+        gateway: ((_a2 = spec.parameters) == null ? void 0 : _a2.gateway) || GOOGLE_PAY_TEST_DEFAULTS.gateway,
+        gatewayMerchantId: ((_b2 = spec.parameters) == null ? void 0 : _b2.gatewayMerchantId) || GOOGLE_PAY_TEST_DEFAULTS.gatewayMerchantId
+      };
+      return {
+        ...method,
+        tokenizationSpecification: { type: "PAYMENT_GATEWAY", parameters }
+      };
+    });
+    if (allowedPaymentMethods.length === 0) {
+      allowedPaymentMethods.push({
+        type: "CARD",
+        parameters: {
+          allowedAuthMethods: ["PAN_ONLY", "CRYPTOGRAM_3DS"],
+          allowedCardNetworks: ["MASTERCARD", "VISA"]
+        },
+        tokenizationSpecification: {
+          type: "PAYMENT_GATEWAY",
+          parameters: {
+            gateway: GOOGLE_PAY_TEST_DEFAULTS.gateway,
+            gatewayMerchantId: GOOGLE_PAY_TEST_DEFAULTS.gatewayMerchantId
+          }
+        }
+      });
+    }
+    return {
+      ...params,
+      merchantInfo: merchantInfo2,
+      allowedPaymentMethods
+    };
+  }
   function merchantInfo(config) {
     var _a;
     const gp = config.googlePay;
     if ((_a = gp == null ? void 0 : gp.paymentDataRequest) == null ? void 0 : _a.merchantInfo) {
-      return gp.paymentDataRequest.merchantInfo;
+      const info2 = gp.paymentDataRequest.merchantInfo;
+      if (config.environment === "TEST") {
+        return {
+          ...info2,
+          merchantId: info2.merchantId || GOOGLE_PAY_TEST_DEFAULTS.merchantId,
+          merchantName: info2.merchantName || GOOGLE_PAY_TEST_DEFAULTS.merchantName
+        };
+      }
+      return info2;
     }
     const info = {
-      merchantName: (gp == null ? void 0 : gp.merchantName) || "Merchant"
+      merchantName: (gp == null ? void 0 : gp.merchantName) || (config.environment === "TEST" ? GOOGLE_PAY_TEST_DEFAULTS.merchantName : "Merchant")
     };
-    if (gp == null ? void 0 : gp.merchantId) info.merchantId = gp.merchantId;
+    const merchantId = (gp == null ? void 0 : gp.merchantId) || (config.environment === "TEST" ? GOOGLE_PAY_TEST_DEFAULTS.merchantId : void 0);
+    if (merchantId) info.merchantId = merchantId;
     return info;
   }
   function getPaymentsClient(config) {
@@ -872,12 +942,13 @@ var PaySdk = function(exports) {
     var _a;
     const provided = (_a = config.googlePay) == null ? void 0 : _a.paymentDataRequest;
     if (provided) {
-      return {
+      const base = {
         ...provided,
         callbackIntents: (provided.callbackIntents || []).filter(
           (intent) => intent !== "PAYMENT_AUTHORIZATION"
         )
       };
+      return config.environment === "TEST" ? applyGooglePayTestDefaults(base) : base;
     }
     const payment = config.payment;
     return {
@@ -1355,7 +1426,8 @@ apple-pay-button {
       onCancel: config.onCancel
     };
     if (order.method === "googlePay") {
-      const card = order.params.allowedPaymentMethods[0];
+      const params = environment === "TEST" ? applyGooglePayTestDefaults(order.params) : order.params;
+      const card = params.allowedPaymentMethods[0];
       if (!(card == null ? void 0 : card.tokenizationSpecification)) {
         throw new Error("Create order response is missing Google Pay tokenizationSpecification");
       }
@@ -1364,20 +1436,20 @@ apple-pay-button {
         ...common,
         method: "googlePay",
         payment: {
-          amount: order.params.transactionInfo.totalPrice,
-          currency: order.params.transactionInfo.currencyCode,
-          countryCode: order.params.transactionInfo.countryCode || config.order.countryCode
+          amount: params.transactionInfo.totalPrice,
+          currency: params.transactionInfo.currencyCode,
+          countryCode: params.transactionInfo.countryCode || config.order.countryCode
         },
         billingAddressRequired: parameters.billingAddressRequired === true,
         googlePay: {
-          merchantId: order.params.merchantInfo.merchantId,
-          merchantName: order.params.merchantInfo.merchantName,
+          merchantId: params.merchantInfo.merchantId,
+          merchantName: params.merchantInfo.merchantName,
           allowedAuthMethods: parameters.allowedAuthMethods,
           allowedCardNetworks: parameters.allowedCardNetworks,
           tokenizationSpecification: card.tokenizationSpecification,
           paymentDataRequest: {
-            ...order.params,
-            callbackIntents: withoutPaymentAuthorization(order.params.callbackIntents)
+            ...params,
+            callbackIntents: withoutPaymentAuthorization(params.callbackIntents)
           }
         }
       };
@@ -1434,14 +1506,9 @@ apple-pay-button {
         (_b = (_a = this.config).onOrderCreated) == null ? void 0 : _b.call(_a, order);
         const environment = resolveEnvironment(this.config.environment || order.environment);
         this.api = new PayApiClient(resolvePayApiConfig(environment, this.config.api));
-        this.runtimeConfig = runtimeConfigFromOrder(
-          this.config,
-          order,
-          this.api,
-          async (result) => {
-            await this.processPayment(result);
-          }
-        );
+        this.runtimeConfig = runtimeConfigFromOrder(this.config, order, this.api, async (result) => {
+          await this.processPayment(result);
+        });
         this.runtimeConfig.riskCollection = collectRisk(
           this.runtimeConfig.risk,
           this.runtimeConfig.environment
@@ -1671,7 +1738,9 @@ apple-pay-button {
   if (typeof window !== "undefined") {
     window.PaySdk = { init };
   }
+  exports.GOOGLE_PAY_TEST_DEFAULTS = GOOGLE_PAY_TEST_DEFAULTS;
   exports.PayApiError = PayApiError;
+  exports.applyGooglePayTestDefaults = applyGooglePayTestDefaults;
   exports.describePayResponse = describePayResponse;
   exports.describeS3ds = describeS3ds;
   exports.getApiEndpoints = getApiEndpoints;

@@ -65,6 +65,15 @@ sdk.ready().then(() => sdk.mount())
 `/v1/pay/payments`、`/v1/pay/orders/{orderId}`。本地代理时可在 `api` 里覆盖 URL。
 创建订单若返回 `validateMerchantUrl`，优先使用响应值；未返回则使用环境内置地址。
 
+Google Pay **TEST** 环境默认（创建订单未下发时 SDK 补齐，有值则保留）：
+
+| 字段                | 默认值                 |
+| ------------------- | ---------------------- |
+| `merchantId`        | `12345678901234567890` |
+| `merchantName`      | `Example Merchant`     |
+| `gateway`           | `unlimint`             |
+| `gatewayMerchantId` | `googletest`           |
+
 `ready()` 先创建订单，再按响应加载钱包并检查可用性；`mount()` 也可直接调用，会自动完成这一步。
 四个 API 统一响应须满足 `returnCode === '0000'`。轮询默认每 2 秒一次，最长 5 分钟，瞬时网络错误最多连续重试 4 次。
 

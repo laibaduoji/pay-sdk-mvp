@@ -10,16 +10,16 @@ window.PaySdkDemoConfig = {
   },
 
   googlePay: {
-    merchantName: 'Alchemy Pay Ramp',
-    /** Required when environment is PRODUCTION (example 9.4) */
-    merchantId: 'BCR2DN4TQTA5V4YV', //BCR2DN5TRCG6H2QZ
-    /** PAYMENT_GATEWAY mode */
-    gateway: 'example',
-    gatewayMerchantId: 'exampleGatewayMerchantId',
-    /** Used by PRODUCTION example (9.4) */
+    /** Google Pay TEST defaults (aligned with SDK GOOGLE_PAY_TEST_DEFAULTS) */
+    merchantName: 'Example Merchant',
+    merchantId: '12345678901234567890',
+    gateway: 'unlimint',
+    gatewayMerchantId: 'googletest',
+    /** PRODUCTION sample */
+    productionMerchantName: 'Alchemy Pay Ramp',
+    productionMerchantId: 'BCR2DN4TQTA5V4YV',
     productionGateway: 'unlimint',
     productionGatewayMerchantId: 'BCR2DN4TQTA5V4YV',
-    /** DIRECT mode public key (replace with your real key) */
     publicKey:
       'BE6v5sWsfYnUTgU+21rbWKcCAgPBuN8aR7k3b2tq+UMF6iuwHS1Px3maVxaRdbxUOn1HYuMWQ6Uvhc6/OhXE/p4='
   },

@@ -78,6 +78,14 @@
     const amount = (request && request.amount) || cfg.payment.amount
     const currency = (request && request.currency) || cfg.payment.currency
     const countryCode = (request && request.countryCode) || cfg.payment.countryCode
+    const isProd = options.environment === 'PRODUCTION'
+    const gp = cfg.googlePay
+    const merchantId = isProd ? gp.productionMerchantId || gp.merchantId : gp.merchantId
+    const merchantName = isProd ? gp.productionMerchantName || gp.merchantName : gp.merchantName
+    const gateway = isProd ? gp.productionGateway || gp.gateway : gp.gateway
+    const gatewayMerchantId = isProd
+      ? gp.productionGatewayMerchantId || gp.gatewayMerchantId
+      : gp.gatewayMerchantId
     const cardParameters = {
       allowedAuthMethods: ['PAN_ONLY', 'CRYPTOGRAM_3DS'],
       allowedCardNetworks: ['MASTERCARD', 'VISA']
@@ -99,8 +107,8 @@
           tokenizationSpecification: {
             type: 'PAYMENT_GATEWAY',
             parameters: {
-              gateway: cfg.googlePay.gateway,
-              gatewayMerchantId: cfg.googlePay.gatewayMerchantId
+              gateway: gateway,
+              gatewayMerchantId: gatewayMerchantId
             }
           }
         }
@@ -113,8 +121,8 @@
         totalPriceLabel: 'Total'
       },
       merchantInfo: {
-        merchantId: cfg.googlePay.merchantId,
-        merchantName: cfg.googlePay.merchantName
+        merchantId: merchantId,
+        merchantName: merchantName
       },
       callbackIntents: []
     }

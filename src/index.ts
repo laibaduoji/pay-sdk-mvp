@@ -11,7 +11,7 @@ import type {
 } from './types.js'
 import { ready as detectReady } from './ready.js'
 import { renderButton, resolveContainer } from './button.js'
-import { payWithGoogle } from './googlePay.js'
+import { applyGooglePayTestDefaults, payWithGoogle } from './googlePay.js'
 import { payWithApple } from './applePay.js'
 import { PayApiClient, PayApiError } from './api.js'
 import { describePayResponse, describeS3ds, PaymentActionView } from './actions.js'
@@ -65,6 +65,7 @@ export type {
 export { PayApiError } from './api.js'
 export { describePayResponse, describeS3ds } from './actions.js'
 export { getApiEndpoints, resolvePayApiConfig, resolveEnvironment } from './endpoints.js'
+export { GOOGLE_PAY_TEST_DEFAULTS, applyGooglePayTestDefaults } from './googlePay.js'
 
 function validateConfig(config: PaySdkConfig): void {
   if (!config || typeof config !== 'object') {
@@ -126,7 +127,8 @@ function runtimeConfigFromOrder(
   }
 
   if (order.method === 'googlePay') {
-    const card = order.params.allowedPaymentMethods[0]
+    const params = environment === 'TEST' ? applyGooglePayTestDefaults(order.params) : order.params
+    const card = params.allowedPaymentMethods[0]
     if (!card?.tokenizationSpecification) {
       throw new Error('Create order response is missing Google Pay tokenizationSpecification')
     }
@@ -135,20 +137,20 @@ function runtimeConfigFromOrder(
       ...common,
       method: 'googlePay',
       payment: {
-        amount: order.params.transactionInfo.totalPrice,
-        currency: order.params.transactionInfo.currencyCode,
-        countryCode: order.params.transactionInfo.countryCode || config.order.countryCode
+        amount: params.transactionInfo.totalPrice,
+        currency: params.transactionInfo.currencyCode,
+        countryCode: params.transactionInfo.countryCode || config.order.countryCode
       },
       billingAddressRequired: parameters.billingAddressRequired === true,
       googlePay: {
-        merchantId: order.params.merchantInfo.merchantId,
-        merchantName: order.params.merchantInfo.merchantName,
+        merchantId: params.merchantInfo.merchantId,
+        merchantName: params.merchantInfo.merchantName,
         allowedAuthMethods: parameters.allowedAuthMethods,
         allowedCardNetworks: parameters.allowedCardNetworks,
         tokenizationSpecification: card.tokenizationSpecification,
         paymentDataRequest: {
-          ...order.params,
-          callbackIntents: withoutPaymentAuthorization(order.params.callbackIntents)
+          ...params,
+          callbackIntents: withoutPaymentAuthorization(params.callbackIntents)
         }
       }
     }

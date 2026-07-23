@@ -81,6 +81,9 @@ Built-in API hosts live in [`src/endpoints.ts`](src/endpoints.ts)
 (`TEST` → `api-test.alchemytech.cc`, `PRODUCTION` → `api.alchemypay.org`).
 Pass `environment` on `init`; omit `api` URLs unless you need a proxy override.
 Init `environment` also drives Google Pay and Checkout Risk (sandbox vs prod).
+In Google Pay **TEST**, SDK fills defaults when create-order omits them:
+`merchantId=12345678901234567890`, `merchantName=Example Merchant`,
+`gateway=unlimint`, `gatewayMerchantId=googletest`.
 Apple Pay merchant validation URL is built in; if create-order returns
 `validateMerchantUrl`, that value takes precedence.
 

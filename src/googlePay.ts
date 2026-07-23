@@ -1,20 +1,101 @@
-import type { RuntimeWalletConfig } from './types.js'
+import type { GooglePayParams, RuntimeWalletConfig } from './types.js'
 import { normalizeGoogleResult, isGoogleCancel, toError } from './normalize.js'
 import { resolveRiskCollection } from './risk/index.js'
 
+/** Google Pay TEST 环境默认（创建订单未下发时补齐） */
+export const GOOGLE_PAY_TEST_DEFAULTS = {
+  merchantId: '12345678901234567890',
+  merchantName: 'Example Merchant',
+  gateway: 'unlimint',
+  gatewayMerchantId: 'googletest'
+} as const
+
 const paymentsClients = new WeakMap<RuntimeWalletConfig, google.payments.api.PaymentsClient>()
+
+/**
+ * TEST 环境下补齐 merchantInfo / PAYMENT_GATEWAY 缺省字段。
+ * 响应已有值则保留；无 tokenization 时默认 PAYMENT_GATEWAY。
+ */
+export function applyGooglePayTestDefaults(params: GooglePayParams): GooglePayParams {
+  const merchantInfo: google.payments.api.MerchantInfo = {
+    ...params.merchantInfo,
+    merchantId: params.merchantInfo?.merchantId || GOOGLE_PAY_TEST_DEFAULTS.merchantId,
+    merchantName: params.merchantInfo?.merchantName || GOOGLE_PAY_TEST_DEFAULTS.merchantName
+  }
+
+  const allowedPaymentMethods = (params.allowedPaymentMethods || []).map((method) => {
+    const spec = method.tokenizationSpecification
+    if (!spec) {
+      return {
+        ...method,
+        tokenizationSpecification: {
+          type: 'PAYMENT_GATEWAY' as const,
+          parameters: {
+            gateway: GOOGLE_PAY_TEST_DEFAULTS.gateway,
+            gatewayMerchantId: GOOGLE_PAY_TEST_DEFAULTS.gatewayMerchantId
+          }
+        }
+      }
+    }
+    if (spec.type !== 'PAYMENT_GATEWAY') return method
+    const parameters = {
+      ...spec.parameters,
+      gateway: spec.parameters?.gateway || GOOGLE_PAY_TEST_DEFAULTS.gateway,
+      gatewayMerchantId:
+        spec.parameters?.gatewayMerchantId || GOOGLE_PAY_TEST_DEFAULTS.gatewayMerchantId
+    }
+    return {
+      ...method,
+      tokenizationSpecification: { type: 'PAYMENT_GATEWAY' as const, parameters }
+    }
+  })
+
+  if (allowedPaymentMethods.length === 0) {
+    allowedPaymentMethods.push({
+      type: 'CARD',
+      parameters: {
+        allowedAuthMethods: ['PAN_ONLY', 'CRYPTOGRAM_3DS'],
+        allowedCardNetworks: ['MASTERCARD', 'VISA']
+      },
+      tokenizationSpecification: {
+        type: 'PAYMENT_GATEWAY',
+        parameters: {
+          gateway: GOOGLE_PAY_TEST_DEFAULTS.gateway,
+          gatewayMerchantId: GOOGLE_PAY_TEST_DEFAULTS.gatewayMerchantId
+        }
+      }
+    })
+  }
+
+  return {
+    ...params,
+    merchantInfo,
+    allowedPaymentMethods
+  }
+}
 
 function merchantInfo(config: RuntimeWalletConfig): google.payments.api.MerchantInfo {
   const gp = config.googlePay
   if (gp?.paymentDataRequest?.merchantInfo) {
-    return gp.paymentDataRequest.merchantInfo
+    const info = gp.paymentDataRequest.merchantInfo
+    if (config.environment === 'TEST') {
+      return {
+        ...info,
+        merchantId: info.merchantId || GOOGLE_PAY_TEST_DEFAULTS.merchantId,
+        merchantName: info.merchantName || GOOGLE_PAY_TEST_DEFAULTS.merchantName
+      }
+    }
+    return info
   }
-  // merchantId is required by the type but only used in PRODUCTION; omit it in
-  // TEST rather than sending an empty value.
   const info: Partial<google.payments.api.MerchantInfo> = {
-    merchantName: gp?.merchantName || 'Merchant'
+    merchantName:
+      gp?.merchantName ||
+      (config.environment === 'TEST' ? GOOGLE_PAY_TEST_DEFAULTS.merchantName : 'Merchant')
   }
-  if (gp?.merchantId) info.merchantId = gp.merchantId
+  const merchantId =
+    gp?.merchantId ||
+    (config.environment === 'TEST' ? GOOGLE_PAY_TEST_DEFAULTS.merchantId : undefined)
+  if (merchantId) info.merchantId = merchantId
   return info as google.payments.api.MerchantInfo
 }
 
@@ -72,12 +153,17 @@ function buildPaymentDataRequest(
 ): google.payments.api.PaymentDataRequest {
   const provided = config.googlePay?.paymentDataRequest
   if (provided) {
-    return {
+    const base = {
       ...provided,
       callbackIntents: (provided.callbackIntents || []).filter(
         (intent) => intent !== 'PAYMENT_AUTHORIZATION'
       )
     } as google.payments.api.PaymentDataRequest
+    return config.environment === 'TEST'
+      ? (applyGooglePayTestDefaults(
+          base as GooglePayParams
+        ) as google.payments.api.PaymentDataRequest)
+      : base
   }
 
   const payment = config.payment
