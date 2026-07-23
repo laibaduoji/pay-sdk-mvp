@@ -33,8 +33,13 @@ export const CHECKOUT_DEFAULTS: Required<Omit<RiskCheckoutConfig, 'enabled'>> = 
   integrity: CHECKOUT_INTEGRITY_PROD
 }
 
+export const WORLDPAY_ACTION_URL_DEFAULT =
+  'https://centinelapi.cardinalcommerce.com/V1/Cruise/Collect'
+
 export const WORLDPAY_DEFAULTS: Required<Omit<RiskWorldPayConfig, 'enabled'>> = {
-  jwt: ''
+  jwt: '',
+  bin: '',
+  actionUrl: WORLDPAY_ACTION_URL_DEFAULT
 }
 
 export function mergeFingerprintConfig(
@@ -78,4 +83,14 @@ export function mergeCheckoutConfig(
   }
 
   return { publicKey, scriptUrl, integrity }
+}
+
+export function mergeWorldPayConfig(
+  cfg?: RiskWorldPayConfig
+): Required<Omit<RiskWorldPayConfig, 'enabled'>> {
+  return {
+    jwt: cfg?.jwt || WORLDPAY_DEFAULTS.jwt,
+    bin: cfg?.bin ?? WORLDPAY_DEFAULTS.bin,
+    actionUrl: cfg?.actionUrl || WORLDPAY_DEFAULTS.actionUrl
+  }
 }

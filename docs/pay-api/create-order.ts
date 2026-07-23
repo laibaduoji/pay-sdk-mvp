@@ -88,7 +88,12 @@ export interface RiskCheckoutConfig {
 
 export interface RiskWorldPayConfig {
   enabled?: boolean
+  /** Cardinal / WorldPay DDC JWT（创建订单下发） */
   jwt?: string
+  /** 卡 BIN；钱包支付可空 */
+  bin?: string
+  /** DDC Collect URL，可覆盖 */
+  actionUrl?: string
 }
 
 export interface CreateOrderRisk {

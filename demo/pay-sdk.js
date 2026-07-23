@@ -753,15 +753,19 @@ var PaySdk = (function (exports) {
   const FORTER_DEFAULTS = {
     siteId: 'b132efccafac'
   }
+  const CHECKOUT_PUBLIC_KEY_PROD = 'pk_aldlsnx6lhkjggag4qe2nff4c4h'
+  const CHECKOUT_PUBLIC_KEY_SANDBOX = 'pk_sbox_srkhzyxmotpo6vnfhqixvs66kyt'
   const CHECKOUT_SCRIPT_PROD = 'https://risk.checkout.com/cdn/risk/3.3.1/risk.js'
   const CHECKOUT_INTEGRITY_PROD =
     'sha384-bdtH448zhkYQQTsR0FB6/ITKVZ1zdSi5Dv5NN5AILI1ZBIMJFsqKs8Upm6bWD+DL'
   const CHECKOUT_SCRIPT_SANDBOX = 'https://risk.sandbox.checkout.com/cdn/risk/3.3.1/risk.js'
   const CHECKOUT_INTEGRITY_SANDBOX =
     'sha384-NuldQYGHmN12FhNL/QlNXZ2H+T00OYzfkbbS8s6MvxpqOQUzRg48p+av2KjO8Yut'
-  const CHECKOUT_DEFAULTS = {
-    publicKey: 'pk_aldlsnx6lhkjggag4qe2nff4c4h',
-    scriptUrl: CHECKOUT_SCRIPT_PROD
+  const WORLDPAY_ACTION_URL_DEFAULT = 'https://centinelapi.cardinalcommerce.com/V1/Cruise/Collect'
+  const WORLDPAY_DEFAULTS = {
+    jwt: '',
+    bin: '',
+    actionUrl: WORLDPAY_ACTION_URL_DEFAULT
   }
   function mergeFingerprintConfig(cfg) {
     var _a, _b
@@ -777,12 +781,17 @@ var PaySdk = (function (exports) {
         : FINGERPRINT_DEFAULTS.endpoint
     }
   }
-  function mergeCheckoutConfig(cfg) {
-    const publicKey = (cfg == null ? void 0 : cfg.publicKey) || CHECKOUT_DEFAULTS.publicKey
-    const isSandbox = publicKey.startsWith('pk_sbox_')
+  function mergeCheckoutConfig(cfg, environment) {
+    const useSandbox =
+      environment === 'TEST' ||
+      (!!(cfg == null ? void 0 : cfg.publicKey) && cfg.publicKey.startsWith('pk_sbox_'))
+    const publicKey =
+      (cfg == null ? void 0 : cfg.publicKey) ||
+      (useSandbox ? CHECKOUT_PUBLIC_KEY_SANDBOX : CHECKOUT_PUBLIC_KEY_PROD)
+    const isSandboxKey = publicKey.startsWith('pk_sbox_')
     const scriptUrl =
       (cfg == null ? void 0 : cfg.scriptUrl) ||
-      (isSandbox ? CHECKOUT_SCRIPT_SANDBOX : CHECKOUT_DEFAULTS.scriptUrl)
+      (isSandboxKey ? CHECKOUT_SCRIPT_SANDBOX : CHECKOUT_SCRIPT_PROD)
     let integrity = (cfg == null ? void 0 : cfg.integrity) || ''
     if (!integrity) {
       if (scriptUrl === CHECKOUT_SCRIPT_SANDBOX) integrity = CHECKOUT_INTEGRITY_SANDBOX
@@ -790,12 +799,19 @@ var PaySdk = (function (exports) {
     }
     return { publicKey, scriptUrl, integrity }
   }
+  function mergeWorldPayConfig(cfg) {
+    return {
+      jwt: (cfg == null ? void 0 : cfg.jwt) || WORLDPAY_DEFAULTS.jwt,
+      bin: (cfg == null ? void 0 : cfg.bin) ?? WORLDPAY_DEFAULTS.bin,
+      actionUrl: (cfg == null ? void 0 : cfg.actionUrl) || WORLDPAY_DEFAULTS.actionUrl
+    }
+  }
   let cachedVisitorId = null
-  let inflight$1 = null
+  let inflight$2 = null
   async function collectFingerprint(cfg) {
     if (cachedVisitorId) return cachedVisitorId
-    if (inflight$1) return inflight$1
-    inflight$1 = (async () => {
+    if (inflight$2) return inflight$2
+    inflight$2 = (async () => {
       try {
         const merged = mergeFingerprintConfig(cfg)
         const agent = await ke.load({
@@ -810,10 +826,10 @@ var PaySdk = (function (exports) {
       } catch {
         return ''
       } finally {
-        inflight$1 = null
+        inflight$2 = null
       }
     })()
-    return inflight$1
+    return inflight$2
   }
   function runForterBootstrap(siteId) {
     const source =
@@ -825,7 +841,7 @@ var PaySdk = (function (exports) {
   }
   const TOKEN_READY = 'ftr:tokenReady'
   const COOKIE_NAME = 'forterToken'
-  const TIMEOUT_MS = 15e3
+  const TIMEOUT_MS$1 = 15e3
   let injectedSiteId = null
   function readForterTokenCookie() {
     try {
@@ -863,7 +879,7 @@ var PaySdk = (function (exports) {
       }
       const timer = window.setTimeout(() => {
         finish(readForterTokenCookie())
-      }, TIMEOUT_MS)
+      }, TIMEOUT_MS$1)
       document.addEventListener(TOKEN_READY, onReady)
       try {
         if (injectedSiteId !== siteId) {
@@ -879,7 +895,7 @@ var PaySdk = (function (exports) {
     })
   }
   let cachedDeviceSessionId = null
-  let inflight = null
+  let inflight$1 = null
   async function ensureRiskJs(scriptUrl, integrity) {
     if (window.Risk) return window.Risk
     await loadScript(scriptUrl, {
@@ -893,12 +909,12 @@ var PaySdk = (function (exports) {
     }
     return window.Risk
   }
-  async function collectCheckout(cfg) {
+  async function collectCheckout(cfg, environment) {
     if (cachedDeviceSessionId) return cachedDeviceSessionId
-    if (inflight) return inflight
-    inflight = (async () => {
+    if (inflight$1) return inflight$1
+    inflight$1 = (async () => {
       try {
-        const merged = mergeCheckoutConfig(cfg)
+        const merged = mergeCheckoutConfig(cfg, environment)
         if (!merged.publicKey);
         const Risk = await ensureRiskJs(merged.scriptUrl, merged.integrity)
         const risk = await Risk.create(merged.publicKey)
@@ -909,18 +925,108 @@ var PaySdk = (function (exports) {
       } catch {
         return ''
       } finally {
-        inflight = null
+        inflight$1 = null
       }
     })()
-    return inflight
+    return inflight$1
   }
-  async function collectWorldPay(_cfg) {
+  const IFRAME_ID = 'pay-sdk-ddc-iframe'
+  const TIMEOUT_MS = 1e4
+  let cachedSessionId = null
+  let inflight = null
+  function removeDdcIframe() {
+    const existing = document.getElementById(IFRAME_ID)
+    if (existing == null ? void 0 : existing.parentNode) existing.parentNode.removeChild(existing)
+  }
+  function startDeviceDataCollection(bin, jwt, actionUrl) {
+    removeDdcIframe()
+    const iframe = document.createElement('iframe')
+    iframe.id = IFRAME_ID
+    iframe.name = IFRAME_ID
+    iframe.height = '1'
+    iframe.width = '1'
+    iframe.style.display = 'none'
+    document.body.appendChild(iframe)
+    const form = document.createElement('form')
+    form.method = 'POST'
+    form.action = actionUrl
+    form.target = IFRAME_ID
+    form.style.display = 'none'
+    const binInput = document.createElement('input')
+    binInput.type = 'hidden'
+    binInput.name = 'Bin'
+    binInput.value = bin
+    form.appendChild(binInput)
+    const jwtInput = document.createElement('input')
+    jwtInput.type = 'hidden'
+    jwtInput.name = 'JWT'
+    jwtInput.value = jwt
+    form.appendChild(jwtInput)
+    document.body.appendChild(form)
+    form.submit()
+    form.remove()
+  }
+  function parseSessionId(data) {
+    try {
+      const parsed = typeof data === 'string' ? JSON.parse(data) : data
+      if (
+        parsed &&
+        typeof parsed === 'object' &&
+        'Status' in parsed &&
+        parsed.Status &&
+        'SessionId' in parsed
+      ) {
+        const id = parsed.SessionId
+        return typeof id === 'string' ? id : id != null ? String(id) : ''
+      }
+    } catch {}
     return ''
+  }
+  async function collectWorldPay(cfg) {
+    if (cachedSessionId) return cachedSessionId
+    if (inflight) return inflight
+    inflight = (async () => {
+      const merged = mergeWorldPayConfig(cfg)
+      if (!merged.jwt) return ''
+      let allowedOrigin
+      try {
+        allowedOrigin = new URL(merged.actionUrl).origin
+      } catch {
+        return ''
+      }
+      return await new Promise((resolve) => {
+        let settled = false
+        const finish = (sessionId) => {
+          if (settled) return
+          settled = true
+          window.clearTimeout(timer)
+          window.removeEventListener('message', onMessage)
+          removeDdcIframe()
+          if (sessionId) cachedSessionId = sessionId
+          resolve(sessionId)
+        }
+        const onMessage = (event) => {
+          if (event.origin !== allowedOrigin) return
+          const sessionId = parseSessionId(event.data)
+          if (sessionId) finish(sessionId)
+        }
+        const timer = window.setTimeout(() => finish(''), TIMEOUT_MS)
+        try {
+          window.addEventListener('message', onMessage)
+          startDeviceDataCollection(merged.bin, merged.jwt, merged.actionUrl)
+        } catch {
+          finish('')
+        }
+      })
+    })().finally(() => {
+      inflight = null
+    })
+    return inflight
   }
   function isEnabled(enabled) {
     return enabled === true
   }
-  async function collectRisk(risk) {
+  async function collectRisk(risk, environment) {
     var _a, _b, _c, _d
     if (!risk) return {}
     const tasks = []
@@ -941,7 +1047,7 @@ var PaySdk = (function (exports) {
     }
     if (isEnabled((_c = risk.checkout) == null ? void 0 : _c.enabled)) {
       tasks.push(
-        collectCheckout(risk.checkout).then((deviceSessionId) => {
+        collectCheckout(risk.checkout, environment).then((deviceSessionId) => {
           if (deviceSessionId) payload.checkout = { deviceSessionId }
         })
       )
@@ -1036,7 +1142,7 @@ var PaySdk = (function (exports) {
   async function payWithGoogle(config) {
     var _a, _b, _c
     const client = getPaymentsClient(config)
-    const riskPromise = collectRisk(config.risk)
+    const riskPromise = collectRisk(config.risk, config.environment)
     try {
       const paymentData = await client.loadPaymentData(buildPaymentDataRequest(config))
       const risk = await riskPromise
@@ -1171,7 +1277,7 @@ apple-pay-button {
         : _a.call(config, new Error('applePay.validateMerchantUrl is required'))
       return
     }
-    const riskPromise = collectRisk(config.risk)
+    const riskPromise = collectRisk(config.risk, config.environment)
     const session = new ApplePaySession(APPLE_PAY_VERSION, buildPaymentRequest(config))
     session.onvalidatemerchant = async (event) => {
       var _a2
