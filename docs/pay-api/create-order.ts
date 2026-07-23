@@ -138,9 +138,6 @@ export type CreateOrderResponse = CreateOrderResponseGooglePay | CreateOrderResp
 
 export type CreateOrderApiResponse = ApiResponse<CreateOrderResponse>
 
-/** @deprecated 使用 CreateOrderResponse */
-export type CreateOrderData = CreateOrderResponse
-
 // ─────────────────────────────────────────────
 // 示例
 // ─────────────────────────────────────────────
@@ -181,7 +178,7 @@ export const googlePayParamsDirect: GooglePayParams = {
     merchantId: 'BCR2DN5TRCG6H2QZ',
     merchantName: 'Alchemy Pay Ramp'
   },
-  callbackIntents: ['PAYMENT_AUTHORIZATION']
+  callbackIntents: []
 }
 
 export const googlePayParamsDirectMinimal: GooglePayParams = {
@@ -215,7 +212,7 @@ export const googlePayParamsDirectMinimal: GooglePayParams = {
     merchantId: 'BCR2DN5TRCG6H2QZ',
     merchantName: 'Alchemy Pay Ramp'
   },
-  callbackIntents: ['PAYMENT_AUTHORIZATION']
+  callbackIntents: []
 }
 
 export const googlePayParamsGateway: GooglePayParams = {
@@ -253,7 +250,7 @@ export const googlePayParamsGateway: GooglePayParams = {
     merchantId: 'BCR2DN4TQTA5V4YV',
     merchantName: 'ramp'
   },
-  callbackIntents: ['PAYMENT_AUTHORIZATION']
+  callbackIntents: []
 }
 
 export const applePayParams: ApplePayParams = {

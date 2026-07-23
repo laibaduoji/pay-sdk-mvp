@@ -6,37 +6,30 @@ import type {
 } from '../types.js'
 
 /** SDK 内置默认；订单 risk 有值时覆盖 */
-export const FINGERPRINT_DEFAULTS: Required<Omit<RiskFingerprintConfig, 'enabled'>> = {
+const FINGERPRINT_DEFAULTS: Required<Omit<RiskFingerprintConfig, 'enabled'>> = {
   apiKey: 'BhQq2qOOYR3oeMTEKIc2',
   scriptUrlPattern: ['https://fp.alchemypay.org/web/v3/BhQq2qOOYR3oeMTEKIc2/loader_v3.9.9.js'],
   endpoint: ['https://fp.alchemypay.org']
 }
 
-export const FORTER_DEFAULTS: Required<Omit<RiskForterConfig, 'enabled'>> = {
+const FORTER_DEFAULTS: Required<Omit<RiskForterConfig, 'enabled'>> = {
   siteId: 'b132efccafac'
 }
 
 /** Risk.js SDK 3.3.1 — https://www.checkout.com/docs/developer-resources/sdks/risk-sdks/risk-js-sdk */
-export const CHECKOUT_PUBLIC_KEY_PROD = 'pk_aldlsnx6lhkjggag4qe2nff4c4h'
-export const CHECKOUT_PUBLIC_KEY_SANDBOX = 'pk_sbox_srkhzyxmotpo6vnfhqixvs66kyt'
+const CHECKOUT_PUBLIC_KEY_PROD = 'pk_aldlsnx6lhkjggag4qe2nff4c4h'
+const CHECKOUT_PUBLIC_KEY_SANDBOX = 'pk_sbox_srkhzyxmotpo6vnfhqixvs66kyt'
 
-export const CHECKOUT_SCRIPT_PROD = 'https://risk.checkout.com/cdn/risk/3.3.1/risk.js'
-export const CHECKOUT_INTEGRITY_PROD =
+const CHECKOUT_SCRIPT_PROD = 'https://risk.checkout.com/cdn/risk/3.3.1/risk.js'
+const CHECKOUT_INTEGRITY_PROD =
   'sha384-bdtH448zhkYQQTsR0FB6/ITKVZ1zdSi5Dv5NN5AILI1ZBIMJFsqKs8Upm6bWD+DL'
-export const CHECKOUT_SCRIPT_SANDBOX = 'https://risk.sandbox.checkout.com/cdn/risk/3.3.1/risk.js'
-export const CHECKOUT_INTEGRITY_SANDBOX =
+const CHECKOUT_SCRIPT_SANDBOX = 'https://risk.sandbox.checkout.com/cdn/risk/3.3.1/risk.js'
+const CHECKOUT_INTEGRITY_SANDBOX =
   'sha384-NuldQYGHmN12FhNL/QlNXZ2H+T00OYzfkbbS8s6MvxpqOQUzRg48p+av2KjO8Yut'
 
-export const CHECKOUT_DEFAULTS: Required<Omit<RiskCheckoutConfig, 'enabled'>> = {
-  publicKey: CHECKOUT_PUBLIC_KEY_PROD,
-  scriptUrl: CHECKOUT_SCRIPT_PROD,
-  integrity: CHECKOUT_INTEGRITY_PROD
-}
+const WORLDPAY_ACTION_URL_DEFAULT = 'https://centinelapi.cardinalcommerce.com/V1/Cruise/Collect'
 
-export const WORLDPAY_ACTION_URL_DEFAULT =
-  'https://centinelapi.cardinalcommerce.com/V1/Cruise/Collect'
-
-export const WORLDPAY_DEFAULTS: Required<Omit<RiskWorldPayConfig, 'enabled'>> = {
+const WORLDPAY_DEFAULTS: Required<Omit<RiskWorldPayConfig, 'enabled'>> = {
   jwt: '',
   bin: '',
   actionUrl: WORLDPAY_ACTION_URL_DEFAULT

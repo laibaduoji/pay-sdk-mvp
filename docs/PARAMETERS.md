@@ -6,18 +6,19 @@
 
 ## 1. 顶层参数（`config`）
 
-| 参数                     | 类型                        |  必传  | 默认值   | 说明                                           |
-| ------------------------ | --------------------------- | :----: | -------- | ---------------------------------------------- |
-| `method`                 | `'googlePay' \| 'applePay'` | **是** | —        | 使用哪种支付方式，由商户显式指定               |
-| `container`              | `string \| HTMLElement`     | **是** | —        | 按钮渲染容器，CSS 选择器或 DOM 元素            |
-| `payment`                | `PaymentConfig`             | **是** | —        | 交易信息，见第 2 节                            |
-| `environment`            | `'TEST' \| 'PRODUCTION'`    |   否   | `'TEST'` | 仅 Google Pay 使用；Apple Pay 不区分           |
-| `billingAddressRequired` | `boolean`                   |   否   | `false`  | 是否需要账单地址（两端通用），见第 5 节        |
-| `googlePay`              | `GooglePayConfig`           | 见说明 | —        | `method === 'googlePay'` 时**必传**，见第 3 节 |
-| `applePay`               | `ApplePayConfig`            | 见说明 | —        | `method === 'applePay'` 时**必传**，见第 4 节  |
-| `onSuccess`              | `(result) => void`          |   否   | —        | 支付成功回调，返回规范化结果                   |
-| `onError`                | `(error: Error) => void`    |   否   | —        | 出错回调                                       |
-| `onCancel`               | `() => void`                |   否   | —        | 用户取消回调                                   |
+| 参数                     | 类型                        |  必传  | 默认值         | 说明                                            |
+| ------------------------ | --------------------------- | :----: | -------------- | ----------------------------------------------- |
+| `method`                 | `'googlePay' \| 'applePay'` | **是** | —              | 使用哪种支付方式，由商户显式指定                |
+| `container`              | `string \| HTMLElement`     | **是** | —              | 按钮渲染容器，CSS 选择器或 DOM 元素             |
+| `payment`                | `PaymentConfig`             | **是** | —              | 交易信息，见第 2 节                             |
+| `environment`            | `'TEST' \| 'PRODUCTION'`    |   否   | `'PRODUCTION'` | Google Pay 与风控环境；Apple Pay 钱包本身不区分 |
+| `billingAddressRequired` | `boolean`                   |   否   | `false`        | 是否需要账单地址（两端通用），见第 5 节         |
+| `googlePay`              | `GooglePayConfig`           | 见说明 | —              | `method === 'googlePay'` 时**必传**，见第 3 节  |
+| `applePay`               | `ApplePayConfig`            | 见说明 | —              | `method === 'applePay'` 时**必传**，见第 4 节   |
+| `risk`                   | `CreateOrderRisk`           |   否   | —              | 创建订单下发的风控配置，见第 6 节               |
+| `onSuccess`              | `(result) => void`          |   否   | —              | 支付成功回调，返回规范化结果                    |
+| `onError`                | `(error: Error) => void`    |   否   | —              | 出错回调                                        |
+| `onCancel`               | `() => void`                |   否   | —              | 用户取消回调                                    |
 
 > 说明：`method` 为 `googlePay` 时未提供 `googlePay.tokenizationSpecification` 会抛错；为 `applePay` 时未提供 `applePay.validateMerchantUrl` 会抛错。
 
@@ -93,7 +94,39 @@
 
 ---
 
-## 6. `tokenizationSpecification`（Google Pay 必传）
+## 6. `risk`（风控采集）
+
+把创建订单返回的 `risk` 原样传给 `PaySdk.init`。仅 `enabled === true` 的厂商会采集；失败字段不写入结果，**不阻断支付**。
+
+| 块            | 采集结果字段                           | 可覆盖配置                               |
+| ------------- | -------------------------------------- | ---------------------------------------- |
+| `fingerprint` | `result.risk.fingerprint.visitorId`    | `apiKey`、`scriptUrlPattern`、`endpoint` |
+| `forter`      | `result.risk.forter.token`             | `siteId`                                 |
+| `checkout`    | `result.risk.checkout.deviceSessionId` | `publicKey`、`scriptUrl`、`integrity`    |
+| `worldPay`    | `result.risk.worldPay.sessionId`       | `jwt`、`bin`、`actionUrl`                |
+
+```js
+PaySdk.init({
+  // ...
+  environment: 'TEST', // Checkout 未下发 publicKey 时走沙盒默认 key
+  risk: {
+    fingerprint: { enabled: true },
+    forter: { enabled: true },
+    checkout: { enabled: true },
+    worldPay: { enabled: true, jwt: '...' }
+  },
+  onSuccess(result) {
+    // 商户组 PayRequest.risk 时使用 result.risk
+    console.log(result.risk)
+  }
+})
+```
+
+完整契约见 [`docs/pay-api/`](./pay-api/)。
+
+---
+
+## 7. `tokenizationSpecification`（Google Pay 必传）
 
 由商户按支付网关要求提供，SDK 不做任何字段改写。二选一：
 
@@ -119,7 +152,7 @@
 
 ---
 
-## 7. 成功回调结果（`onSuccess(result)`）
+## 8. 成功回调结果（`onSuccess(result)`）
 
 ```js
 // Google Pay
@@ -129,7 +162,8 @@
     paymentMethodData,
     billingAddress, // 开启账单地址时
     email,
-    raw) // 完整 paymentData
+    raw, // 完整 paymentData
+    risk) // 见第 6 节；无 enabled 厂商时为 {}
 }
 
 // Apple Pay
@@ -138,27 +172,28 @@
     token, // event.payment.token
     billingContact,
     shippingContact,
-    raw) // 完整 event.payment
+    raw, // 完整 event.payment
+    risk)
 }
 ```
 
 ---
 
-## 8. 示例集
+## 9. 示例集
 
 可交互 demo 见 [`demo/`](../demo/)（`npm run demo`）。各页共用 [`demo/config.js`](../demo/config.js) 中的 gateway / publicKey / payment 等参数。
 
 | PARAMETERS | Demo 页面                                                              |
 | ---------- | ---------------------------------------------------------------------- |
-| 8.1        | [01-google-pay-gateway.html](../demo/01-google-pay-gateway.html)       |
-| 8.2        | [02-google-pay-direct.html](../demo/02-google-pay-direct.html)         |
-| 8.3        | [03-google-pay-billing.html](../demo/03-google-pay-billing.html)       |
-| 8.4        | [04-google-pay-production.html](../demo/04-google-pay-production.html) |
-| 8.5        | [05-apple-pay-basic.html](../demo/05-apple-pay-basic.html)             |
-| 8.6        | [06-apple-pay-billing.html](../demo/06-apple-pay-billing.html)         |
-| 8.7        | [07-lifecycle.html](../demo/07-lifecycle.html)                         |
+| 9.1        | [01-google-pay-gateway.html](../demo/01-google-pay-gateway.html)       |
+| 9.2        | [02-google-pay-direct.html](../demo/02-google-pay-direct.html)         |
+| 9.3        | [03-google-pay-billing.html](../demo/03-google-pay-billing.html)       |
+| 9.4        | [04-google-pay-production.html](../demo/04-google-pay-production.html) |
+| 9.5        | [05-apple-pay-basic.html](../demo/05-apple-pay-basic.html)             |
+| 9.6        | [06-apple-pay-billing.html](../demo/06-apple-pay-billing.html)         |
+| 9.7        | [07-lifecycle.html](../demo/07-lifecycle.html)                         |
 
-### 8.1 Google Pay — 最简（PAYMENT_GATEWAY，TEST）
+### 9.1 Google Pay — 最简（PAYMENT_GATEWAY，TEST）
 
 ```js
 PaySdk.init({
@@ -178,7 +213,7 @@ PaySdk.init({
 })
 ```
 
-### 8.2 Google Pay — DIRECT 令牌化
+### 9.2 Google Pay — DIRECT 令牌化
 
 ```js
 PaySdk.init({
@@ -200,7 +235,7 @@ PaySdk.init({
 })
 ```
 
-### 8.3 Google Pay — 需要账单地址
+### 9.3 Google Pay — 需要账单地址
 
 ```js
 PaySdk.init({
@@ -221,7 +256,7 @@ PaySdk.init({
 })
 ```
 
-### 8.4 Google Pay — PRODUCTION + 自定义卡组织 + 按钮样式
+### 9.4 Google Pay — PRODUCTION + 自定义卡组织 + 按钮样式
 
 ```js
 PaySdk.init({
@@ -243,7 +278,7 @@ PaySdk.init({
 })
 ```
 
-### 8.5 Apple Pay — 最简
+### 9.5 Apple Pay — 最简
 
 ```js
 PaySdk.init({
@@ -261,7 +296,7 @@ PaySdk.init({
 })
 ```
 
-### 8.6 Apple Pay — 需要账单地址 + 自定义能力/卡组织/按钮
+### 9.6 Apple Pay — 需要账单地址 + 自定义能力/卡组织/按钮
 
 ```js
 PaySdk.init({
@@ -283,7 +318,7 @@ PaySdk.init({
 })
 ```
 
-### 8.7 完整生命周期（ready → mount → destroy）
+### 9.7 完整生命周期（ready → mount → destroy）
 
 ```js
 const sdk = PaySdk.init({

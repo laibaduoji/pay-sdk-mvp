@@ -2,7 +2,7 @@ import type { PaySdkConfig } from './types.js'
 import { normalizeGoogleResult, isGoogleCancel, toError } from './normalize.js'
 import { collectRisk } from './risk/index.js'
 
-let paymentsClient: google.payments.api.PaymentsClient | null = null
+const paymentsClients = new WeakMap<PaySdkConfig, google.payments.api.PaymentsClient>()
 
 function merchantInfo(config: PaySdkConfig): google.payments.api.MerchantInfo {
   const gp = config.googlePay
@@ -16,13 +16,15 @@ function merchantInfo(config: PaySdkConfig): google.payments.api.MerchantInfo {
 }
 
 export function getPaymentsClient(config: PaySdkConfig): google.payments.api.PaymentsClient {
-  if (paymentsClient) return paymentsClient
+  const cached = paymentsClients.get(config)
+  if (cached) return cached
 
-  paymentsClient = new google.payments.api.PaymentsClient({
-    environment: config.environment === 'PRODUCTION' ? 'PRODUCTION' : 'TEST',
+  const client = new google.payments.api.PaymentsClient({
+    environment: config.environment === 'TEST' ? 'TEST' : 'PRODUCTION',
     merchantInfo: merchantInfo(config)
   })
-  return paymentsClient
+  paymentsClients.set(config, client)
+  return client
 }
 
 function buildCardPaymentMethod(

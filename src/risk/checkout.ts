@@ -6,12 +6,8 @@ interface CheckoutRiskInstance {
   publishRiskData(): Promise<string>
 }
 
-interface CheckoutRiskCreateOptions {
-  timeoutMs?: number
-}
-
 interface CheckoutRiskStatic {
-  create(publicKey: string, options?: CheckoutRiskCreateOptions): Promise<CheckoutRiskInstance>
+  create(publicKey: string): Promise<CheckoutRiskInstance>
 }
 
 declare global {

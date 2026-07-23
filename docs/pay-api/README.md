@@ -123,7 +123,7 @@ sequenceDiagram
 
 #### `params` — Google Pay
 
-`PaymentDataRequest`。`totalPriceLabel`、`merchantId`、`merchantName`、`callbackIntents` **必传**。
+`PaymentDataRequest`。`totalPriceLabel`、`merchantId`、`merchantName`、`callbackIntents` **必传**（当前钱包 SDK MVP 不消费 `PAYMENT_AUTHORIZATION`，示例用 `[]`）。
 
 令牌化二选一：
 

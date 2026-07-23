@@ -1,5 +1,5 @@
 import type { RiskForterConfig } from '../types.js'
-import { FORTER_DEFAULTS } from './defaults.js'
+import { mergeForterConfig } from './defaults.js'
 import { runForterBootstrap } from './forterInject.js'
 
 const TOKEN_READY = 'ftr:tokenReady'
@@ -24,17 +24,13 @@ function readForterTokenCookie(): string {
   return ''
 }
 
-function mergeSiteId(cfg?: RiskForterConfig): string {
-  return (cfg?.siteId || FORTER_DEFAULTS.siteId).trim()
-}
-
 /**
  * Forter 前端 token（完整 evt.detail / forterToken cookie）。
  * https://docs.forter.com/front-end-integration
  * 失败返回 ""，不阻断支付。
  */
 export async function collectForter(cfg?: RiskForterConfig): Promise<string> {
-  const siteId = mergeSiteId(cfg)
+  const siteId = mergeForterConfig(cfg).siteId.trim()
   if (!siteId) return ''
 
   const cached = readForterTokenCookie()

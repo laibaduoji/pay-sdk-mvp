@@ -1,4 +1,4 @@
-import type { PaySdkConfig, PayMethod } from './types.js'
+import type { PaySdkConfig, PayMethod, PaySdkInstance } from './types.js'
 import { ready as detectReady } from './ready.js'
 import { renderButton, resolveContainer } from './button.js'
 import { payWithGoogle } from './googlePay.js'
@@ -6,7 +6,14 @@ import { payWithApple } from './applePay.js'
 
 export type {
   PaySdkConfig,
+  PaySdkInstance,
   PayMethod,
+  Environment,
+  PaymentConfig,
+  GooglePayButtonConfig,
+  GooglePayConfig,
+  ApplePayButtonConfig,
+  ApplePayConfig,
   PayResult,
   GooglePayResult,
   ApplePayResult,
@@ -41,7 +48,7 @@ function validateConfig(config: PaySdkConfig): void {
   }
 }
 
-class PaySdkInstance {
+class PaySdk implements PaySdkInstance {
   private config: PaySdkConfig
   private _readyPromise: Promise<true> | null = null
   private _button: HTMLElement | null = null
@@ -82,5 +89,5 @@ class PaySdkInstance {
 
 export function init(config: PaySdkConfig): PaySdkInstance {
   validateConfig(config)
-  return new PaySdkInstance(config)
+  return new PaySdk(config)
 }

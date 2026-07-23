@@ -105,6 +105,12 @@ export interface ApplePayResult {
 
 export type PayResult = GooglePayResult | ApplePayResult
 
+export interface PaySdkInstance {
+  ready(): Promise<true>
+  mount(): this
+  destroy(): void
+}
+
 export interface PaySdkConfig {
   method: PayMethod
   container: string | HTMLElement

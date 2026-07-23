@@ -20,18 +20,18 @@ npm run format     # prettier write
 
 ## Demos
 
-示例页在 [`demo/`](demo/)，一一对应 [docs/PARAMETERS.md](docs/PARAMETERS.md) 第 8 节：
+示例页在 [`demo/`](demo/)，一一对应 [docs/PARAMETERS.md](docs/PARAMETERS.md) 第 9 节：
 
 | 文件                                                                     | 对应示例                    |
 | ------------------------------------------------------------------------ | --------------------------- |
 | [demo/index.html](demo/index.html)                                       | 目录页                      |
-| [demo/01-google-pay-gateway.html](demo/01-google-pay-gateway.html)       | 8.1 PAYMENT_GATEWAY         |
-| [demo/02-google-pay-direct.html](demo/02-google-pay-direct.html)         | 8.2 DIRECT                  |
-| [demo/03-google-pay-billing.html](demo/03-google-pay-billing.html)       | 8.3 账单地址                |
-| [demo/04-google-pay-production.html](demo/04-google-pay-production.html) | 8.4 PRODUCTION              |
-| [demo/05-apple-pay-basic.html](demo/05-apple-pay-basic.html)             | 8.5 Apple Pay 最简          |
-| [demo/06-apple-pay-billing.html](demo/06-apple-pay-billing.html)         | 8.6 Apple 账单地址          |
-| [demo/07-lifecycle.html](demo/07-lifecycle.html)                         | 8.7 ready → mount → destroy |
+| [demo/01-google-pay-gateway.html](demo/01-google-pay-gateway.html)       | 9.1 PAYMENT_GATEWAY         |
+| [demo/02-google-pay-direct.html](demo/02-google-pay-direct.html)         | 9.2 DIRECT                  |
+| [demo/03-google-pay-billing.html](demo/03-google-pay-billing.html)       | 9.3 账单地址                |
+| [demo/04-google-pay-production.html](demo/04-google-pay-production.html) | 9.4 PRODUCTION              |
+| [demo/05-apple-pay-basic.html](demo/05-apple-pay-basic.html)             | 9.5 Apple Pay 最简          |
+| [demo/06-apple-pay-billing.html](demo/06-apple-pay-billing.html)         | 9.6 Apple 账单地址          |
+| [demo/07-lifecycle.html](demo/07-lifecycle.html)                         | 9.7 ready → mount → destroy |
 
 共享测试参数写在 [`demo/config.js`](demo/config.js)（`gateway`、`gatewayMerchantId`、`publicKey`、`merchantName`、`validateMerchantUrl`、`payment` 等）。改一处即可让各示例复用。
 
@@ -116,16 +116,20 @@ Passed through to Google Pay unchanged. Two supported forms:
 {
   method: 'googlePay',
   token: paymentData.paymentMethodData.tokenizationData.token,
-  paymentMethodData, billingAddress, email, raw
+  paymentMethodData, billingAddress, email, raw,
+  risk // PayRiskPayload；仅 enabled 厂商有字段
 }
 
 // Apple Pay
 {
   method: 'applePay',
   token: event.payment.token,
-  billingContact, shippingContact, raw
+  billingContact, shippingContact, raw,
+  risk
 }
 ```
+
+把创建订单返回的 `risk` 传给 `PaySdk.init({ risk })`；采集结果在 `onSuccess(result).risk`，再组到支付请求。详见 [docs/PARAMETERS.md](docs/PARAMETERS.md) 第 6 节与 [docs/pay-api/](docs/pay-api/)。
 
 ## Billing address
 

@@ -11,12 +11,12 @@ window.PaySdkDemoConfig = {
 
   googlePay: {
     merchantName: 'Alchemy Pay Ramp',
-    /** Required when environment is PRODUCTION (example 8.4) */
+    /** Required when environment is PRODUCTION (example 9.4) */
     merchantId: 'BCR2DN4TQTA5V4YV', //BCR2DN5TRCG6H2QZ
     /** PAYMENT_GATEWAY mode */
     gateway: 'example',
     gatewayMerchantId: 'exampleGatewayMerchantId',
-    /** Used by PRODUCTION example (8.4) */
+    /** Used by PRODUCTION example (9.4) */
     productionGateway: 'unlimint',
     productionGatewayMerchantId: 'BCR2DN4TQTA5V4YV',
     /** DIRECT mode public key (replace with your real key) */
