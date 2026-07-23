@@ -1,10 +1,10 @@
-import type { WalletPaySdkConfig } from './types.js'
+import type { RuntimeWalletConfig } from './types.js'
 import { normalizeGoogleResult, isGoogleCancel, toError } from './normalize.js'
-import { collectRisk } from './risk/index.js'
+import { resolveRiskCollection } from './risk/index.js'
 
-const paymentsClients = new WeakMap<WalletPaySdkConfig, google.payments.api.PaymentsClient>()
+const paymentsClients = new WeakMap<RuntimeWalletConfig, google.payments.api.PaymentsClient>()
 
-function merchantInfo(config: WalletPaySdkConfig): google.payments.api.MerchantInfo {
+function merchantInfo(config: RuntimeWalletConfig): google.payments.api.MerchantInfo {
   const gp = config.googlePay
   if (gp?.paymentDataRequest?.merchantInfo) {
     return gp.paymentDataRequest.merchantInfo
@@ -18,7 +18,7 @@ function merchantInfo(config: WalletPaySdkConfig): google.payments.api.MerchantI
   return info as google.payments.api.MerchantInfo
 }
 
-export function getPaymentsClient(config: WalletPaySdkConfig): google.payments.api.PaymentsClient {
+export function getPaymentsClient(config: RuntimeWalletConfig): google.payments.api.PaymentsClient {
   const cached = paymentsClients.get(config)
   if (cached) return cached
 
@@ -31,7 +31,7 @@ export function getPaymentsClient(config: WalletPaySdkConfig): google.payments.a
 }
 
 function buildCardPaymentMethod(
-  config: WalletPaySdkConfig
+  config: RuntimeWalletConfig
 ): google.payments.api.PaymentMethodSpecification {
   const gp = config.googlePay
 
@@ -57,7 +57,7 @@ function buildCardPaymentMethod(
 
 // Base request shared by isReadyToPay() and loadPaymentData().
 export function buildGoogleBaseRequest(
-  config: WalletPaySdkConfig
+  config: RuntimeWalletConfig
 ): google.payments.api.IsReadyToPayRequest {
   const request = config.googlePay?.paymentDataRequest
   return {
@@ -68,7 +68,7 @@ export function buildGoogleBaseRequest(
 }
 
 function buildPaymentDataRequest(
-  config: WalletPaySdkConfig
+  config: RuntimeWalletConfig
 ): google.payments.api.PaymentDataRequest {
   const provided = config.googlePay?.paymentDataRequest
   if (provided) {
@@ -97,7 +97,7 @@ function buildPaymentDataRequest(
 }
 
 function buttonOptions(
-  config: WalletPaySdkConfig,
+  config: RuntimeWalletConfig,
   onClick: () => void
 ): google.payments.api.ButtonOptions {
   const btn = config.googlePay?.button || {}
@@ -111,13 +111,13 @@ function buttonOptions(
   return options
 }
 
-export function createGoogleButton(config: WalletPaySdkConfig, onClick: () => void): HTMLElement {
+export function createGoogleButton(config: RuntimeWalletConfig, onClick: () => void): HTMLElement {
   return getPaymentsClient(config).createButton(buttonOptions(config, onClick))
 }
 
-export async function payWithGoogle(config: WalletPaySdkConfig): Promise<void> {
+export async function payWithGoogle(config: RuntimeWalletConfig): Promise<void> {
   const client = getPaymentsClient(config)
-  const riskPromise = collectRisk(config.risk, config.environment)
+  const riskPromise = resolveRiskCollection(config)
   try {
     const paymentData = await client.loadPaymentData(buildPaymentDataRequest(config))
     const risk = await riskPromise

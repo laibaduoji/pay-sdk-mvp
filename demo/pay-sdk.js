@@ -671,7 +671,7 @@ var PaySdk = function(exports) {
     inflight$1 = (async () => {
       try {
         const merged = mergeCheckoutConfig(cfg, environment);
-        if (!merged.publicKey) ;
+        if (!merged.publicKey) return "";
         const Risk = await ensureRiskJs(merged.scriptUrl, merged.integrity);
         const risk = await Risk.create(merged.publicKey);
         const deviceSessionId = await risk.publishRiskData();
@@ -813,6 +813,10 @@ var PaySdk = function(exports) {
     await Promise.all(tasks);
     return payload;
   }
+  function resolveRiskCollection(config) {
+    if (config.riskCollection) return config.riskCollection;
+    return collectRisk(config.risk, config.environment);
+  }
   const paymentsClients = /* @__PURE__ */ new WeakMap();
   function merchantInfo(config) {
     var _a;
@@ -908,7 +912,7 @@ var PaySdk = function(exports) {
   async function payWithGoogle(config) {
     var _a, _b, _c;
     const client = getPaymentsClient(config);
-    const riskPromise = collectRisk(config.risk, config.environment);
+    const riskPromise = resolveRiskCollection(config);
     try {
       const paymentData = await client.loadPaymentData(buildPaymentDataRequest(config));
       const risk = await riskPromise;
@@ -1028,47 +1032,19 @@ apple-pay-button {
     }
     return request;
   }
-  async function fetchMerchantSession(config, validationURL) {
-    const ap = config.applePay;
-    if (ap.validateMerchant) {
-      return ap.validateMerchant(validationURL);
-    }
-    const res = await fetch(ap.validateMerchantUrl, {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ validationURL })
-    });
-    if (!res.ok) {
-      throw new Error(`Merchant validation failed with status ${res.status}`);
-    }
-    const body = await res.json();
-    if (typeof (body == null ? void 0 : body.returnCode) === "string") {
-      if (body.returnCode !== "0000") {
-        throw new Error(body.returnMsg || "Merchant validation failed");
-      }
-      if (!body.data || typeof body.data !== "object") {
-        throw new Error("Merchant validation response missing data");
-      }
-      return body.data;
-    }
-    if ((body == null ? void 0 : body.data) && typeof body.data === "object") {
-      return body.data;
-    }
-    throw new Error("Merchant validation response missing data");
-  }
   function payWithApple(config) {
     var _a;
     const ap = config.applePay;
-    if (!(ap == null ? void 0 : ap.validateMerchantUrl)) {
-      (_a = config.onError) == null ? void 0 : _a.call(config, new Error("applePay.validateMerchantUrl is required"));
+    if (!(ap == null ? void 0 : ap.validateMerchant)) {
+      (_a = config.onError) == null ? void 0 : _a.call(config, new Error("Apple Pay merchant validation is not configured"));
       return;
     }
-    const riskPromise = collectRisk(config.risk, config.environment);
+    const riskPromise = resolveRiskCollection(config);
     const session = new ApplePaySession(APPLE_PAY_VERSION, buildPaymentRequest(config));
     session.onvalidatemerchant = async (event) => {
       var _a2;
       try {
-        const merchantSession = await fetchMerchantSession(config, event.validationURL);
+        const merchantSession = await ap.validateMerchant(event.validationURL);
         session.completeMerchantValidation(merchantSession);
       } catch (err) {
         session.abort();
@@ -1342,36 +1318,16 @@ apple-pay-button {
   function resolveEnvironment(environment) {
     return environment === "TEST" ? "TEST" : "PRODUCTION";
   }
-  const SUPPORTED_METHODS = ["googlePay", "applePay"];
   function validateConfig(config) {
-    var _a, _b;
     if (!config || typeof config !== "object") {
       throw new Error("PaySdk.init requires a config object");
     }
     if (!config.container) {
       throw new Error("config.container is required");
     }
-    if (isApiConfig(config)) {
-      if (!config.order || config.order.amount == null || !config.order.currency || !config.order.countryCode) {
-        throw new Error("order.amount, order.currency and order.countryCode are required");
-      }
-      return;
+    if (!config.order || config.order.amount == null || !config.order.currency || !config.order.countryCode) {
+      throw new Error("order.amount, order.currency and order.countryCode are required");
     }
-    if (!SUPPORTED_METHODS.includes(config.method)) {
-      throw new Error(`config.method must be one of: ${SUPPORTED_METHODS.join(", ")}`);
-    }
-    if (!config.payment || config.payment.amount == null || !config.payment.currency) {
-      throw new Error("config.payment.amount and config.payment.currency are required");
-    }
-    if (config.method === "googlePay" && !((_a = config.googlePay) == null ? void 0 : _a.tokenizationSpecification)) {
-      throw new Error("googlePay.tokenizationSpecification is required");
-    }
-    if (config.method === "applePay" && !((_b = config.applePay) == null ? void 0 : _b.validateMerchantUrl)) {
-      throw new Error("applePay.validateMerchantUrl is required");
-    }
-  }
-  function isApiConfig(config) {
-    return "order" in config && !!config.order;
   }
   function hasSecondaryAction(response) {
     return !!(response.webUrl || response.MD || response.JWT || response.action || response.threeDSMethodData || response.methodUrl);
@@ -1460,10 +1416,10 @@ apple-pay-button {
       this.paymentInFlight = false;
       this.destroyed = false;
       this.config = config;
-      this.api = isApiConfig(config) ? new PayApiClient(resolvePayApiConfig(resolveEnvironment(config.environment), config.api)) : null;
-      if (!isApiConfig(config)) this.runtimeConfig = config;
+      this.api = new PayApiClient(
+        resolvePayApiConfig(resolveEnvironment(config.environment), config.api)
+      );
     }
-    // Resolves once the wallet JS is loaded and the environment supports payment.
     ready() {
       if (!this._readyPromise) {
         this._readyPromise = this.prepare();
@@ -1471,21 +1427,24 @@ apple-pay-button {
       return this._readyPromise;
     }
     async prepare() {
-      var _a;
+      var _a, _b;
       if (!this.runtimeConfig) {
-        const config = this.config;
-        const order = await this.api.createOrder(config.order);
+        const order = await this.api.createOrder(this.config.order);
         this.order = order;
-        (_a = config.onOrderCreated) == null ? void 0 : _a.call(config, order);
-        const environment = resolveEnvironment(config.environment || order.environment);
-        this.api = new PayApiClient(resolvePayApiConfig(environment, config.api));
+        (_b = (_a = this.config).onOrderCreated) == null ? void 0 : _b.call(_a, order);
+        const environment = resolveEnvironment(this.config.environment || order.environment);
+        this.api = new PayApiClient(resolvePayApiConfig(environment, this.config.api));
         this.runtimeConfig = runtimeConfigFromOrder(
-          config,
+          this.config,
           order,
           this.api,
           async (result) => {
             await this.processPayment(result);
           }
+        );
+        this.runtimeConfig.riskCollection = collectRisk(
+          this.runtimeConfig.risk,
+          this.runtimeConfig.environment
         );
       }
       return ready(this.runtimeConfig);
@@ -1505,7 +1464,6 @@ apple-pay-button {
       }
       payWithApple(config);
     }
-    // Renders the official button into the container and wires up the click.
     mount() {
       if (this.runtimeConfig) {
         this.render();
@@ -1517,20 +1475,17 @@ apple-pay-button {
       }
       return this;
     }
-    /** 商户（或 JS Bridge 授权后）可主动让 SDK 打开二次动作。 */
     openAction(action) {
       this.actionView.open(action);
     }
     getActionMode() {
-      return isApiConfig(this.config) ? this.config.actionMode || "callback" : "callback";
+      return this.config.actionMode || "callback";
     }
-    /** @returns navigated = SDK 已整页跳转；opened = 已开窗/iframe；deferred = 仅回调商户 */
     async dispatchAction(action) {
       var _a, _b;
       (_b = (_a = this.config).onAction) == null ? void 0 : _b.call(_a, action);
       if (this.getActionMode() !== "auto") return "deferred";
-      const custom = isApiConfig(this.config) ? this.config.openAction : void 0;
-      const handled = custom ? await custom(action) : false;
+      const handled = this.config.openAction ? await this.config.openAction(action) : false;
       if (handled === true) return "opened";
       this.actionView.open(action);
       if (action.type === "webUrl" || action.type === "s3ds") return "navigated";
@@ -1541,10 +1496,8 @@ apple-pay-button {
       this._button = renderButton(this.runtimeConfig, () => this._pay());
     }
     async processPayment(walletResult) {
-      var _a, _b;
-      if (!this.api || !this.order || !isApiConfig(this.config)) {
-        await ((_b = (_a = this.config).onSuccess) == null ? void 0 : _b.call(_a, walletResult));
-        return;
+      if (!this.order) {
+        throw new Error("Order is not ready");
       }
       if (this.destroyed) return;
       if (this.paymentInFlight) {
@@ -1640,75 +1593,83 @@ apple-pay-button {
             consecutiveTransientErrors += 1;
             if (consecutiveTransientErrors < 5) continue;
           }
-          this.fail(error);
+          this.fail(toError(error));
           return;
         }
       }
     }
     delay(ms) {
       return new Promise((resolve) => {
-        this.pollDelayResolve = resolve;
+        this.pollDelayResolve = () => resolve();
         this.pollTimer = window.setTimeout(() => {
-          this.pollTimer = null;
           this.pollDelayResolve = null;
+          this.pollTimer = null;
           resolve();
         }, ms);
       });
     }
-    finish(walletResult, paymentResponse, order) {
-      var _a, _b;
-      const result = this.complete(walletResult, paymentResponse, order);
-      (_b = (_a = this.config).onSuccess) == null ? void 0 : _b.call(_a, result);
+    stopPolling() {
+      this.pollGeneration += 1;
+      if (this.pollTimer != null) {
+        window.clearTimeout(this.pollTimer);
+        this.pollTimer = null;
+      }
+      const resume = this.pollDelayResolve;
+      this.pollDelayResolve = null;
+      resume == null ? void 0 : resume();
     }
-    complete(walletResult, paymentResponse, order) {
-      var _a, _b, _c;
-      this.paymentInFlight = false;
+    finish(walletResult, paymentResponse, order) {
+      var _a, _b, _c, _d, _e2;
       this.stopPolling();
       this.actionView.destroy();
+      this.paymentInFlight = false;
       const result = {
         ...walletResult,
         orderId: (_a = this.order) == null ? void 0 : _a.orderId,
         paymentResponse,
         order
       };
-      (_c = (_b = this.config).onComplete) == null ? void 0 : _c.call(_b, result);
-      return result;
+      void ((_c = (_b = this.config).onSuccess) == null ? void 0 : _c.call(_b, result));
+      (_e2 = (_d = this.config).onComplete) == null ? void 0 : _e2.call(_d, result);
+    }
+    complete(walletResult, paymentResponse, order) {
+      var _a, _b, _c;
+      this.stopPolling();
+      this.actionView.destroy();
+      this.paymentInFlight = false;
+      (_c = (_b = this.config).onComplete) == null ? void 0 : _c.call(_b, {
+        ...walletResult,
+        orderId: (_a = this.order) == null ? void 0 : _a.orderId,
+        paymentResponse,
+        order
+      });
     }
     fail(error) {
       var _a, _b;
-      this.paymentInFlight = false;
       this.stopPolling();
       this.actionView.destroy();
-      (_b = (_a = this.config).onError) == null ? void 0 : _b.call(
-        _a,
-        error instanceof PayApiError || error instanceof Error ? error : toError(error)
-      );
-    }
-    stopPolling() {
-      var _a;
-      this.pollGeneration += 1;
-      if (this.pollTimer !== null) {
-        window.clearTimeout(this.pollTimer);
-        this.pollTimer = null;
-      }
-      (_a = this.pollDelayResolve) == null ? void 0 : _a.call(this);
-      this.pollDelayResolve = null;
+      this.paymentInFlight = false;
+      (_b = (_a = this.config).onError) == null ? void 0 : _b.call(_a, error);
     }
     destroy() {
       var _a;
       this.destroyed = true;
-      this.paymentInFlight = false;
       this.stopPolling();
       this.actionView.destroy();
+      this.paymentInFlight = false;
       (_a = this._button) == null ? void 0 : _a.remove();
       this._button = null;
-      const el = resolveContainer(this.config.container);
-      if (el) el.innerHTML = "";
+      if (this.runtimeConfig) {
+        resolveContainer(this.runtimeConfig.container).replaceChildren();
+      }
     }
   }
   function init(config) {
     validateConfig(config);
     return new PaySdk2(config);
+  }
+  if (typeof window !== "undefined") {
+    window.PaySdk = { init };
   }
   exports.PayApiError = PayApiError;
   exports.describePayResponse = describePayResponse;

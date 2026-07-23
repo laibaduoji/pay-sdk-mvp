@@ -1,7 +1,5 @@
 import type {
-  ApiPaySdkConfig,
   CreateOrderResponse,
-  PayMethod,
   PayResponse,
   PayResult,
   PaySdkConfig,
@@ -9,7 +7,7 @@ import type {
   PaymentAction,
   PaymentActionMode,
   QueryOrderResponse,
-  WalletPaySdkConfig
+  RuntimeWalletConfig
 } from './types.js'
 import { ready as detectReady } from './ready.js'
 import { renderButton, resolveContainer } from './button.js'
@@ -24,11 +22,12 @@ import {
   normalizeGoogleBillingAddress,
   toError
 } from './normalize.js'
+import { collectRisk } from './risk/index.js'
 
 export type {
   PaySdkConfig,
   ApiPaySdkConfig,
-  WalletPaySdkConfig,
+  RuntimeWalletConfig,
   PaySdkInstance,
   PayMethod,
   Environment,
@@ -67,8 +66,6 @@ export { PayApiError } from './api.js'
 export { describePayResponse, describeS3ds } from './actions.js'
 export { getApiEndpoints, resolvePayApiConfig, resolveEnvironment } from './endpoints.js'
 
-const SUPPORTED_METHODS: PayMethod[] = ['googlePay', 'applePay']
-
 function validateConfig(config: PaySdkConfig): void {
   if (!config || typeof config !== 'object') {
     throw new Error('PaySdk.init requires a config object')
@@ -76,33 +73,14 @@ function validateConfig(config: PaySdkConfig): void {
   if (!config.container) {
     throw new Error('config.container is required')
   }
-  if (isApiConfig(config)) {
-    if (
-      !config.order ||
-      config.order.amount == null ||
-      !config.order.currency ||
-      !config.order.countryCode
-    ) {
-      throw new Error('order.amount, order.currency and order.countryCode are required')
-    }
-    return
+  if (
+    !config.order ||
+    config.order.amount == null ||
+    !config.order.currency ||
+    !config.order.countryCode
+  ) {
+    throw new Error('order.amount, order.currency and order.countryCode are required')
   }
-  if (!SUPPORTED_METHODS.includes(config.method)) {
-    throw new Error(`config.method must be one of: ${SUPPORTED_METHODS.join(', ')}`)
-  }
-  if (!config.payment || config.payment.amount == null || !config.payment.currency) {
-    throw new Error('config.payment.amount and config.payment.currency are required')
-  }
-  if (config.method === 'googlePay' && !config.googlePay?.tokenizationSpecification) {
-    throw new Error('googlePay.tokenizationSpecification is required')
-  }
-  if (config.method === 'applePay' && !config.applePay?.validateMerchantUrl) {
-    throw new Error('applePay.validateMerchantUrl is required')
-  }
-}
-
-function isApiConfig(config: PaySdkConfig): config is ApiPaySdkConfig {
-  return 'order' in config && !!(config as ApiPaySdkConfig).order
 }
 
 function hasSecondaryAction(response: PayResponse): boolean {
@@ -119,7 +97,6 @@ function hasSecondaryAction(response: PayResponse): boolean {
 function isTransientPollError(error: unknown): boolean {
   if (error instanceof PayApiError) {
     if (error.status != null && error.status >= 500) return true
-    // 业务 returnCode 失败不重试
     if (error.returnCode && error.returnCode !== '0000') return false
     return error.status == null
   }
@@ -133,12 +110,11 @@ function withoutPaymentAuthorization(
 }
 
 function runtimeConfigFromOrder(
-  config: ApiPaySdkConfig,
+  config: PaySdkConfig,
   order: CreateOrderResponse,
   api: PayApiClient,
   onWalletAuthorized: (result: PayResult) => void | Promise<void>
-): WalletPaySdkConfig {
-  // init.environment 优先；否则用创建订单下发；默认 PRODUCTION
+): RuntimeWalletConfig {
   const environment = resolveEnvironment(config.environment || order.environment)
   const common = {
     container: config.container,
@@ -203,11 +179,11 @@ function runtimeConfigFromOrder(
 
 class PaySdk implements PaySdkInstance {
   private readonly config: PaySdkConfig
-  private api: PayApiClient | null
+  private api: PayApiClient
   private readonly actionView = new PaymentActionView()
   private _readyPromise: Promise<true> | null = null
   private _button: HTMLElement | null = null
-  private runtimeConfig: WalletPaySdkConfig | null = null
+  private runtimeConfig: RuntimeWalletConfig | null = null
   private order: CreateOrderResponse | null = null
   private pollTimer: number | null = null
   private pollDelayResolve: (() => void) | null = null
@@ -217,13 +193,11 @@ class PaySdk implements PaySdkInstance {
 
   constructor(config: PaySdkConfig) {
     this.config = config
-    this.api = isApiConfig(config)
-      ? new PayApiClient(resolvePayApiConfig(resolveEnvironment(config.environment), config.api))
-      : null
-    if (!isApiConfig(config)) this.runtimeConfig = config
+    this.api = new PayApiClient(
+      resolvePayApiConfig(resolveEnvironment(config.environment), config.api)
+    )
   }
 
-  // Resolves once the wallet JS is loaded and the environment supports payment.
   ready(): Promise<true> {
     if (!this._readyPromise) {
       this._readyPromise = this.prepare()
@@ -233,19 +207,21 @@ class PaySdk implements PaySdkInstance {
 
   private async prepare(): Promise<true> {
     if (!this.runtimeConfig) {
-      const config = this.config as ApiPaySdkConfig
-      const order = await this.api!.createOrder(config.order)
+      const order = await this.api.createOrder(this.config.order)
       this.order = order
-      config.onOrderCreated?.(order)
+      this.config.onOrderCreated?.(order)
 
-      // 创建订单后按 init.environment || order.environment 重建客户端，
-      // 保证后续 pay / query / validateMerchant 与 Google Pay / Checkout 同环境
-      const environment = resolveEnvironment(config.environment || order.environment)
-      this.api = new PayApiClient(resolvePayApiConfig(environment, config.api))
+      const environment = resolveEnvironment(this.config.environment || order.environment)
+      this.api = new PayApiClient(resolvePayApiConfig(environment, this.config.api))
 
-      this.runtimeConfig = runtimeConfigFromOrder(config, order, this.api, async (result) => {
+      this.runtimeConfig = runtimeConfigFromOrder(this.config, order, this.api, async (result) => {
         await this.processPayment(result)
       })
+
+      this.runtimeConfig.riskCollection = collectRisk(
+        this.runtimeConfig.risk,
+        this.runtimeConfig.environment
+      )
     }
     return detectReady(this.runtimeConfig)
   }
@@ -265,7 +241,6 @@ class PaySdk implements PaySdkInstance {
     payWithApple(config)
   }
 
-  // Renders the official button into the container and wires up the click.
   mount(): this {
     if (this.runtimeConfig) {
       this.render()
@@ -277,24 +252,21 @@ class PaySdk implements PaySdkInstance {
     return this
   }
 
-  /** 商户（或 JS Bridge 授权后）可主动让 SDK 打开二次动作。 */
   openAction(action: PaymentAction): void {
     this.actionView.open(action)
   }
 
   private getActionMode(): PaymentActionMode {
-    return isApiConfig(this.config) ? this.config.actionMode || 'callback' : 'callback'
+    return this.config.actionMode || 'callback'
   }
 
-  /** @returns navigated = SDK 已整页跳转；opened = 已开窗/iframe；deferred = 仅回调商户 */
   private async dispatchAction(
     action: PaymentAction
   ): Promise<'navigated' | 'opened' | 'deferred'> {
     this.config.onAction?.(action)
     if (this.getActionMode() !== 'auto') return 'deferred'
 
-    const custom = isApiConfig(this.config) ? this.config.openAction : undefined
-    const handled = custom ? await custom(action) : false
+    const handled = this.config.openAction ? await this.config.openAction(action) : false
     if (handled === true) return 'opened'
 
     this.actionView.open(action)
@@ -308,9 +280,8 @@ class PaySdk implements PaySdkInstance {
   }
 
   private async processPayment(walletResult: PayResult): Promise<void> {
-    if (!this.api || !this.order || !isApiConfig(this.config)) {
-      await this.config.onSuccess?.(walletResult)
-      return
+    if (!this.order) {
+      throw new Error('Order is not ready')
     }
     if (this.destroyed) return
     if (this.paymentInFlight) {
@@ -331,7 +302,6 @@ class PaySdk implements PaySdkInstance {
       const action = describePayResponse(paymentResponse)
       if (this.destroyed) return
       if (action) await this.dispatchAction(action)
-      // WebView 友好：不因 webUrl 中断轮询；由商户决定是否跳转/开窗
       void this.pollOrder(walletResult, paymentResponse)
     } catch (error) {
       this.paymentInFlight = false
@@ -367,7 +337,7 @@ class PaySdk implements PaySdkInstance {
   }
 
   private async pollOrder(walletResult: PayResult, paymentResponse: PayResponse): Promise<void> {
-    const apiConfig = (this.config as ApiPaySdkConfig).api
+    const apiConfig = this.config.api
     const interval = apiConfig?.pollIntervalMs || 2_000
     const timeoutMs = apiConfig?.pollTimeoutMs ?? 300_000
     const startedAt = Date.now()
@@ -387,7 +357,7 @@ class PaySdk implements PaySdkInstance {
       }
 
       try {
-        const current = await this.api!.queryOrder(this.order.orderId)
+        const current = await this.api.queryOrder(this.order.orderId)
         if (this.destroyed || generation !== this.pollGeneration) return
         consecutiveTransientErrors = 0
         this.config.onStatusChange?.(current)
@@ -395,7 +365,6 @@ class PaySdk implements PaySdkInstance {
         if (current.s3dsUrl && current.s3dsUrl !== lastS3dsUrl) {
           lastS3dsUrl = current.s3dsUrl
           const outcome = await this.dispatchAction(describeS3ds(current.s3dsUrl))
-          // 仅 SDK 内置整页跳转时停止；callback / Bridge 开窗继续轮询
           if (outcome === 'navigated') {
             this.stopPolling()
             return
@@ -419,7 +388,7 @@ class PaySdk implements PaySdkInstance {
           consecutiveTransientErrors += 1
           if (consecutiveTransientErrors < 5) continue
         }
-        this.fail(error)
+        this.fail(toError(error))
         return
       }
     }
@@ -427,13 +396,24 @@ class PaySdk implements PaySdkInstance {
 
   private delay(ms: number): Promise<void> {
     return new Promise((resolve) => {
-      this.pollDelayResolve = resolve
+      this.pollDelayResolve = () => resolve()
       this.pollTimer = window.setTimeout(() => {
-        this.pollTimer = null
         this.pollDelayResolve = null
+        this.pollTimer = null
         resolve()
       }, ms)
     })
+  }
+
+  private stopPolling(): void {
+    this.pollGeneration += 1
+    if (this.pollTimer != null) {
+      window.clearTimeout(this.pollTimer)
+      this.pollTimer = null
+    }
+    const resume = this.pollDelayResolve
+    this.pollDelayResolve = null
+    resume?.()
   }
 
   private finish(
@@ -441,60 +421,66 @@ class PaySdk implements PaySdkInstance {
     paymentResponse: PayResponse,
     order?: QueryOrderResponse
   ): void {
-    const result = this.complete(walletResult, paymentResponse, order)
-    this.config.onSuccess?.(result)
-  }
-
-  private complete(
-    walletResult: PayResult,
-    paymentResponse: PayResponse,
-    order?: QueryOrderResponse
-  ): PayResult {
-    this.paymentInFlight = false
     this.stopPolling()
     this.actionView.destroy()
-    const result: PayResult = {
+    this.paymentInFlight = false
+    const result = {
       ...walletResult,
       orderId: this.order?.orderId,
       paymentResponse,
       order
     }
+    void this.config.onSuccess?.(result)
     this.config.onComplete?.(result)
-    return result
   }
 
-  private fail(error: unknown): void {
-    this.paymentInFlight = false
+  private complete(
+    walletResult: PayResult,
+    paymentResponse: PayResponse,
+    order: QueryOrderResponse
+  ): void {
     this.stopPolling()
     this.actionView.destroy()
-    this.config.onError?.(
-      error instanceof PayApiError || error instanceof Error ? error : toError(error)
-    )
+    this.paymentInFlight = false
+    this.config.onComplete?.({
+      ...walletResult,
+      orderId: this.order?.orderId,
+      paymentResponse,
+      order
+    })
   }
 
-  private stopPolling(): void {
-    this.pollGeneration += 1
-    if (this.pollTimer !== null) {
-      window.clearTimeout(this.pollTimer)
-      this.pollTimer = null
-    }
-    this.pollDelayResolve?.()
-    this.pollDelayResolve = null
+  private fail(error: Error): void {
+    this.stopPolling()
+    this.actionView.destroy()
+    this.paymentInFlight = false
+    this.config.onError?.(error)
   }
 
   destroy(): void {
     this.destroyed = true
-    this.paymentInFlight = false
     this.stopPolling()
     this.actionView.destroy()
+    this.paymentInFlight = false
     this._button?.remove()
     this._button = null
-    const el = resolveContainer(this.config.container)
-    if (el) el.innerHTML = ''
+    if (this.runtimeConfig) {
+      resolveContainer(this.runtimeConfig.container).replaceChildren()
+    }
   }
 }
 
 export function init(config: PaySdkConfig): PaySdkInstance {
   validateConfig(config)
   return new PaySdk(config)
+}
+
+declare global {
+  interface Window {
+    PaySdk: { init: typeof init }
+  }
+}
+
+if (typeof window !== 'undefined') {
+  window.PaySdk = { init }
 }

@@ -288,8 +288,11 @@ interface PaySdkBaseConfig extends PaySdkCallbacks {
   container: string | HTMLElement
 }
 
-/** 完整支付编排：SDK 内创建订单、钱包授权、支付及查询状态。 */
-export interface ApiPaySdkConfig extends PaySdkBaseConfig {
+/**
+ * `PaySdk.init` 配置：创建订单 → 钱包授权 → 支付 → 查询。
+ * 钱包参数与 risk 均来自创建订单响应，不再支持仅钱包初始化。
+ */
+export interface PaySdkConfig extends PaySdkBaseConfig {
   order: CreateOrderRequest
   /**
    * SDK 运行环境，默认 `PRODUCTION`。
@@ -311,26 +314,26 @@ export interface ApiPaySdkConfig extends PaySdkBaseConfig {
    * 返回 true 表示已处理，SDK 不再使用内置打开。
    */
   openAction?: (action: PaymentAction) => boolean | void | Promise<boolean | void>
-  method?: never
-  payment?: never
-  billingAddressRequired?: never
-  googlePay?: never
-  applePay?: never
-  risk?: never
 }
 
-/** 兼容旧调用：仅完成钱包授权并返回 token / risk。 */
-export interface WalletPaySdkConfig extends PaySdkBaseConfig {
+/** @deprecated 使用 `PaySdkConfig` */
+export type ApiPaySdkConfig = PaySdkConfig
+
+/**
+ * 创建订单成功后的内部运行时配置（供 Google/Apple 模块使用，非 init 入参）。
+ */
+export interface RuntimeWalletConfig {
+  container: string | HTMLElement
   method: PayMethod
   payment: PaymentConfig
   environment?: Environment
   billingAddressRequired?: boolean
   googlePay?: GooglePayConfig
   applePay?: ApplePayConfig
-  /** 创建订单返回的 risk；enabled 块才会采集 */
   risk?: CreateOrderRisk
-  api?: never
-  order?: never
+  /** 创建订单后启动的预采集；支付时复用 / await */
+  riskCollection?: Promise<PayRiskPayload>
+  onSuccess?: (result: PayResult) => void | Promise<void>
+  onError?: (error: Error) => void
+  onCancel?: () => void
 }
-
-export type PaySdkConfig = ApiPaySdkConfig | WalletPaySdkConfig

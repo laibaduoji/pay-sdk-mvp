@@ -1,4 +1,4 @@
-import type { CreateOrderRisk, Environment, PayRiskPayload } from '../types.js'
+import type { CreateOrderRisk, Environment, PayRiskPayload, RuntimeWalletConfig } from '../types.js'
 import { collectFingerprint } from './fingerprint.js'
 import { collectForter } from './forter.js'
 import { collectCheckout } from './checkout.js'
@@ -9,7 +9,7 @@ function isEnabled(enabled?: boolean): boolean {
 }
 
 /**
- * 按 Fingerprint → Forter → Checkout → WorldPay 顺序采集（内部并行）。
+ * 按 Fingerprint → Forter → Checkout → WorldPay 并行采集。
  * 仅 enabled === true 的块会执行；失败字段不写入 payload。
  */
 export async function collectRisk(
@@ -55,4 +55,10 @@ export async function collectRisk(
 
   await Promise.all(tasks)
   return payload
+}
+
+/** 支付路径：优先复用预采集 Promise，否则当场开始采集。 */
+export function resolveRiskCollection(config: RuntimeWalletConfig): Promise<PayRiskPayload> {
+  if (config.riskCollection) return config.riskCollection
+  return collectRisk(config.risk, config.environment)
 }

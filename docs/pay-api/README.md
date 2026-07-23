@@ -2,13 +2,13 @@
 
 前后端联调契约。类型与报文示例见本目录 TypeScript 文件。
 
-| #   | 文件                                             | 方法     | 类型                                                   | 何时调用                           |
-| --- | ------------------------------------------------ | -------- | ------------------------------------------------------ | ---------------------------------- |
-| —   | [`common.ts`](./common.ts)                       | —        | `ApiResponse` / `OrderStatus` / `BillingAddress`       | 共用                               |
-| 1   | [`create-order.ts`](./create-order.ts)           | **POST** | `CreateOrderRequest` → `CreateOrderResponse`           | 拿 `params` / `risk`，渲染钱包按钮 |
-| 2   | [`validate-merchant.ts`](./validate-merchant.ts) | **POST** | `ValidateMerchantRequest` → `ValidateMerchantResponse` | 仅 Apple Pay，`onvalidatemerchant` |
-| 3   | [`pay.ts`](./pay.ts)                             | **POST** | `PayRequest` → `PayResponse`                           | 钱包授权 + 风控采集完成后          |
-| 4   | [`query-order.ts`](./query-order.ts)             | **GET**  | `QueryOrderRequest` → `QueryOrderResponse`             | **仅**接口 3 未直接成功时          |
+| #   | 文件                                             | 方法     | 类型                                                   | 何时调用                                       |
+| --- | ------------------------------------------------ | -------- | ------------------------------------------------------ | ---------------------------------------------- |
+| —   | [`common.ts`](./common.ts)                       | —        | `ApiResponse` / `OrderStatus` / `BillingAddress`       | 共用                                           |
+| 1   | [`create-order.ts`](./create-order.ts)           | **POST** | `CreateOrderRequest` → `CreateOrderResponse`           | 拿 `params` / `risk`，渲染钱包按钮             |
+| 2   | [`validate-merchant.ts`](./validate-merchant.ts) | **POST** | `ValidateMerchantRequest` → `ValidateMerchantResponse` | 仅 Apple Pay，`onvalidatemerchant`             |
+| 3   | [`pay.ts`](./pay.ts)                             | **POST** | `PayRequest` → `PayResponse`                           | 钱包授权后；风控宜在创建订单后预采、支付时复用 |
+| 4   | [`query-order.ts`](./query-order.ts)             | **GET**  | `QueryOrderRequest` → `QueryOrderResponse`             | **仅**接口 3 未直接成功时                      |
 
 > 仅接口 4 为 GET（`GET /v1/pay/orders/{orderId}`）；其余均为 POST。  
 > 路径为建议值，以实际网关为准。入口：`import … from './pay-api'`（[`index.ts`](./index.ts)）。
