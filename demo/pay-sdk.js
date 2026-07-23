@@ -1355,10 +1355,6 @@ apple-pay-button {
       if (!config.order || config.order.amount == null || !config.order.currency || !config.order.countryCode) {
         throw new Error("order.amount, order.currency and order.countryCode are required");
       }
-      const api = resolvePayApiConfig(resolveEnvironment(config.environment), config.api);
-      if (!api.createOrderUrl || !api.payUrl || !api.queryOrderUrl) {
-        throw new Error("api.createOrderUrl, api.payUrl and api.queryOrderUrl are required");
-      }
       return;
     }
     if (!SUPPORTED_METHODS.includes(config.method)) {
@@ -1478,13 +1474,19 @@ apple-pay-button {
       var _a;
       if (!this.runtimeConfig) {
         const config = this.config;
-        const api = this.api;
-        const order = await api.createOrder(config.order);
+        const order = await this.api.createOrder(config.order);
         this.order = order;
         (_a = config.onOrderCreated) == null ? void 0 : _a.call(config, order);
-        this.runtimeConfig = runtimeConfigFromOrder(config, order, api, async (result) => {
-          await this.processPayment(result);
-        });
+        const environment = resolveEnvironment(config.environment || order.environment);
+        this.api = new PayApiClient(resolvePayApiConfig(environment, config.api));
+        this.runtimeConfig = runtimeConfigFromOrder(
+          config,
+          order,
+          this.api,
+          async (result) => {
+            await this.processPayment(result);
+          }
+        );
       }
       return ready(this.runtimeConfig);
     }

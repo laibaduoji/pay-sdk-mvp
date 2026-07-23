@@ -85,10 +85,6 @@ function validateConfig(config: PaySdkConfig): void {
     ) {
       throw new Error('order.amount, order.currency and order.countryCode are required')
     }
-    const api = resolvePayApiConfig(resolveEnvironment(config.environment), config.api)
-    if (!api.createOrderUrl || !api.payUrl || !api.queryOrderUrl) {
-      throw new Error('api.createOrderUrl, api.payUrl and api.queryOrderUrl are required')
-    }
     return
   }
   if (!SUPPORTED_METHODS.includes(config.method)) {
@@ -207,7 +203,7 @@ function runtimeConfigFromOrder(
 
 class PaySdk implements PaySdkInstance {
   private readonly config: PaySdkConfig
-  private readonly api: PayApiClient | null
+  private api: PayApiClient | null
   private readonly actionView = new PaymentActionView()
   private _readyPromise: Promise<true> | null = null
   private _button: HTMLElement | null = null
@@ -238,11 +234,16 @@ class PaySdk implements PaySdkInstance {
   private async prepare(): Promise<true> {
     if (!this.runtimeConfig) {
       const config = this.config as ApiPaySdkConfig
-      const api = this.api!
-      const order = await api.createOrder(config.order)
+      const order = await this.api!.createOrder(config.order)
       this.order = order
       config.onOrderCreated?.(order)
-      this.runtimeConfig = runtimeConfigFromOrder(config, order, api, async (result) => {
+
+      // 创建订单后按 init.environment || order.environment 重建客户端，
+      // 保证后续 pay / query / validateMerchant 与 Google Pay / Checkout 同环境
+      const environment = resolveEnvironment(config.environment || order.environment)
+      this.api = new PayApiClient(resolvePayApiConfig(environment, config.api))
+
+      this.runtimeConfig = runtimeConfigFromOrder(config, order, this.api, async (result) => {
         await this.processPayment(result)
       })
     }

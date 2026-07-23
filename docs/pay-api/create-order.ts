@@ -325,7 +325,7 @@ export const createOrderResponseApplePay: CreateOrderResponseApplePay = {
   environment: 'TEST',
   method: 'applePay',
   params: applePayParams,
-  validateMerchantUrl: 'https://api.example.com/v1/pay/apple-pay/validate-merchant',
+  validateMerchantUrl: 'https://api-test.alchemytech.cc/pay/apple/domainName/verify',
   risk: riskCollectAll
 }
 

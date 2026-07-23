@@ -22,17 +22,17 @@ npm run format     # prettier write
 
 示例页在 [`demo/`](demo/)，一一对应 [docs/PARAMETERS.md](docs/PARAMETERS.md) 第 9 节：
 
-| 文件                                                                     | 对应示例                    |
-| ------------------------------------------------------------------------ | --------------------------- |
-| [demo/index.html](demo/index.html)                                       | 目录页                      |
-| [demo/01-google-pay-gateway.html](demo/01-google-pay-gateway.html)       | 9.1 PAYMENT_GATEWAY         |
-| [demo/02-google-pay-direct.html](demo/02-google-pay-direct.html)         | 9.2 DIRECT                  |
-| [demo/03-google-pay-billing.html](demo/03-google-pay-billing.html)       | 9.3 账单地址                |
-| [demo/04-google-pay-production.html](demo/04-google-pay-production.html) | 9.4 PRODUCTION              |
-| [demo/05-apple-pay-basic.html](demo/05-apple-pay-basic.html)             | 9.5 Apple Pay 最简          |
-| [demo/06-apple-pay-billing.html](demo/06-apple-pay-billing.html)         | 9.6 Apple 账单地址          |
-| [demo/07-lifecycle.html](demo/07-lifecycle.html)                         | 9.7 ready → mount → destroy |
-| [demo/08-managed-flow.html](demo/08-managed-flow.html)                   | 9.8 完整支付编排            |
+| 文件                                                                     | 对应示例                                    |
+| ------------------------------------------------------------------------ | ------------------------------------------- |
+| [demo/index.html](demo/index.html)                                       | 目录页                                      |
+| [demo/01-google-pay-gateway.html](demo/01-google-pay-gateway.html)       | 9.1 PAYMENT_GATEWAY                         |
+| [demo/02-google-pay-direct.html](demo/02-google-pay-direct.html)         | 9.2 DIRECT                                  |
+| [demo/03-google-pay-billing.html](demo/03-google-pay-billing.html)       | 9.3 账单地址                                |
+| [demo/04-google-pay-production.html](demo/04-google-pay-production.html) | 9.4 PRODUCTION                              |
+| [demo/05-apple-pay-basic.html](demo/05-apple-pay-basic.html)             | 9.5 Apple Pay 最简                          |
+| [demo/06-apple-pay-billing.html](demo/06-apple-pay-billing.html)         | 9.6 Apple 账单地址                          |
+| [demo/07-lifecycle.html](demo/07-lifecycle.html)                         | 9.7 ready → mount → destroy                 |
+| [demo/08-managed-flow.html](demo/08-managed-flow.html)                   | 9.8 完整编排 Mock（勾选环境 / 风控 / 账单） |
 
 共享测试参数写在 [`demo/config.js`](demo/config.js)（`gateway`、`gatewayMerchantId`、`publicKey`、`merchantName`、`validateMerchantUrl`、`payment` 等）。改一处即可让各示例复用。
 
@@ -215,12 +215,15 @@ Apple requires that the merchant session be created **on your server** (never in
 browser). The SDK handles the client half:
 
 1. On button tap the SDK creates an `ApplePaySession` and calls `begin()`.
-2. In `onvalidatemerchant`, the SDK `POST`s to your `validateMerchantUrl` with
-   `{ validationURL }`.
+2. In `onvalidatemerchant`, the SDK `POST`s to your `validateMerchantUrl`.
+   Wallet-only mode sends `{ validationURL }`; managed mode also includes
+   `orderId`.
 3. Your server uses its **Merchant Identity Certificate** and Merchant ID to
-   request a session from the `validationURL` and returns JSON shaped as
-   `{ data: merchantSession }` (Apple's opaque session under `data`).
-4. The SDK calls `completeMerchantValidation(merchantSession.data)` and the sheet appears.
+   request a session from the `validationURL` and returns the unified envelope
+   `{ returnCode: '0000', data: merchantSession }` (Apple's opaque session under
+   `data`). Legacy `{ data: merchantSession }` without `returnCode` is still
+   accepted in wallet-only mode.
+4. The SDK extracts `data` and calls `completeMerchantValidation(merchantSession)`.
 
 Your server / Apple Developer setup (not included in this repo):
 

@@ -8,65 +8,171 @@
   </head>
   <body>
     <p class="meta"><a href="./index.html">← Demos</a> · PARAMETERS §9.8</p>
-    <h1>SDK 完整支付编排</h1>
+    <h1>SDK 完整支付编排（Mock）</h1>
     <p class="meta">
-      <code>environment: 'TEST'</code> 时走测试 API / Google Pay TEST / Checkout 沙盒。<br />
-      Demo 用同源代理覆盖 URL；线上可省略
-      <code>api.createOrderUrl</code> 等，由 SDK 内置地址填充。<br />
-      默认 <code>actionMode: 'callback'</code>：二次动作只经 <code>onAction</code> 吐出；Demo
-      里演示授权后调用 <code>sdk.openAction(action)</code>。
+      勾选下方选项后点「应用并挂载」：Mock 会按选项返回创建订单 / 支付 / 查询数据（
+      <code>api.fetch</code>）。真实钱包仍依赖浏览器环境；二次动作默认
+      <code>callback</code>，可确认后 <code>sdk.openAction</code>。
     </p>
-    <p id="status">Creating order…</p>
+
+    <form id="controls" class="panel" onsubmit="return false">
+      <fieldset>
+        <legend>环境</legend>
+        <label><input type="radio" name="environment" value="TEST" checked /> TEST</label>
+        <label><input type="radio" name="environment" value="PRODUCTION" /> PRODUCTION</label>
+      </fieldset>
+
+      <fieldset>
+        <legend>钱包</legend>
+        <label><input type="radio" name="method" value="googlePay" checked /> Google Pay</label>
+        <label><input type="radio" name="method" value="applePay" /> Apple Pay</label>
+        <label class="block"> <input type="checkbox" name="billingAddress" /> 账单地址 </label>
+        <label class="block">
+          <input type="checkbox" name="omitValidateUrl" checked /> Apple：不返回
+          validateMerchantUrl（走 SDK 内置）
+        </label>
+      </fieldset>
+
+      <fieldset>
+        <legend>风控（创建订单 risk.enabled）</legend>
+        <label><input type="checkbox" name="fingerprint" /> Fingerprint</label>
+        <label><input type="checkbox" name="forter" /> Forter</label>
+        <label><input type="checkbox" name="checkout" /> Checkout</label>
+        <label><input type="checkbox" name="worldPay" /> WorldPay</label>
+      </fieldset>
+
+      <fieldset>
+        <legend>支付结果（接口 3）</legend>
+        <label><input type="radio" name="payOutcome" value="success" checked /> 直接成功</label>
+        <label><input type="radio" name="payOutcome" value="webUrl" /> webUrl</label>
+        <label><input type="radio" name="payOutcome" value="threeDS" /> 3DS (MD/JWT/action)</label>
+        <label><input type="radio" name="payOutcome" value="threeDSMethod" /> threeDSMethod</label>
+      </fieldset>
+
+      <fieldset>
+        <legend>二次动作</legend>
+        <label
+          ><input type="radio" name="actionMode" value="callback" checked /> callback（只
+          onAction）</label
+        >
+        <label><input type="radio" name="actionMode" value="auto" /> auto（SDK 自动打开）</label>
+      </fieldset>
+
+      <button type="button" id="apply-btn">应用并挂载</button>
+    </form>
+
+    <h2 class="section-title">Mock 创建订单预览</h2>
+    <pre id="preview">勾选后点「应用并挂载」查看…</pre>
+
+    <p id="status">未挂载</p>
     <div id="pay-container"></div>
-    <pre id="action">Action payload will appear here.</pre>
-    <pre id="output">Result will appear here.</pre>
+    <h2 class="section-title">onAction</h2>
+    <pre id="action">—</pre>
+    <h2 class="section-title">结果</h2>
+    <pre id="output">—</pre>
 
     <script src="./pay-sdk.js"></script>
+    <script src="./config.js"></script>
+    <script src="./mock-api.js"></script>
     <script src="./demo-ui.js"></script>
     <script>
+      const mock = window.PaySdkDemoMock
       const ui = window.PaySdkDemoUI
       const handlers = ui.handlers()
+      const form = document.getElementById('controls')
+      const previewEl = document.getElementById('preview')
+      const actionEl = document.getElementById('action')
+      const outputEl = document.getElementById('output')
+      const statusEl = document.getElementById('status')
 
-      const sdk = PaySdk.init({
-        container: '#pay-container',
-        environment: 'TEST',
-        // actionMode: 'callback', // default — WebView-friendly
-        order: {
-          amount: '10.00',
-          currency: 'USD',
-          countryCode: 'US'
-        },
-        // 本地 demo：覆盖为同源代理；生产可省略这三个 URL
-        api: {
-          createOrderUrl: '/v1/pay/orders',
-          payUrl: '/v1/pay/payments',
-          queryOrderUrl: '/v1/pay/orders/{orderId}',
-          pollIntervalMs: 2000,
-          pollTimeoutMs: 300000
-        },
-        onAction(action) {
-          document.getElementById('action').textContent = JSON.stringify(action, null, 2)
-          // 模拟商户 / JS Bridge 授权后再让 SDK 打开
-          if (confirm(`收到二次动作 ${action.type}，是否让 SDK 打开？`)) {
-            sdk.openAction(action)
-          }
-        },
-        onOrderCreated(order) {
-          document.getElementById('status').textContent =
-            `Order ${order.orderId} created (${order.method}).`
-        },
-        onStatusChange(order) {
-          document.getElementById('status').textContent = `Payment status: ${order.status}`
-        },
-        onComplete(result) {
-          document.getElementById('output').textContent = JSON.stringify(result, null, 2)
-        },
-        onSuccess: handlers.onSuccess,
-        onError: handlers.onError,
-        onCancel: handlers.onCancel
-      })
+      let sdk = null
 
-      ui.run(sdk)
+      function readOptions() {
+        const fd = new FormData(form)
+        return {
+          environment: fd.get('environment') || 'TEST',
+          method: fd.get('method') || 'googlePay',
+          billingAddress: fd.get('billingAddress') === 'on',
+          fingerprint: fd.get('fingerprint') === 'on',
+          forter: fd.get('forter') === 'on',
+          checkout: fd.get('checkout') === 'on',
+          worldPay: fd.get('worldPay') === 'on',
+          payOutcome: fd.get('payOutcome') || 'success',
+          actionMode: fd.get('actionMode') || 'callback',
+          omitValidateUrl: fd.get('omitValidateUrl') === 'on'
+        }
+      }
+
+      function refreshPreview() {
+        mock.setOptions(readOptions())
+        const order = {
+          amount: window.PaySdkDemoConfig.payment.amount,
+          currency: window.PaySdkDemoConfig.payment.currency,
+          countryCode: window.PaySdkDemoConfig.payment.countryCode
+        }
+        previewEl.textContent = JSON.stringify(mock.previewCreateOrder(order), null, 2)
+      }
+
+      function mountSdk() {
+        if (sdk) {
+          try {
+            sdk.destroy()
+          } catch (_) {}
+          sdk = null
+        }
+
+        const opts = mock.setOptions(readOptions())
+        refreshPreview()
+        actionEl.textContent = '—'
+        outputEl.textContent = '—'
+        document.getElementById('pay-container').innerHTML = ''
+
+        sdk = PaySdk.init({
+          container: '#pay-container',
+          environment: opts.environment,
+          actionMode: opts.actionMode,
+          order: {
+            amount: window.PaySdkDemoConfig.payment.amount,
+            currency: window.PaySdkDemoConfig.payment.currency,
+            countryCode: window.PaySdkDemoConfig.payment.countryCode
+          },
+          api: {
+            createOrderUrl: '/v1/pay/orders',
+            payUrl: '/v1/pay/payments',
+            queryOrderUrl: '/v1/pay/orders/{orderId}',
+            fetch: mock.fetch.bind(mock),
+            pollIntervalMs: 1500,
+            pollTimeoutMs: 60000
+          },
+          onAction(action) {
+            actionEl.textContent = JSON.stringify(action, null, 2)
+            if (opts.actionMode === 'callback') {
+              if (confirm('收到二次动作 ' + action.type + '，是否 sdk.openAction？')) {
+                sdk.openAction(action)
+              }
+            }
+          },
+          onOrderCreated(order) {
+            statusEl.textContent = 'Order ' + order.orderId + ' created (' + order.method + ').'
+          },
+          onStatusChange(order) {
+            statusEl.textContent =
+              'Payment status: ' + order.status + (order.s3dsUrl ? ' · s3dsUrl' : '')
+          },
+          onComplete(result) {
+            outputEl.textContent = JSON.stringify(result, null, 2)
+          },
+          onSuccess: handlers.onSuccess,
+          onError: handlers.onError,
+          onCancel: handlers.onCancel
+        })
+
+        ui.run(sdk)
+      }
+
+      form.addEventListener('change', refreshPreview)
+      document.getElementById('apply-btn').addEventListener('click', mountSdk)
+      refreshPreview()
     </script>
   </body>
 </html>

@@ -1,6 +1,7 @@
 /**
  * 接口 2 — Apple Pay 域名校验（仅 applePay）
- * POST {validateMerchantUrl} 或 POST /v1/pay/apple-pay/validate-merchant
+ * POST {validateMerchantUrl}；未下发时使用当前环境内置地址
+ * （`/pay/apple/domainName/verify`，见 SDK `src/endpoints.ts`）
  *
  * 客户端：returnCode==='0000' 时 completeMerchantValidation(response.data)
  * 其中 data 即为 Apple 下发的 merchantSession（opaque）。

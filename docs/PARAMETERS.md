@@ -6,27 +6,27 @@
 
 ## 1. 顶层参数（`config`）
 
-| 参数                     | 类型                        |  必传  | 默认值         | 说明                                                                      |
-| ------------------------ | --------------------------- | :----: | -------------- | ------------------------------------------------------------------------- |
-| `container`              | `string \| HTMLElement`     | **是** | —              | 按钮渲染容器                                                              |
-| `order`                  | `CreateOrderRequest`        | 见说明 | —              | 完整编排模式必传；SDK 调接口 1 创建订单                                   |
-| `environment`            | `'TEST' \| 'PRODUCTION'`    |   否   | `'PRODUCTION'` | 完整编排与钱包模式通用；决定内置 API / Google Pay / Checkout Risk         |
-| `api`                    | `Partial<PayApiConfig>`     |   否   | 按环境内置     | 完整编排可选；默认用 `src/endpoints.ts`；可只传 headers / 覆盖 URL        |
-| `method`                 | `'googlePay' \| 'applePay'` | 见说明 | —              | 仅钱包模式必传；完整模式由创建订单响应决定                                |
-| `payment`                | `PaymentConfig`             | 见说明 | —              | 仅钱包模式必传；完整模式由创建订单响应决定                                |
-| `billingAddressRequired` | `boolean`                   |   否   | `false`        | 仅钱包模式配置；完整模式由钱包 params 决定                                |
-| `googlePay`              | `GooglePayConfig`           | 见说明 | —              | 仅钱包模式且 `method === 'googlePay'` 时必传                              |
-| `applePay`               | `ApplePayConfig`            | 见说明 | —              | 仅钱包模式且 `method === 'applePay'` 时必传                               |
-| `risk`                   | `CreateOrderRisk`           |   否   | —              | 仅钱包模式手动传；完整模式读取创建订单响应                                |
-| `onOrderCreated`         | `(order) => void`           |   否   | —              | 接口 1 成功后回调                                                         |
-| `onStatusChange`         | `(order) => void`           |   否   | —              | 接口 4 每次轮询成功后回调                                                 |
-| `onAction`               | `(action) => void`          |   否   | —              | 二次动作回调；含 `MD`/`JWT`/`action`/`webUrl` 等完整字段                  |
-| `actionMode`             | `'callback' \| 'auto'`      |   否   | `'callback'`   | 完整编排：默认只回调；`auto` 才尝试打开                                   |
-| `openAction`             | `(action) => boolean?`      |   否   | —              | `actionMode: 'auto'` 时自定义打开（如 JS Bridge）；返回 `true` 表示已处理 |
-| `onComplete`             | `(result) => void`          |   否   | —              | 编排结束；包括非终态的 `s3dsComplete`                                     |
-| `onSuccess`              | `(result) => void`          |   否   | —              | 接口 3 直接成功或查询状态为 `succeeded`                                   |
-| `onError`                | `(error: Error) => void`    |   否   | —              | API、钱包或终态失败                                                       |
-| `onCancel`               | `() => void`                |   否   | —              | 用户取消钱包                                                              |
+| 参数                     | 类型                        |  必传  | 默认值         | 说明                                                                                                         |
+| ------------------------ | --------------------------- | :----: | -------------- | ------------------------------------------------------------------------------------------------------------ |
+| `container`              | `string \| HTMLElement`     | **是** | —              | 按钮渲染容器                                                                                                 |
+| `order`                  | `CreateOrderRequest`        | 见说明 | —              | 完整编排模式必传；SDK 调接口 1 创建订单                                                                      |
+| `environment`            | `'TEST' \| 'PRODUCTION'`    |   否   | `'PRODUCTION'` | 完整编排与钱包模式通用；决定内置 API / Google Pay / Checkout Risk                                            |
+| `api`                    | `Partial<PayApiConfig>`     |   否   | 按环境内置     | 完整编排可选；默认用 `src/endpoints.ts`；可只传 headers / 覆盖 URL                                           |
+| `method`                 | `'googlePay' \| 'applePay'` | 见说明 | —              | 仅钱包模式必传；完整模式由创建订单响应决定                                                                   |
+| `payment`                | `PaymentConfig`             | 见说明 | —              | 仅钱包模式必传；完整模式由创建订单响应决定                                                                   |
+| `billingAddressRequired` | `boolean`                   |   否   | `false`        | 仅钱包模式配置；完整模式由钱包 params 决定                                                                   |
+| `googlePay`              | `GooglePayConfig`           | 见说明 | —              | 仅钱包模式且 `method === 'googlePay'` 时必传                                                                 |
+| `applePay`               | `ApplePayConfig`            | 见说明 | —              | 仅钱包模式且 `method === 'applePay'` 时必传                                                                  |
+| `risk`                   | `CreateOrderRisk`           |   否   | —              | 仅钱包模式手动传；完整模式读取创建订单响应                                                                   |
+| `onOrderCreated`         | `(order) => void`           |   否   | —              | 接口 1 成功后回调                                                                                            |
+| `onStatusChange`         | `(order) => void`           |   否   | —              | 接口 4 每次轮询成功后回调                                                                                    |
+| `onAction`               | `(action) => void`          |   否   | —              | 二次动作回调；含 `MD`/`JWT`/`action`/`webUrl` 等完整字段                                                     |
+| `actionMode`             | `'callback' \| 'auto'`      |   否   | `'callback'`   | 完整编排：默认只回调；`auto` 才尝试打开                                                                      |
+| `openAction`             | `(action) => boolean?`      |   否   | —              | `actionMode: 'auto'` 时自定义打开（如 JS Bridge）；也可随时 `sdk.openAction(action)`；返回 `true` 表示已处理 |
+| `onComplete`             | `(result) => void`          |   否   | —              | 编排结束；包括非终态的 `s3dsComplete`                                                                        |
+| `onSuccess`              | `(result) => void`          |   否   | —              | 接口 3 直接成功或查询状态为 `succeeded`                                                                      |
+| `onError`                | `(error: Error) => void`    |   否   | —              | API、钱包或终态失败                                                                                          |
+| `onCancel`               | `() => void`                |   否   | —              | 用户取消钱包                                                                                                 |
 
 完整编排与仅钱包模式二选一。完整编排传 `order`（可选 `environment` / `api`），不要再传 `method / payment / googlePay / applePay`。
 
@@ -266,6 +266,7 @@ PaySdk.init({
 PaySdk.init({
   method: 'googlePay',
   container: '#pay-container',
+  environment: 'TEST',
   payment: { amount: '10.00', currency: 'USD', countryCode: 'US' },
   googlePay: {
     tokenizationSpecification: {
@@ -286,6 +287,7 @@ PaySdk.init({
 PaySdk.init({
   method: 'googlePay',
   container: '#pay-container',
+  environment: 'TEST',
   payment: {
     amount: '25.00',
     currency: 'EUR',
@@ -308,6 +310,7 @@ PaySdk.init({
 PaySdk.init({
   method: 'googlePay',
   container: '#pay-container',
+  environment: 'TEST',
   billingAddressRequired: true,
   payment: { amount: '10.00', currency: 'USD', countryCode: 'US' },
   googlePay: {
@@ -391,6 +394,7 @@ PaySdk.init({
 const sdk = PaySdk.init({
   method: 'googlePay',
   container: '#pay-container',
+  environment: 'TEST',
   payment: { amount: '10.00', currency: 'USD', countryCode: 'US' },
   googlePay: {
     tokenizationSpecification: {
@@ -417,8 +421,9 @@ sdk
 
 ### 9.8 SDK 完整支付编排
 
-使用 `order` + 可选 `environment` / `api`，完整示例见
-[`08-managed-flow.html`](../demo/08-managed-flow.html)。`environment` 默认
+使用 `order` + 可选 `environment` / `api`，交互 Mock 示例见
+[`08-managed-flow.html`](../demo/08-managed-flow.html)（勾选环境 / 风控 / 账单地址 /
+支付结果后，由 `demo/mock-api.js` 返回对应创建订单与支付数据）。`environment` 默认
 `PRODUCTION`；传 `TEST` 时 API、Google Pay、Checkout Risk 均走测试侧。四接口默认地址在
 [`src/endpoints.ts`](../src/endpoints.ts)。创建订单响应决定钱包类型并下发钱包参数与风控配置。
 

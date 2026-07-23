@@ -1,6 +1,6 @@
 body {
   font-family: -apple-system, system-ui, sans-serif;
-  max-width: 520px;
+  max-width: 640px;
   margin: 40px auto;
   padding: 0 16px;
   color: #222;
@@ -66,4 +66,61 @@ h1 {
   display: block;
   color: #666;
   margin-top: 2px;
+}
+
+.panel {
+  background: #f7f7f7;
+  border-radius: 8px;
+  padding: 12px 14px;
+  margin: 16px 0 20px;
+}
+
+.panel fieldset {
+  border: 1px solid #ddd;
+  border-radius: 6px;
+  margin: 0 0 10px;
+  padding: 8px 10px 10px;
+}
+
+.panel legend {
+  font-size: 13px;
+  color: #444;
+  padding: 0 4px;
+}
+
+.panel label {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  margin: 4px 12px 4px 0;
+  font-size: 13px;
+  cursor: pointer;
+}
+
+.panel label.block {
+  display: flex;
+  margin-top: 6px;
+}
+
+.panel button {
+  margin-top: 4px;
+  padding: 8px 14px;
+  font-size: 14px;
+  cursor: pointer;
+}
+
+.section-title {
+  font-size: 0.95rem;
+  margin: 1.25rem 0 0.4rem;
+  color: #333;
+}
+
+#preview,
+#action {
+  background: #f5f5f5;
+  padding: 12px;
+  border-radius: 6px;
+  overflow: auto;
+  font-size: 12px;
+  max-height: 280px;
 }
