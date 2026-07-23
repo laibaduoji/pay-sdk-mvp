@@ -80,6 +80,10 @@ export interface RiskForterConfig {
 export interface RiskCheckoutConfig {
   enabled?: boolean
   publicKey?: string
+  /** 覆盖 Risk.js CDN；缺省按 publicKey（pk_sbox_ → sandbox）选择 */
+  scriptUrl?: string
+  /** SRI；自定义 scriptUrl 时可一并覆盖 */
+  integrity?: string
 }
 
 export interface RiskWorldPayConfig {
@@ -280,6 +284,7 @@ export const riskCollectAll: CreateOrderRisk = {
     endpoint: ['https://fp.alchemypay.org']
   },
   forter: { enabled: true, siteId: 'b132efccafac' },
+  // 生产默认 pk_aldlsnx6lhkjggag4qe2nff4c4h；沙盒默认 pk_sbox_srkhzyxmotpo6vnfhqixvs66kyt（environment=TEST）
   checkout: { enabled: true, publicKey: 'pk_aldlsnx6lhkjggag4qe2nff4c4h' },
   worldPay: { enabled: true, jwt: 'your worldPayJwt' }
 }

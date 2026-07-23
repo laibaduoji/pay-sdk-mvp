@@ -5,14 +5,23 @@ const cache: Record<string, Promise<void> | undefined> = {}
 
 interface LoadOptions {
   crossorigin?: boolean
+  id?: string
+  integrity?: string
+  /** 默认 async；Risk.js 文档使用 defer */
+  defer?: boolean
 }
 
-function loadScript(src: string, { crossorigin = false }: LoadOptions = {}): Promise<void> {
+export function loadScript(
+  src: string,
+  { crossorigin = false, id, integrity, defer = false }: LoadOptions = {}
+): Promise<void> {
   const cached = cache[src]
   if (cached) return cached
 
   const promise = new Promise<void>((resolve, reject) => {
-    const existing = document.querySelector<HTMLScriptElement>(`script[src="${src}"]`)
+    const existing = document.querySelector<HTMLScriptElement>(
+      id ? `script#${CSS.escape(id)}` : `script[src="${src}"]`
+    )
     if (existing) {
       if (existing.dataset.loaded === 'true') return resolve()
       existing.addEventListener('load', () => resolve())
@@ -21,9 +30,19 @@ function loadScript(src: string, { crossorigin = false }: LoadOptions = {}): Pro
     }
 
     const script = document.createElement('script')
+    if (id) script.id = id
     script.src = src
-    script.async = true
-    if (crossorigin) script.crossOrigin = 'anonymous'
+    if (defer) {
+      script.defer = true
+    } else {
+      script.async = true
+    }
+    if (integrity) {
+      script.integrity = integrity
+      script.crossOrigin = 'anonymous'
+    } else if (crossorigin) {
+      script.crossOrigin = 'anonymous'
+    }
     script.addEventListener('load', () => {
       script.dataset.loaded = 'true'
       resolve()

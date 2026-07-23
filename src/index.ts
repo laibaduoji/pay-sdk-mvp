@@ -9,7 +9,13 @@ export type {
   PayMethod,
   PayResult,
   GooglePayResult,
-  ApplePayResult
+  ApplePayResult,
+  CreateOrderRisk,
+  PayRiskPayload,
+  RiskFingerprintConfig,
+  RiskForterConfig,
+  RiskCheckoutConfig,
+  RiskWorldPayConfig
 } from './types.js'
 
 const SUPPORTED_METHODS: PayMethod[] = ['googlePay', 'applePay']

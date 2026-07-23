@@ -1,5 +1,6 @@
 import type { PaySdkConfig } from './types.js'
 import { normalizeGoogleResult, isGoogleCancel, toError } from './normalize.js'
+import { collectRisk } from './risk/index.js'
 
 let paymentsClient: google.payments.api.PaymentsClient | null = null
 
@@ -98,9 +99,11 @@ export function createGoogleButton(config: PaySdkConfig, onClick: () => void): H
 
 export async function payWithGoogle(config: PaySdkConfig): Promise<void> {
   const client = getPaymentsClient(config)
+  const riskPromise = collectRisk(config.risk, config.environment)
   try {
     const paymentData = await client.loadPaymentData(buildPaymentDataRequest(config))
-    config.onSuccess?.(normalizeGoogleResult(paymentData))
+    const risk = await riskPromise
+    config.onSuccess?.({ ...normalizeGoogleResult(paymentData), risk })
   } catch (err) {
     if (isGoogleCancel(err)) {
       config.onCancel?.()

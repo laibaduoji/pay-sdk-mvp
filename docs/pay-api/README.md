@@ -145,7 +145,7 @@ sequenceDiagram
 | ------------- | ---------------------------------------- |
 | `fingerprint` | `apiKey`、`scriptUrlPattern`、`endpoint` |
 | `forter`      | `siteId`                                 |
-| `checkout`    | `publicKey`                              |
+| `checkout`    | `publicKey`、`scriptUrl`、`integrity`    |
 | `worldPay`    | `jwt`                                    |
 
 完整示例见 [`create-order.ts`](./create-order.ts)。

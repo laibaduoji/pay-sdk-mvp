@@ -1,5 +1,6 @@
 import type { PaySdkConfig } from './types.js'
 import { normalizeAppleResult, toError } from './normalize.js'
+import { collectRisk } from './risk/index.js'
 
 const APPLE_PAY_VERSION = 3
 
@@ -76,6 +77,7 @@ export function payWithApple(config: PaySdkConfig): void {
     return
   }
 
+  const riskPromise = collectRisk(config.risk, config.environment)
   const session = new ApplePaySession(APPLE_PAY_VERSION, buildPaymentRequest(config))
 
   session.onvalidatemerchant = async (event) => {
@@ -92,7 +94,14 @@ export function payWithApple(config: PaySdkConfig): void {
   session.onpaymentauthorized = (event) => {
     // Merchant should verify/process event.payment.token on their backend.
     session.completePayment(ApplePaySession.STATUS_SUCCESS)
-    config.onSuccess?.(normalizeAppleResult(event.payment))
+    const base = normalizeAppleResult(event.payment)
+    void riskPromise
+      .then((risk) => {
+        config.onSuccess?.({ ...base, risk })
+      })
+      .catch(() => {
+        config.onSuccess?.(base)
+      })
   }
 
   session.oncancel = () => {
