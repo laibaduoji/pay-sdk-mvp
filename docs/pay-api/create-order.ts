@@ -2,15 +2,16 @@
  * 接口 1 — 创建订单
  * POST /v1/pay/orders（路径建议，以实际网关为准）
  *
- * 响应 data 含 params（见 sdk-pay.md §1–3）与 risk（§4）。
+ * 响应 data 含 params（Google / Apple 原生唤起参数）与 risk。
  * environment 可选，不传默认 'PRODUCTION'。
  * risk 配置：有值覆盖 SDK 默认，无值用默认。
+ * 说明见 README.md。
  */
 
-import type { ApiResponse, Environment, PayMethod } from './common'
+import type { ApiResponse, Environment } from './common'
 
 // ─────────────────────────────────────────────
-// 钱包 params（对照 md §1–3）
+// 钱包 params
 // ─────────────────────────────────────────────
 
 export interface GooglePayParams {
@@ -42,14 +43,13 @@ export interface GooglePayParams {
     currencyCode: string
     totalPriceStatus: string
     totalPrice: string
-    totalPriceLabel?: string
+    totalPriceLabel: string
   }
   merchantInfo: {
-    merchantId?: string
-    merchantName?: string
+    merchantId: string
+    merchantName: string
   }
-  /** 可选；不需要授权回调时不要带 */
-  callbackIntents?: string[]
+  callbackIntents: string[]
 }
 
 export interface ApplePayParams {
@@ -98,17 +98,11 @@ export interface CreateOrderRisk {
 // 请求 / 响应
 // ─────────────────────────────────────────────
 
+/** 创建订单请求（其余字段暂未冻结，后续再补） */
 export interface CreateOrderRequest {
-  merchantOrderId: string
   amount: string
   currency: string
   countryCode: string
-  method: PayMethod
-  billingAddressRequired?: boolean
-  /** 3DS / webUrl 完成后回商户页 */
-  returnUrl?: string
-  customer?: { email?: string; id?: string }
-  metadata?: Record<string, unknown>
 }
 
 export interface CreateOrderResponseGooglePay {
@@ -118,7 +112,6 @@ export interface CreateOrderResponseGooglePay {
   environment?: Environment
   params: GooglePayParams
   risk?: CreateOrderRisk
-  returnUrl?: string
 }
 
 export interface CreateOrderResponseApplePay {
@@ -129,7 +122,6 @@ export interface CreateOrderResponseApplePay {
   /** Apple onvalidatemerchant 时调用的服务端地址（接口 2） */
   validateMerchantUrl: string
   risk?: CreateOrderRisk
-  returnUrl?: string
 }
 
 /** 创建订单成功时 data 载荷 */
@@ -163,7 +155,8 @@ export const googlePayParamsDirect: GooglePayParams = {
         type: 'DIRECT',
         parameters: {
           protocolVersion: 'ECv2',
-          publicKey: 'your publicKey'
+          publicKey:
+            'BE6v5sWsfYnUTgU+21rbWKcCAgPBuN8aR7k3b2tq+UMF6iuwHS1Px3maVxaRdbxUOn1HYuMWQ6Uvhc6/OhXE/p4='
         }
       }
     }
@@ -176,8 +169,8 @@ export const googlePayParamsDirect: GooglePayParams = {
     totalPriceLabel: 'Total'
   },
   merchantInfo: {
-    merchantId: 'your merchantId',
-    merchantName: 'your merchantName'
+    merchantId: 'BCR2DN5TRCG6H2QZ',
+    merchantName: 'Alchemy Pay Ramp'
   },
   callbackIntents: ['PAYMENT_AUTHORIZATION']
 }
@@ -196,7 +189,8 @@ export const googlePayParamsDirectMinimal: GooglePayParams = {
         type: 'DIRECT',
         parameters: {
           protocolVersion: 'ECv2',
-          publicKey: 'your publicKey'
+          publicKey:
+            'BE6v5sWsfYnUTgU+21rbWKcCAgPBuN8aR7k3b2tq+UMF6iuwHS1Px3maVxaRdbxUOn1HYuMWQ6Uvhc6/OhXE/p4='
         }
       }
     }
@@ -208,7 +202,11 @@ export const googlePayParamsDirectMinimal: GooglePayParams = {
     totalPrice: '10.00',
     totalPriceLabel: 'Total'
   },
-  merchantInfo: { merchantName: 'your merchantName' }
+  merchantInfo: {
+    merchantId: 'BCR2DN5TRCG6H2QZ',
+    merchantName: 'Alchemy Pay Ramp'
+  },
+  callbackIntents: ['PAYMENT_AUTHORIZATION']
 }
 
 export const googlePayParamsGateway: GooglePayParams = {
@@ -229,8 +227,8 @@ export const googlePayParamsGateway: GooglePayParams = {
       tokenizationSpecification: {
         type: 'PAYMENT_GATEWAY',
         parameters: {
-          gateway: 'your gateway',
-          gatewayMerchantId: 'your gatewayMerchantId'
+          gateway: 'unlimint',
+          gatewayMerchantId: 'BCR2DN4TQTA5V4YV'
         }
       }
     }
@@ -243,8 +241,8 @@ export const googlePayParamsGateway: GooglePayParams = {
     totalPriceLabel: 'Total'
   },
   merchantInfo: {
-    merchantId: 'your merchantId',
-    merchantName: 'your merchantName'
+    merchantId: 'BCR2DN4TQTA5V4YV',
+    merchantName: 'ramp'
   },
   callbackIntents: ['PAYMENT_AUTHORIZATION']
 }
@@ -277,12 +275,12 @@ export const applePayParamsMinimal: ApplePayParams = {
 export const riskCollectAll: CreateOrderRisk = {
   fingerprint: {
     enabled: true,
-    apiKey: 'your fingerprint apiKey',
-    scriptUrlPattern: ['https://fp.example.com/web/v3/yourApiKey/loader_v3.9.9.js'],
-    endpoint: ['https://fp.example.com']
+    apiKey: 'BhQq2qOOYR3oeMTEKIc2',
+    scriptUrlPattern: ['https://fp.alchemypay.org/web/v3/BhQq2qOOYR3oeMTEKIc2/loader_v3.9.9.js'],
+    endpoint: ['https://fp.alchemypay.org']
   },
-  forter: { enabled: true, siteId: 'your forter siteId' },
-  checkout: { enabled: true, publicKey: 'your checkout public key' },
+  forter: { enabled: true, siteId: 'b132efccafac' },
+  checkout: { enabled: true, publicKey: 'pk_aldlsnx6lhkjggag4qe2nff4c4h' },
   worldPay: { enabled: true, jwt: 'your worldPayJwt' }
 }
 
@@ -294,14 +292,9 @@ export const riskCollectNone: CreateOrderRisk = {
 }
 
 export const createOrderRequestExample: CreateOrderRequest = {
-  merchantOrderId: 'm_20260723_001',
   amount: '10.00',
   currency: 'USD',
-  countryCode: 'US',
-  method: 'googlePay',
-  billingAddressRequired: true,
-  returnUrl: 'https://merchant.example/pay/return',
-  customer: { email: 'u@example.com', id: 'c_123' }
+  countryCode: 'US'
 }
 
 export const createOrderResponseGooglePayDirect: CreateOrderResponseGooglePay = {
@@ -309,8 +302,7 @@ export const createOrderResponseGooglePayDirect: CreateOrderResponseGooglePay = 
   environment: 'TEST',
   method: 'googlePay',
   params: googlePayParamsDirect,
-  risk: riskCollectAll,
-  returnUrl: 'https://merchant.example/pay/return'
+  risk: riskCollectAll
 }
 
 export const createOrderResponseGooglePayGateway: CreateOrderResponseGooglePay = {
@@ -327,8 +319,7 @@ export const createOrderResponseApplePay: CreateOrderResponseApplePay = {
   method: 'applePay',
   params: applePayParams,
   validateMerchantUrl: 'https://api.example.com/v1/pay/apple-pay/validate-merchant',
-  risk: riskCollectAll,
-  returnUrl: 'https://merchant.example/pay/return'
+  risk: riskCollectAll
 }
 
 export const createOrderResponseMinimalNoRisk: CreateOrderResponseGooglePay = {

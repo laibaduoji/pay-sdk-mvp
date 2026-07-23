@@ -4,7 +4,6 @@
 
 export type Environment = 'TEST' | 'PRODUCTION'
 export type PayMethod = 'googlePay' | 'applePay'
-export type ClientChannel = 'web' | 'webview' | 'android' | 'ios'
 
 /** 业务成功时的 returnCode */
 export const SUCCESS_RETURN_CODE = '0000' as const
@@ -29,27 +28,19 @@ export function isApiSuccess(res: ApiResponse): boolean {
   return res.returnCode === SUCCESS_RETURN_CODE
 }
 
-/** 订单状态（支付结果 / 查询订单共用） */
+/** 订单状态（查询订单接口） */
 export type OrderStatus = 'pending' | 'requires_action' | 'succeeded' | 'failed'
 
-/**
- * 支付接口告诉客户端下一步做什么。
- * - none：无页面动作（成功或失败看 status）
- * - redirect：打开 webUrl
- * - threeDS：WorldPay 等 3DS（md + jwt + threeDSAction），并轮询订单
- * - shift4Pay：Shift4 方法页，并轮询订单
- */
-export type PayAction = 'none' | 'redirect' | 'threeDS' | 'shift4Pay'
-
 export interface BillingAddress {
-  name?: string
-  address1?: string
-  address2?: string
-  locality?: string
-  administrativeArea?: string
-  postalCode?: string
-  countryCode?: string
-  phoneNumber?: string
+  addressLine1: string
+  addressLine2: string
+  city: string
+  state: string
+  zip: string
+  country: string
+  firstName: string
+  lastName: string
+  phone?: string
   email?: string
 }
 
