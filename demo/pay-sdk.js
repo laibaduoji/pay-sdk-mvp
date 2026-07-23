@@ -70,6 +70,64 @@ var PaySdk = function(exports) {
       raw: payment
     };
   }
+  function splitName(name) {
+    const parts = (name || "").trim().split(/\s+/).filter(Boolean);
+    return {
+      firstName: parts.shift() || "",
+      lastName: parts.join(" ")
+    };
+  }
+  function onlyCompleteBillingAddress(address) {
+    const required = [
+      address.addressLine1,
+      address.city,
+      address.state,
+      address.zip,
+      address.country,
+      address.firstName,
+      address.lastName
+    ];
+    return required.every((value) => value.trim().length > 0) ? address : void 0;
+  }
+  function normalizeGoogleBillingAddress(address, email) {
+    if (!address) return void 0;
+    const name = splitName(address.name);
+    return onlyCompleteBillingAddress({
+      addressLine1: address.address1 || "",
+      addressLine2: [address.address2, address.address3].filter(Boolean).join(" "),
+      city: address.locality || "",
+      state: address.administrativeArea || "",
+      zip: address.postalCode || "",
+      country: address.countryCode || "",
+      firstName: name.firstName,
+      lastName: name.lastName,
+      phone: address.phoneNumber,
+      email
+    });
+  }
+  function normalizeAppleBillingAddress(contact) {
+    if (!contact) return void 0;
+    const lines = contact.addressLines || [];
+    return onlyCompleteBillingAddress({
+      addressLine1: lines[0] || "",
+      addressLine2: lines.slice(1).join(" "),
+      city: contact.locality || "",
+      state: contact.administrativeArea || "",
+      zip: contact.postalCode || "",
+      country: contact.countryCode || "",
+      firstName: contact.givenName || "",
+      lastName: contact.familyName || "",
+      phone: contact.phoneNumber || void 0,
+      email: contact.emailAddress || void 0
+    });
+  }
+  function normalizeAppleToken(token) {
+    return {
+      paymentData: token.paymentData,
+      paymentMethod: token.paymentMethod,
+      transactionIdentifier: token.transactionIdentifier
+    };
+  }
   function isGoogleCancel(err) {
     return (err == null ? void 0 : err.statusCode) === "CANCELED";
   }
@@ -757,7 +815,11 @@ var PaySdk = function(exports) {
   }
   const paymentsClients = /* @__PURE__ */ new WeakMap();
   function merchantInfo(config) {
+    var _a;
     const gp = config.googlePay;
+    if ((_a = gp == null ? void 0 : gp.paymentDataRequest) == null ? void 0 : _a.merchantInfo) {
+      return gp.paymentDataRequest.merchantInfo;
+    }
     const info = {
       merchantName: (gp == null ? void 0 : gp.merchantName) || "Merchant"
     };
@@ -794,13 +856,25 @@ var PaySdk = function(exports) {
     };
   }
   function buildGoogleBaseRequest(config) {
+    var _a;
+    const request = (_a = config.googlePay) == null ? void 0 : _a.paymentDataRequest;
     return {
-      apiVersion: 2,
-      apiVersionMinor: 0,
-      allowedPaymentMethods: [buildCardPaymentMethod(config)]
+      apiVersion: (request == null ? void 0 : request.apiVersion) || 2,
+      apiVersionMinor: (request == null ? void 0 : request.apiVersionMinor) || 0,
+      allowedPaymentMethods: (request == null ? void 0 : request.allowedPaymentMethods) || [buildCardPaymentMethod(config)]
     };
   }
   function buildPaymentDataRequest(config) {
+    var _a;
+    const provided = (_a = config.googlePay) == null ? void 0 : _a.paymentDataRequest;
+    if (provided) {
+      return {
+        ...provided,
+        callbackIntents: (provided.callbackIntents || []).filter(
+          (intent) => intent !== "PAYMENT_AUTHORIZATION"
+        )
+      };
+    }
     const payment = config.payment;
     return {
       apiVersion: 2,
@@ -838,7 +912,7 @@ var PaySdk = function(exports) {
     try {
       const paymentData = await client.loadPaymentData(buildPaymentDataRequest(config));
       const risk = await riskPromise;
-      (_a = config.onSuccess) == null ? void 0 : _a.call(config, { ...normalizeGoogleResult(paymentData), risk });
+      await ((_a = config.onSuccess) == null ? void 0 : _a.call(config, { ...normalizeGoogleResult(paymentData), risk }));
     } catch (err) {
       if (isGoogleCancel(err)) {
         (_b = config.onCancel) == null ? void 0 : _b.call(config);
@@ -935,14 +1009,17 @@ apple-pay-button {
   function buildPaymentRequest(config) {
     const payment = config.payment;
     const ap = config.applePay;
+    if (ap == null ? void 0 : ap.paymentRequest) {
+      return ap.paymentRequest;
+    }
     const request = {
       countryCode: payment.countryCode,
       currencyCode: payment.currency,
       merchantCapabilities: (ap == null ? void 0 : ap.merchantCapabilities) || DEFAULT_CAPABILITIES,
       supportedNetworks: (ap == null ? void 0 : ap.supportedNetworks) || DEFAULT_NETWORKS,
       total: {
-        label: "ALCHEMY GPS EUROPE UAB",
-        type: "final",
+        label: (ap == null ? void 0 : ap.totalLabel) || "ALCHEMY GPS EUROPE UAB",
+        type: (ap == null ? void 0 : ap.totalType) || "final",
         amount: String(payment.amount)
       }
     };
@@ -953,6 +1030,9 @@ apple-pay-button {
   }
   async function fetchMerchantSession(config, validationURL) {
     const ap = config.applePay;
+    if (ap.validateMerchant) {
+      return ap.validateMerchant(validationURL);
+    }
     const res = await fetch(ap.validateMerchantUrl, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
@@ -962,10 +1042,19 @@ apple-pay-button {
       throw new Error(`Merchant validation failed with status ${res.status}`);
     }
     const body = await res.json();
-    if (!(body == null ? void 0 : body.data) || typeof body.data !== "object") {
-      throw new Error("Merchant validation response missing data");
+    if (typeof (body == null ? void 0 : body.returnCode) === "string") {
+      if (body.returnCode !== "0000") {
+        throw new Error(body.returnMsg || "Merchant validation failed");
+      }
+      if (!body.data || typeof body.data !== "object") {
+        throw new Error("Merchant validation response missing data");
+      }
+      return body.data;
     }
-    return body;
+    if ((body == null ? void 0 : body.data) && typeof body.data === "object") {
+      return body.data;
+    }
+    throw new Error("Merchant validation response missing data");
   }
   function payWithApple(config) {
     var _a;
@@ -980,22 +1069,28 @@ apple-pay-button {
       var _a2;
       try {
         const merchantSession = await fetchMerchantSession(config, event.validationURL);
-        session.completeMerchantValidation(merchantSession.data);
+        session.completeMerchantValidation(merchantSession);
       } catch (err) {
         session.abort();
         (_a2 = config.onError) == null ? void 0 : _a2.call(config, toError(err));
       }
     };
     session.onpaymentauthorized = (event) => {
-      session.completePayment(ApplePaySession.STATUS_SUCCESS);
-      const base = normalizeAppleResult(event.payment);
-      void riskPromise.then((risk) => {
-        var _a2;
-        (_a2 = config.onSuccess) == null ? void 0 : _a2.call(config, { ...base, risk });
-      }).catch(() => {
-        var _a2;
-        (_a2 = config.onSuccess) == null ? void 0 : _a2.call(config, base);
-      });
+      void (async () => {
+        var _a2, _b;
+        try {
+          const base = normalizeAppleResult(event.payment);
+          const risk = await riskPromise;
+          await ((_a2 = config.onSuccess) == null ? void 0 : _a2.call(config, { ...base, risk }));
+          session.completePayment(ApplePaySession.STATUS_SUCCESS);
+        } catch (err) {
+          try {
+            session.completePayment(ApplePaySession.STATUS_FAILURE);
+          } catch {
+          }
+          (_b = config.onError) == null ? void 0 : _b.call(config, toError(err));
+        }
+      })();
     };
     session.oncancel = () => {
       var _a2;
@@ -1003,17 +1098,232 @@ apple-pay-button {
     };
     session.begin();
   }
+  const SUCCESS_RETURN_CODE = "0000";
+  class PayApiError extends Error {
+    constructor(message, details = {}) {
+      super(message);
+      this.name = "PayApiError";
+      this.returnCode = details.returnCode;
+      this.traceId = details.traceId;
+      this.status = details.status;
+    }
+  }
+  class PayApiClient {
+    constructor(config) {
+      this.config = config;
+      this.fetcher = config.fetch || window.fetch.bind(window);
+    }
+    createOrder(request) {
+      return this.request(this.config.createOrderUrl, "POST", request);
+    }
+    validateMerchant(url, orderId, validationURL) {
+      return this.request(url, "POST", {
+        orderId,
+        validationURL
+      });
+    }
+    pay(request) {
+      return this.request(this.config.payUrl, "POST", request);
+    }
+    queryOrder(orderId) {
+      const encoded = encodeURIComponent(orderId);
+      const template = this.config.queryOrderUrl;
+      const url = template.includes("{orderId}") ? template.replace("{orderId}", encoded) : `${template.replace(/\/$/, "")}/${encoded}`;
+      return this.request(url, "GET");
+    }
+    async headers(includeContentType) {
+      const configured = typeof this.config.headers === "function" ? await this.config.headers() : this.config.headers;
+      return includeContentType ? { "Content-Type": "application/json", ...configured } : { ...configured };
+    }
+    async request(url, method, body) {
+      let response;
+      try {
+        response = await this.fetcher(url, {
+          method,
+          headers: await this.headers(body !== void 0),
+          body: body === void 0 ? void 0 : JSON.stringify(body)
+        });
+      } catch (error) {
+        throw error instanceof Error ? error : new PayApiError("Pay API network request failed");
+      }
+      let envelope;
+      try {
+        envelope = await response.json();
+      } catch {
+        throw new PayApiError(
+          response.ok ? "Pay API returned invalid JSON" : `Pay API request failed with status ${response.status}`,
+          { status: response.status }
+        );
+      }
+      if (!response.ok || !envelope || envelope.returnCode !== SUCCESS_RETURN_CODE) {
+        throw new PayApiError((envelope == null ? void 0 : envelope.returnMsg) || "Pay API request failed", {
+          returnCode: envelope == null ? void 0 : envelope.returnCode,
+          traceId: envelope == null ? void 0 : envelope.traceId,
+          status: response.status
+        });
+      }
+      return envelope.data;
+    }
+  }
+  let nextActionViewId = 0;
+  function describePayResponse(response) {
+    if (response.MD || response.JWT || response.action) {
+      if (!(response.MD && response.JWT && response.action)) {
+        throw new Error("Incomplete 3DS action fields (MD, JWT, action are all required)");
+      }
+      return {
+        type: "threeDS",
+        url: response.action,
+        MD: response.MD,
+        JWT: response.JWT,
+        action: response.action
+      };
+    }
+    if (response.webUrl) {
+      return {
+        type: "webUrl",
+        url: response.webUrl,
+        webUrl: response.webUrl
+      };
+    }
+    if (response.threeDSMethodData || response.methodUrl) {
+      if (!(response.threeDSMethodData && response.methodUrl)) {
+        throw new Error(
+          "Incomplete threeDSMethod fields (threeDSMethodData and methodUrl are required)"
+        );
+      }
+      return {
+        type: "threeDSMethod",
+        url: response.methodUrl,
+        threeDSMethodData: response.threeDSMethodData,
+        methodUrl: response.methodUrl
+      };
+    }
+    return null;
+  }
+  function describeS3ds(s3dsUrl) {
+    return {
+      type: "s3ds",
+      url: s3dsUrl,
+      s3dsUrl
+    };
+  }
+  class PaymentActionView {
+    constructor() {
+      this.methodFrameName = `pay-sdk-method-${++nextActionViewId}`;
+      this.challengeFrameName = `pay-sdk-challenge-${nextActionViewId}`;
+      this.challengeOverlay = null;
+      this.methodFrame = null;
+    }
+    open(action) {
+      if (action.type === "webUrl" || action.type === "s3ds") {
+        window.location.assign(action.url);
+        return;
+      }
+      if (action.type === "threeDS") {
+        this.openChallenge(action.action, { MD: action.MD, JWT: action.JWT });
+        return;
+      }
+      this.openFormHidden(action.methodUrl, {
+        threeDSMethodData: action.threeDSMethodData
+      });
+    }
+    destroy() {
+      var _a, _b;
+      (_a = this.challengeOverlay) == null ? void 0 : _a.remove();
+      this.challengeOverlay = null;
+      (_b = this.methodFrame) == null ? void 0 : _b.remove();
+      this.methodFrame = null;
+    }
+    openChallenge(url, fields) {
+      var _a;
+      (_a = this.challengeOverlay) == null ? void 0 : _a.remove();
+      const overlay = document.createElement("div");
+      overlay.setAttribute("data-pay-sdk-challenge", "");
+      Object.assign(overlay.style, {
+        position: "fixed",
+        inset: "0",
+        zIndex: "2147483647",
+        background: "rgba(0, 0, 0, 0.55)",
+        display: "flex",
+        alignItems: "center",
+        justifyContent: "center",
+        padding: "16px",
+        boxSizing: "border-box"
+      });
+      const iframe = document.createElement("iframe");
+      iframe.name = this.challengeFrameName;
+      iframe.title = "3D Secure verification";
+      Object.assign(iframe.style, {
+        width: "min(100%, 390px)",
+        height: "min(100%, 400px)",
+        border: "0",
+        background: "#fff"
+      });
+      overlay.appendChild(iframe);
+      document.body.appendChild(overlay);
+      this.challengeOverlay = overlay;
+      const form = document.createElement("form");
+      form.method = "POST";
+      form.action = url;
+      form.target = this.challengeFrameName;
+      form.style.display = "none";
+      this.appendFields(form, fields);
+      document.body.appendChild(form);
+      form.submit();
+      form.remove();
+    }
+    openFormHidden(url, fields) {
+      var _a;
+      (_a = this.methodFrame) == null ? void 0 : _a.remove();
+      const iframe = document.createElement("iframe");
+      iframe.name = this.methodFrameName;
+      iframe.width = "0";
+      iframe.height = "0";
+      iframe.style.display = "none";
+      iframe.setAttribute("aria-hidden", "true");
+      document.body.appendChild(iframe);
+      this.methodFrame = iframe;
+      const form = document.createElement("form");
+      form.method = "POST";
+      form.action = url;
+      form.target = this.methodFrameName;
+      form.style.display = "none";
+      this.appendFields(form, fields);
+      document.body.appendChild(form);
+      form.submit();
+      form.remove();
+    }
+    appendFields(form, fields) {
+      for (const [name, value] of Object.entries(fields)) {
+        const input = document.createElement("input");
+        input.type = "hidden";
+        input.name = name;
+        input.value = value;
+        form.appendChild(input);
+      }
+    }
+  }
   const SUPPORTED_METHODS = ["googlePay", "applePay"];
   function validateConfig(config) {
     var _a, _b;
     if (!config || typeof config !== "object") {
       throw new Error("PaySdk.init requires a config object");
     }
-    if (!SUPPORTED_METHODS.includes(config.method)) {
-      throw new Error(`config.method must be one of: ${SUPPORTED_METHODS.join(", ")}`);
-    }
     if (!config.container) {
       throw new Error("config.container is required");
+    }
+    if (isApiConfig(config)) {
+      if (!config.api.createOrderUrl || !config.api.payUrl || !config.api.queryOrderUrl) {
+        throw new Error("api.createOrderUrl, api.payUrl and api.queryOrderUrl are required");
+      }
+      if (!config.order || config.order.amount == null || !config.order.currency || !config.order.countryCode) {
+        throw new Error("order.amount, order.currency and order.countryCode are required");
+      }
+      return;
+    }
+    if (!SUPPORTED_METHODS.includes(config.method)) {
+      throw new Error(`config.method must be one of: ${SUPPORTED_METHODS.join(", ")}`);
     }
     if (!config.payment || config.payment.amount == null || !config.payment.currency) {
       throw new Error("config.payment.amount and config.payment.currency are required");
@@ -1025,33 +1335,328 @@ apple-pay-button {
       throw new Error("applePay.validateMerchantUrl is required");
     }
   }
+  function isApiConfig(config) {
+    return "api" in config && !!config.api;
+  }
+  function hasSecondaryAction(response) {
+    return !!(response.webUrl || response.MD || response.JWT || response.action || response.threeDSMethodData || response.methodUrl);
+  }
+  function isTransientPollError(error) {
+    if (error instanceof PayApiError) {
+      if (error.status != null && error.status >= 500) return true;
+      if (error.returnCode && error.returnCode !== "0000") return false;
+      return error.status == null;
+    }
+    return error instanceof TypeError;
+  }
+  function withoutPaymentAuthorization(intents) {
+    return (intents || []).filter((intent) => intent !== "PAYMENT_AUTHORIZATION");
+  }
+  function runtimeConfigFromOrder(config, order, api, onWalletAuthorized) {
+    var _a;
+    const common = {
+      container: config.container,
+      environment: order.environment || "PRODUCTION",
+      risk: order.risk,
+      onSuccess: onWalletAuthorized,
+      onError: config.onError,
+      onCancel: config.onCancel
+    };
+    if (order.method === "googlePay") {
+      const card = order.params.allowedPaymentMethods[0];
+      if (!(card == null ? void 0 : card.tokenizationSpecification)) {
+        throw new Error("Create order response is missing Google Pay tokenizationSpecification");
+      }
+      const parameters = card.parameters;
+      return {
+        ...common,
+        method: "googlePay",
+        payment: {
+          amount: order.params.transactionInfo.totalPrice,
+          currency: order.params.transactionInfo.currencyCode,
+          countryCode: order.params.transactionInfo.countryCode || config.order.countryCode
+        },
+        billingAddressRequired: parameters.billingAddressRequired === true,
+        googlePay: {
+          merchantId: order.params.merchantInfo.merchantId,
+          merchantName: order.params.merchantInfo.merchantName,
+          allowedAuthMethods: parameters.allowedAuthMethods,
+          allowedCardNetworks: parameters.allowedCardNetworks,
+          tokenizationSpecification: card.tokenizationSpecification,
+          paymentDataRequest: {
+            ...order.params,
+            callbackIntents: withoutPaymentAuthorization(order.params.callbackIntents)
+          }
+        }
+      };
+    }
+    return {
+      ...common,
+      method: "applePay",
+      payment: {
+        amount: order.params.total.amount,
+        currency: order.params.currencyCode,
+        countryCode: order.params.countryCode
+      },
+      billingAddressRequired: (((_a = order.params.requiredBillingContactFields) == null ? void 0 : _a.length) || 0) > 0,
+      applePay: {
+        validateMerchantUrl: order.validateMerchantUrl,
+        validateMerchant: (validationURL) => api.validateMerchant(order.validateMerchantUrl, order.orderId, validationURL),
+        merchantCapabilities: order.params.merchantCapabilities,
+        supportedNetworks: order.params.supportedNetworks,
+        totalLabel: order.params.total.label,
+        totalType: order.params.total.type,
+        paymentRequest: order.params
+      }
+    };
+  }
   class PaySdk2 {
     constructor(config) {
+      this.actionView = new PaymentActionView();
       this._readyPromise = null;
       this._button = null;
+      this.runtimeConfig = null;
+      this.order = null;
+      this.pollTimer = null;
+      this.pollDelayResolve = null;
+      this.pollGeneration = 0;
+      this.paymentInFlight = false;
+      this.destroyed = false;
       this.config = config;
+      this.api = isApiConfig(config) ? new PayApiClient(config.api) : null;
+      if (!isApiConfig(config)) this.runtimeConfig = config;
     }
     // Resolves once the wallet JS is loaded and the environment supports payment.
     ready() {
       if (!this._readyPromise) {
-        this._readyPromise = ready(this.config);
+        this._readyPromise = this.prepare();
       }
       return this._readyPromise;
     }
+    async prepare() {
+      var _a;
+      if (!this.runtimeConfig) {
+        const config = this.config;
+        const api = this.api;
+        const order = await api.createOrder(config.order);
+        this.order = order;
+        (_a = config.onOrderCreated) == null ? void 0 : _a.call(config, order);
+        this.runtimeConfig = runtimeConfigFromOrder(config, order, api, async (result) => {
+          await this.processPayment(result);
+        });
+      }
+      return ready(this.runtimeConfig);
+    }
     _pay() {
-      if (this.config.method === "googlePay") {
-        void payWithGoogle(this.config);
+      const config = this.runtimeConfig;
+      if (!config) {
+        void this.ready().then(() => this._pay()).catch((error) => {
+          var _a, _b;
+          return (_b = (_a = this.config).onError) == null ? void 0 : _b.call(_a, toError(error));
+        });
         return;
       }
-      payWithApple(this.config);
+      if (config.method === "googlePay") {
+        void payWithGoogle(config);
+        return;
+      }
+      payWithApple(config);
     }
     // Renders the official button into the container and wires up the click.
     mount() {
-      this._button = renderButton(this.config, () => this._pay());
+      if (this.runtimeConfig) {
+        this.render();
+      } else {
+        void this.ready().then(() => this.render()).catch((error) => {
+          var _a, _b;
+          return (_b = (_a = this.config).onError) == null ? void 0 : _b.call(_a, toError(error));
+        });
+      }
       return this;
+    }
+    /** 商户（或 JS Bridge 授权后）可主动让 SDK 打开二次动作。 */
+    openAction(action) {
+      this.actionView.open(action);
+    }
+    getActionMode() {
+      return isApiConfig(this.config) ? this.config.actionMode || "callback" : "callback";
+    }
+    /** @returns navigated = SDK 已整页跳转；opened = 已开窗/iframe；deferred = 仅回调商户 */
+    async dispatchAction(action) {
+      var _a, _b;
+      (_b = (_a = this.config).onAction) == null ? void 0 : _b.call(_a, action);
+      if (this.getActionMode() !== "auto") return "deferred";
+      const custom = isApiConfig(this.config) ? this.config.openAction : void 0;
+      const handled = custom ? await custom(action) : false;
+      if (handled === true) return "opened";
+      this.actionView.open(action);
+      if (action.type === "webUrl" || action.type === "s3ds") return "navigated";
+      return "opened";
+    }
+    render() {
+      if (this.destroyed || !this.runtimeConfig) return;
+      this._button = renderButton(this.runtimeConfig, () => this._pay());
+    }
+    async processPayment(walletResult) {
+      var _a, _b;
+      if (!this.api || !this.order || !isApiConfig(this.config)) {
+        await ((_b = (_a = this.config).onSuccess) == null ? void 0 : _b.call(_a, walletResult));
+        return;
+      }
+      if (this.destroyed) return;
+      if (this.paymentInFlight) {
+        throw new Error("Payment already in progress");
+      }
+      this.paymentInFlight = true;
+      try {
+        const request = this.buildPayRequest(walletResult);
+        const paymentResponse = await this.api.pay(request);
+        if (this.destroyed) return;
+        if (!hasSecondaryAction(paymentResponse)) {
+          this.finish(walletResult, paymentResponse);
+          return;
+        }
+        const action = describePayResponse(paymentResponse);
+        if (this.destroyed) return;
+        if (action) await this.dispatchAction(action);
+        void this.pollOrder(walletResult, paymentResponse);
+      } catch (error) {
+        this.paymentInFlight = false;
+        this.stopPolling();
+        this.actionView.destroy();
+        throw error instanceof Error ? error : toError(error);
+      }
+    }
+    buildPayRequest(walletResult) {
+      if (!this.order) throw new Error("Order is not ready");
+      if (walletResult.method === "googlePay") {
+        if (!walletResult.token) throw new Error("Google Pay token is missing");
+        return {
+          orderId: this.order.orderId,
+          encryptedData: walletResult.token,
+          billingAddress: normalizeGoogleBillingAddress(
+            walletResult.billingAddress,
+            walletResult.email
+          ),
+          risk: walletResult.risk
+        };
+      }
+      if (!walletResult.token) throw new Error("Apple Pay token is missing");
+      return {
+        orderId: this.order.orderId,
+        encryptedData: normalizeAppleToken(walletResult.token),
+        billingAddress: normalizeAppleBillingAddress(walletResult.billingContact),
+        risk: walletResult.risk
+      };
+    }
+    async pollOrder(walletResult, paymentResponse) {
+      var _a, _b;
+      const apiConfig = this.config.api;
+      const interval = apiConfig.pollIntervalMs || 2e3;
+      const timeoutMs = apiConfig.pollTimeoutMs ?? 3e5;
+      const startedAt = Date.now();
+      const generation = ++this.pollGeneration;
+      let lastS3dsUrl = "";
+      let consecutiveTransientErrors = 0;
+      let firstTick = true;
+      while (!this.destroyed && this.order && generation === this.pollGeneration) {
+        if (!firstTick) await this.delay(interval);
+        firstTick = false;
+        if (this.destroyed || !this.order || generation !== this.pollGeneration) return;
+        if (Date.now() - startedAt > timeoutMs) {
+          this.fail(new Error("Payment status polling timed out"));
+          return;
+        }
+        try {
+          const current = await this.api.queryOrder(this.order.orderId);
+          if (this.destroyed || generation !== this.pollGeneration) return;
+          consecutiveTransientErrors = 0;
+          (_b = (_a = this.config).onStatusChange) == null ? void 0 : _b.call(_a, current);
+          if (current.s3dsUrl && current.s3dsUrl !== lastS3dsUrl) {
+            lastS3dsUrl = current.s3dsUrl;
+            const outcome = await this.dispatchAction(describeS3ds(current.s3dsUrl));
+            if (outcome === "navigated") {
+              this.stopPolling();
+              return;
+            }
+          }
+          if (current.status === "failed") {
+            throw new Error(current.failureReason || "Payment failed");
+          }
+          if (current.status === "succeeded") {
+            this.finish(walletResult, paymentResponse, current);
+            return;
+          }
+          if (current.s3dsComplete === true) {
+            this.complete(walletResult, paymentResponse, current);
+            return;
+          }
+        } catch (error) {
+          if (this.destroyed || generation !== this.pollGeneration) return;
+          if (isTransientPollError(error)) {
+            consecutiveTransientErrors += 1;
+            if (consecutiveTransientErrors < 5) continue;
+          }
+          this.fail(error);
+          return;
+        }
+      }
+    }
+    delay(ms) {
+      return new Promise((resolve) => {
+        this.pollDelayResolve = resolve;
+        this.pollTimer = window.setTimeout(() => {
+          this.pollTimer = null;
+          this.pollDelayResolve = null;
+          resolve();
+        }, ms);
+      });
+    }
+    finish(walletResult, paymentResponse, order) {
+      var _a, _b;
+      const result = this.complete(walletResult, paymentResponse, order);
+      (_b = (_a = this.config).onSuccess) == null ? void 0 : _b.call(_a, result);
+    }
+    complete(walletResult, paymentResponse, order) {
+      var _a, _b, _c;
+      this.paymentInFlight = false;
+      this.stopPolling();
+      this.actionView.destroy();
+      const result = {
+        ...walletResult,
+        orderId: (_a = this.order) == null ? void 0 : _a.orderId,
+        paymentResponse,
+        order
+      };
+      (_c = (_b = this.config).onComplete) == null ? void 0 : _c.call(_b, result);
+      return result;
+    }
+    fail(error) {
+      var _a, _b;
+      this.paymentInFlight = false;
+      this.stopPolling();
+      this.actionView.destroy();
+      (_b = (_a = this.config).onError) == null ? void 0 : _b.call(
+        _a,
+        error instanceof PayApiError || error instanceof Error ? error : toError(error)
+      );
+    }
+    stopPolling() {
+      var _a;
+      this.pollGeneration += 1;
+      if (this.pollTimer !== null) {
+        window.clearTimeout(this.pollTimer);
+        this.pollTimer = null;
+      }
+      (_a = this.pollDelayResolve) == null ? void 0 : _a.call(this);
+      this.pollDelayResolve = null;
     }
     destroy() {
       var _a;
+      this.destroyed = true;
+      this.paymentInFlight = false;
+      this.stopPolling();
+      this.actionView.destroy();
       (_a = this._button) == null ? void 0 : _a.remove();
       this._button = null;
       const el = resolveContainer(this.config.container);
@@ -1062,6 +1667,9 @@ apple-pay-button {
     validateConfig(config);
     return new PaySdk2(config);
   }
+  exports.PayApiError = PayApiError;
+  exports.describePayResponse = describePayResponse;
+  exports.describeS3ds = describeS3ds;
   exports.init = init;
   Object.defineProperty(exports, Symbol.toStringTag, { value: "Module" });
   return exports;

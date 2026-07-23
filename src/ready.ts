@@ -1,8 +1,8 @@
-import type { PaySdkConfig } from './types.js'
+import type { WalletPaySdkConfig } from './types.js'
 import { loadGooglePay, loadApplePay } from './loader.js'
 import { buildGoogleBaseRequest, getPaymentsClient } from './googlePay.js'
 
-async function readyGooglePay(config: PaySdkConfig): Promise<true> {
+async function readyGooglePay(config: WalletPaySdkConfig): Promise<true> {
   await loadGooglePay()
   if (!window.google?.payments?.api) {
     throw new Error('Google Pay JS failed to load')
@@ -28,7 +28,7 @@ async function readyApplePay(): Promise<true> {
   return true
 }
 
-export function ready(config: PaySdkConfig): Promise<true> {
+export function ready(config: WalletPaySdkConfig): Promise<true> {
   if (config.method === 'googlePay') return readyGooglePay(config)
   if (config.method === 'applePay') return readyApplePay()
   return Promise.reject(new Error(`Unknown payment method: ${config.method}`))

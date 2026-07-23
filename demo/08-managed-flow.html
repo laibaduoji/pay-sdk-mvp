@@ -1,0 +1,68 @@
+<!doctype html>
+<html lang="zh-CN">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>9.8 SDK Managed Payment Flow</title>
+    <link rel="stylesheet" href="./common.css" />
+  </head>
+  <body>
+    <p class="meta"><a href="./index.html">← Demos</a> · PARAMETERS §9.8</p>
+    <h1>SDK 完整支付编排</h1>
+    <p class="meta">
+      示例使用同源 <code>/v1/pay/*</code> 地址，需要后端代理提供四个 API。<br />
+      默认 <code>actionMode: 'callback'</code>：二次动作只经 <code>onAction</code> 吐出；Demo
+      里演示授权后调用 <code>sdk.openAction(action)</code>。
+    </p>
+    <p id="status">Creating order…</p>
+    <div id="pay-container"></div>
+    <pre id="action">Action payload will appear here.</pre>
+    <pre id="output">Result will appear here.</pre>
+
+    <script src="./pay-sdk.js"></script>
+    <script src="./demo-ui.js"></script>
+    <script>
+      const ui = window.PaySdkDemoUI
+      const handlers = ui.handlers()
+
+      const sdk = PaySdk.init({
+        container: '#pay-container',
+        // actionMode: 'callback', // default — WebView-friendly
+        order: {
+          amount: '10.00',
+          currency: 'USD',
+          countryCode: 'US'
+        },
+        api: {
+          createOrderUrl: '/v1/pay/orders',
+          payUrl: '/v1/pay/payments',
+          queryOrderUrl: '/v1/pay/orders/{orderId}',
+          pollIntervalMs: 2000,
+          pollTimeoutMs: 300000
+        },
+        onAction(action) {
+          document.getElementById('action').textContent = JSON.stringify(action, null, 2)
+          // 模拟商户 / JS Bridge 授权后再让 SDK 打开
+          if (confirm(`收到二次动作 ${action.type}，是否让 SDK 打开？`)) {
+            sdk.openAction(action)
+          }
+        },
+        onOrderCreated(order) {
+          document.getElementById('status').textContent =
+            `Order ${order.orderId} created (${order.method}).`
+        },
+        onStatusChange(order) {
+          document.getElementById('status').textContent = `Payment status: ${order.status}`
+        },
+        onComplete(result) {
+          document.getElementById('output').textContent = JSON.stringify(result, null, 2)
+        },
+        onSuccess: handlers.onSuccess,
+        onError: handlers.onError,
+        onCancel: handlers.onCancel
+      })
+
+      ui.run(sdk)
+    </script>
+  </body>
+</html>

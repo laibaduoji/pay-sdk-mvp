@@ -32,6 +32,7 @@ npm run format     # prettier write
 | [demo/05-apple-pay-basic.html](demo/05-apple-pay-basic.html)             | 9.5 Apple Pay 最简          |
 | [demo/06-apple-pay-billing.html](demo/06-apple-pay-billing.html)         | 9.6 Apple 账单地址          |
 | [demo/07-lifecycle.html](demo/07-lifecycle.html)                         | 9.7 ready → mount → destroy |
+| [demo/08-managed-flow.html](demo/08-managed-flow.html)                   | 9.8 完整支付编排            |
 
 共享测试参数写在 [`demo/config.js`](demo/config.js)（`gateway`、`gatewayMerchantId`、`publicKey`、`merchantName`、`validateMerchantUrl`、`payment` 等）。改一处即可让各示例复用。
 
@@ -41,6 +42,68 @@ npm run format     # prettier write
 - [demo/merchant-apple-pay.html](demo/merchant-apple-pay.html)
 
 ## Usage
+
+### Full payment flow
+
+In this mode the SDK creates the order, validates Apple Pay merchants, submits
+the wallet token and risk data, and polls order status. Secondary actions
+(`webUrl` / 3DS / method / `s3dsUrl`) default to **callback-only** via
+`onAction` (WebView-friendly: merchant opens the URL or grants JS Bridge
+permission). Set `actionMode: 'auto'` or call `sdk.openAction(action)` to let
+the SDK open frames / navigate:
+
+```html
+<div id="pay-container"></div>
+<script src="./dist/pay-sdk.js"></script>
+<script>
+  const sdk = PaySdk.init({
+    container: '#pay-container',
+    order: {
+      amount: '10.00',
+      currency: 'USD',
+      countryCode: 'US'
+    },
+    api: {
+      createOrderUrl: 'https://api.example.com/v1/pay/orders',
+      payUrl: 'https://api.example.com/v1/pay/payments',
+      queryOrderUrl: 'https://api.example.com/v1/pay/orders/{orderId}',
+      headers: () => ({ Authorization: `Bearer ${getAccessToken()}` }),
+      pollIntervalMs: 2000,
+      pollTimeoutMs: 300000
+    },
+    // actionMode: 'callback', // default — only notify merchant
+    // openAction: async (action) => window.NativeBridge?.open(action),
+    onAction(action) {
+      // Full fields: MD / JWT / action, webUrl, methodUrl, s3dsUrl, …
+      // Merchant opens UI, or after Bridge permission: sdk.openAction(action)
+      console.log(action)
+    },
+    onOrderCreated(order) {
+      console.log(order.orderId, order.method)
+    },
+    onStatusChange(order) {
+      console.log(order.status)
+    },
+    onComplete(result) {
+      console.log('flow complete', result.order?.status)
+    },
+    onSuccess(result) {
+      console.log(result.orderId, result.order?.status)
+    },
+    onError(error) {
+      console.error(error)
+    }
+  })
+
+  sdk.ready().then(() => sdk.mount())
+</script>
+```
+
+The backend create-order response selects Google Pay or Apple Pay and supplies
+the wallet `params`, `risk`, environment, and Apple validation URL. See
+[`docs/pay-api/`](docs/pay-api/) for the four HTTP contracts.
+
+### Wallet-only compatibility mode
 
 ```html
 <div id="pay-container"></div>
@@ -90,12 +153,13 @@ npm run format     # prettier write
 
 ## API
 
-| Method                | Description                                                                                                                                      |
-| --------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------ |
-| `PaySdk.init(config)` | Validates config, returns an SDK instance.                                                                                                       |
-| `sdk.ready()`         | Promise resolving once wallet JS is loaded and the environment can pay (Google `isReadyToPay`, Apple `canMakePayments`). Rejects if unsupported. |
-| `sdk.mount()`         | Renders the official wallet button into `container` and wires up the click.                                                                      |
-| `sdk.destroy()`       | Clears the container.                                                                                                                            |
+| Method                   | Description                                                                                                     |
+| ------------------------ | --------------------------------------------------------------------------------------------------------------- |
+| `PaySdk.init(config)`    | Validates full-flow (`order + api`) or wallet-only configuration and returns an SDK instance.                   |
+| `sdk.ready()`            | In full-flow mode creates the order first, then loads the selected wallet and checks availability.              |
+| `sdk.mount()`            | Renders the wallet button. It may be called before `ready()`; full-flow preparation then runs automatically.    |
+| `sdk.openAction(action)` | Opens a secondary action (challenge iframe / method iframe / navigate). Use after merchant / Bridge permission. |
+| `sdk.destroy()`          | Clears the button, payment-action iframe and active order polling timer.                                        |
 
 ## `tokenizationSpecification` (Google Pay)
 

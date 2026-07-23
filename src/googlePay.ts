@@ -1,11 +1,14 @@
-import type { PaySdkConfig } from './types.js'
+import type { WalletPaySdkConfig } from './types.js'
 import { normalizeGoogleResult, isGoogleCancel, toError } from './normalize.js'
 import { collectRisk } from './risk/index.js'
 
-const paymentsClients = new WeakMap<PaySdkConfig, google.payments.api.PaymentsClient>()
+const paymentsClients = new WeakMap<WalletPaySdkConfig, google.payments.api.PaymentsClient>()
 
-function merchantInfo(config: PaySdkConfig): google.payments.api.MerchantInfo {
+function merchantInfo(config: WalletPaySdkConfig): google.payments.api.MerchantInfo {
   const gp = config.googlePay
+  if (gp?.paymentDataRequest?.merchantInfo) {
+    return gp.paymentDataRequest.merchantInfo
+  }
   // merchantId is required by the type but only used in PRODUCTION; omit it in
   // TEST rather than sending an empty value.
   const info: Partial<google.payments.api.MerchantInfo> = {
@@ -15,7 +18,7 @@ function merchantInfo(config: PaySdkConfig): google.payments.api.MerchantInfo {
   return info as google.payments.api.MerchantInfo
 }
 
-export function getPaymentsClient(config: PaySdkConfig): google.payments.api.PaymentsClient {
+export function getPaymentsClient(config: WalletPaySdkConfig): google.payments.api.PaymentsClient {
   const cached = paymentsClients.get(config)
   if (cached) return cached
 
@@ -28,7 +31,7 @@ export function getPaymentsClient(config: PaySdkConfig): google.payments.api.Pay
 }
 
 function buildCardPaymentMethod(
-  config: PaySdkConfig
+  config: WalletPaySdkConfig
 ): google.payments.api.PaymentMethodSpecification {
   const gp = config.googlePay
 
@@ -54,16 +57,29 @@ function buildCardPaymentMethod(
 
 // Base request shared by isReadyToPay() and loadPaymentData().
 export function buildGoogleBaseRequest(
-  config: PaySdkConfig
+  config: WalletPaySdkConfig
 ): google.payments.api.IsReadyToPayRequest {
+  const request = config.googlePay?.paymentDataRequest
   return {
-    apiVersion: 2,
-    apiVersionMinor: 0,
-    allowedPaymentMethods: [buildCardPaymentMethod(config)]
+    apiVersion: request?.apiVersion || 2,
+    apiVersionMinor: request?.apiVersionMinor || 0,
+    allowedPaymentMethods: request?.allowedPaymentMethods || [buildCardPaymentMethod(config)]
   }
 }
 
-function buildPaymentDataRequest(config: PaySdkConfig): google.payments.api.PaymentDataRequest {
+function buildPaymentDataRequest(
+  config: WalletPaySdkConfig
+): google.payments.api.PaymentDataRequest {
+  const provided = config.googlePay?.paymentDataRequest
+  if (provided) {
+    return {
+      ...provided,
+      callbackIntents: (provided.callbackIntents || []).filter(
+        (intent) => intent !== 'PAYMENT_AUTHORIZATION'
+      )
+    } as google.payments.api.PaymentDataRequest
+  }
+
   const payment = config.payment
   return {
     apiVersion: 2,
@@ -81,7 +97,7 @@ function buildPaymentDataRequest(config: PaySdkConfig): google.payments.api.Paym
 }
 
 function buttonOptions(
-  config: PaySdkConfig,
+  config: WalletPaySdkConfig,
   onClick: () => void
 ): google.payments.api.ButtonOptions {
   const btn = config.googlePay?.button || {}
@@ -95,17 +111,17 @@ function buttonOptions(
   return options
 }
 
-export function createGoogleButton(config: PaySdkConfig, onClick: () => void): HTMLElement {
+export function createGoogleButton(config: WalletPaySdkConfig, onClick: () => void): HTMLElement {
   return getPaymentsClient(config).createButton(buttonOptions(config, onClick))
 }
 
-export async function payWithGoogle(config: PaySdkConfig): Promise<void> {
+export async function payWithGoogle(config: WalletPaySdkConfig): Promise<void> {
   const client = getPaymentsClient(config)
   const riskPromise = collectRisk(config.risk, config.environment)
   try {
     const paymentData = await client.loadPaymentData(buildPaymentDataRequest(config))
     const risk = await riskPromise
-    config.onSuccess?.({ ...normalizeGoogleResult(paymentData), risk })
+    await config.onSuccess?.({ ...normalizeGoogleResult(paymentData), risk })
   } catch (err) {
     if (isGoogleCancel(err)) {
       config.onCancel?.()

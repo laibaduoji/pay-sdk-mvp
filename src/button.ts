@@ -1,4 +1,4 @@
-import type { PaySdkConfig } from './types.js'
+import type { WalletPaySdkConfig } from './types.js'
 import { createGoogleButton } from './googlePay.js'
 
 const APPLE_BUTTON_STYLE_ID = 'pay-sdk-apple-button-style'
@@ -27,7 +27,7 @@ apple-pay-button {
 
 function renderAppleButton(
   el: HTMLElement,
-  config: PaySdkConfig,
+  config: WalletPaySdkConfig,
   onClick: () => void
 ): HTMLElement {
   injectAppleButtonStyle()
@@ -45,7 +45,7 @@ function renderAppleButton(
 
 function renderGoogleButton(
   el: HTMLElement,
-  config: PaySdkConfig,
+  config: WalletPaySdkConfig,
   onClick: () => void
 ): HTMLElement {
   const button = createGoogleButton(config, onClick)
@@ -54,7 +54,7 @@ function renderGoogleButton(
 }
 
 // Renders the official wallet button into the container and returns the node.
-export function renderButton(config: PaySdkConfig, onClick: () => void): HTMLElement {
+export function renderButton(config: WalletPaySdkConfig, onClick: () => void): HTMLElement {
   const el = resolveContainer(config.container)
   el.innerHTML = ''
 
