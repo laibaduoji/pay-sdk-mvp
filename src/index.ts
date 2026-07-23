@@ -65,7 +65,11 @@ export type {
 export { PayApiError } from './api.js'
 export { describePayResponse, describeS3ds } from './actions.js'
 export { getApiEndpoints, resolvePayApiConfig, resolveEnvironment } from './endpoints.js'
-export { GOOGLE_PAY_TEST_DEFAULTS, applyGooglePayTestDefaults } from './googlePay.js'
+export {
+  GOOGLE_PAY_TEST_DEFAULTS,
+  GOOGLE_PAY_CALLBACK_INTENTS,
+  applyGooglePayTestDefaults
+} from './googlePay.js'
 
 function validateConfig(config: PaySdkConfig): void {
   if (!config || typeof config !== 'object') {
@@ -102,12 +106,6 @@ function isTransientPollError(error: unknown): boolean {
     return error.status == null
   }
   return error instanceof TypeError
-}
-
-function withoutPaymentAuthorization(
-  intents: google.payments.api.CallbackIntent[] | undefined
-): google.payments.api.CallbackIntent[] {
-  return (intents || []).filter((intent) => intent !== 'PAYMENT_AUTHORIZATION')
 }
 
 function runtimeConfigFromOrder(
@@ -150,7 +148,7 @@ function runtimeConfigFromOrder(
         tokenizationSpecification: card.tokenizationSpecification,
         paymentDataRequest: {
           ...params,
-          callbackIntents: withoutPaymentAuthorization(params.callbackIntents)
+          callbackIntents: ['PAYMENT_AUTHORIZATION']
         }
       }
     }

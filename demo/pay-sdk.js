@@ -823,7 +823,9 @@ var PaySdk = function(exports) {
     gateway: "unlimint",
     gatewayMerchantId: "googletest"
   };
+  const GOOGLE_PAY_CALLBACK_INTENTS = ["PAYMENT_AUTHORIZATION"];
   const paymentsClients = /* @__PURE__ */ new WeakMap();
+  const pendingPays = /* @__PURE__ */ new WeakMap();
   function applyGooglePayTestDefaults(params) {
     var _a, _b;
     const merchantInfo2 = {
@@ -876,7 +878,14 @@ var PaySdk = function(exports) {
     return {
       ...params,
       merchantInfo: merchantInfo2,
-      allowedPaymentMethods
+      allowedPaymentMethods,
+      callbackIntents: [...GOOGLE_PAY_CALLBACK_INTENTS]
+    };
+  }
+  function withFixedCallbackIntents(request) {
+    return {
+      ...request,
+      callbackIntents: [...GOOGLE_PAY_CALLBACK_INTENTS]
     };
   }
   function merchantInfo(config) {
@@ -900,13 +909,51 @@ var PaySdk = function(exports) {
     if (merchantId) info.merchantId = merchantId;
     return info;
   }
+  async function onPaymentAuthorized(config, paymentData) {
+    var _a, _b;
+    const pending = pendingPays.get(config);
+    if (!pending) {
+      return {
+        transactionState: "ERROR",
+        error: {
+          intent: "PAYMENT_AUTHORIZATION",
+          message: "No payment in progress",
+          reason: "OTHER_ERROR"
+        }
+      };
+    }
+    try {
+      const risk = await pending.riskPromise;
+      await ((_a = config.onSuccess) == null ? void 0 : _a.call(config, { ...normalizeGoogleResult(paymentData), risk }));
+      pending.settled = true;
+      return { transactionState: "SUCCESS" };
+    } catch (err) {
+      const error = toError(err);
+      pending.settled = true;
+      (_b = config.onError) == null ? void 0 : _b.call(config, error);
+      return {
+        transactionState: "ERROR",
+        error: {
+          intent: "PAYMENT_AUTHORIZATION",
+          message: error.message || "Payment failed",
+          reason: "PAYMENT_DATA_INVALID"
+        }
+      };
+    }
+  }
   function getPaymentsClient(config) {
     const cached = paymentsClients.get(config);
     if (cached) return cached;
-    const client = new google.payments.api.PaymentsClient({
+    const clientOptions = {
       environment: config.environment === "TEST" ? "TEST" : "PRODUCTION",
-      merchantInfo: merchantInfo(config)
-    });
+      merchantInfo: merchantInfo(config),
+      paymentDataCallbacks: {
+        onPaymentAuthorized: (paymentData) => onPaymentAuthorized(config, paymentData)
+      }
+    };
+    const client = new google.payments.api.PaymentsClient(
+      clientOptions
+    );
     paymentsClients.set(config, client);
     return client;
   }
@@ -942,13 +989,9 @@ var PaySdk = function(exports) {
     var _a;
     const provided = (_a = config.googlePay) == null ? void 0 : _a.paymentDataRequest;
     if (provided) {
-      const base = {
-        ...provided,
-        callbackIntents: (provided.callbackIntents || []).filter(
-          (intent) => intent !== "PAYMENT_AUTHORIZATION"
-        )
-      };
-      return config.environment === "TEST" ? applyGooglePayTestDefaults(base) : base;
+      const withIntents = withFixedCallbackIntents(provided);
+      const base = config.environment === "TEST" ? applyGooglePayTestDefaults(withIntents) : withIntents;
+      return base;
     }
     const payment = config.payment;
     return {
@@ -962,7 +1005,8 @@ var PaySdk = function(exports) {
         totalPriceStatus: "FINAL",
         totalPrice: String(payment.amount),
         totalPriceLabel: "Total"
-      }
+      },
+      callbackIntents: [...GOOGLE_PAY_CALLBACK_INTENTS]
     };
   }
   function buttonOptions(config, onClick) {
@@ -981,19 +1025,23 @@ var PaySdk = function(exports) {
     return getPaymentsClient(config).createButton(buttonOptions(config, onClick));
   }
   async function payWithGoogle(config) {
-    var _a, _b, _c;
+    var _a, _b;
     const client = getPaymentsClient(config);
     const riskPromise = resolveRiskCollection(config);
+    const pending = { riskPromise, settled: false };
+    pendingPays.set(config, pending);
     try {
-      const paymentData = await client.loadPaymentData(buildPaymentDataRequest(config));
-      const risk = await riskPromise;
-      await ((_a = config.onSuccess) == null ? void 0 : _a.call(config, { ...normalizeGoogleResult(paymentData), risk }));
+      await client.loadPaymentData(buildPaymentDataRequest(config));
     } catch (err) {
       if (isGoogleCancel(err)) {
-        (_b = config.onCancel) == null ? void 0 : _b.call(config);
+        (_a = config.onCancel) == null ? void 0 : _a.call(config);
         return;
       }
-      (_c = config.onError) == null ? void 0 : _c.call(config, toError(err));
+      if (!pending.settled) {
+        (_b = config.onError) == null ? void 0 : _b.call(config, toError(err));
+      }
+    } finally {
+      pendingPays.delete(config);
     }
   }
   async function readyGooglePay(config) {
@@ -1411,9 +1459,6 @@ apple-pay-button {
     }
     return error instanceof TypeError;
   }
-  function withoutPaymentAuthorization(intents) {
-    return (intents || []).filter((intent) => intent !== "PAYMENT_AUTHORIZATION");
-  }
   function runtimeConfigFromOrder(config, order, api, onWalletAuthorized) {
     var _a;
     const environment = resolveEnvironment(config.environment || order.environment);
@@ -1449,7 +1494,7 @@ apple-pay-button {
           tokenizationSpecification: card.tokenizationSpecification,
           paymentDataRequest: {
             ...params,
-            callbackIntents: withoutPaymentAuthorization(params.callbackIntents)
+            callbackIntents: ["PAYMENT_AUTHORIZATION"]
           }
         }
       };
@@ -1738,6 +1783,7 @@ apple-pay-button {
   if (typeof window !== "undefined") {
     window.PaySdk = { init };
   }
+  exports.GOOGLE_PAY_CALLBACK_INTENTS = GOOGLE_PAY_CALLBACK_INTENTS;
   exports.GOOGLE_PAY_TEST_DEFAULTS = GOOGLE_PAY_TEST_DEFAULTS;
   exports.PayApiError = PayApiError;
   exports.applyGooglePayTestDefaults = applyGooglePayTestDefaults;

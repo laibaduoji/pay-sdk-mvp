@@ -123,7 +123,9 @@ sequenceDiagram
 
 #### `params` — Google Pay
 
-`PaymentDataRequest`。`totalPriceLabel`、`merchantId`、`merchantName`、`callbackIntents` **必传**（当前钱包 SDK MVP 不消费 `PAYMENT_AUTHORIZATION`，示例用 `[]`）。
+`PaymentDataRequest`。`totalPriceLabel`、`merchantId`、`merchantName` **必传**。
+SDK 固定使用 `callbackIntents: ['PAYMENT_AUTHORIZATION']`，并注册
+`paymentDataCallbacks.onPaymentAuthorized`（创建订单下发的 callbackIntents 会被覆盖）。
 
 令牌化二选一：
 

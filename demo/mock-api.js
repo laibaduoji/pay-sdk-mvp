@@ -124,7 +124,7 @@
         merchantId: merchantId,
         merchantName: merchantName
       },
-      callbackIntents: []
+      callbackIntents: ['PAYMENT_AUTHORIZATION']
     }
   }
 

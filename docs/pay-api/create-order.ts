@@ -49,7 +49,8 @@ export interface GooglePayParams {
     merchantId: string
     merchantName: string
   }
-  callbackIntents: string[]
+  /** SDK 固定覆盖为 ['PAYMENT_AUTHORIZATION'] */
+  callbackIntents?: string[]
 }
 
 export interface ApplePayParams {
@@ -178,7 +179,7 @@ export const googlePayParamsDirect: GooglePayParams = {
     merchantId: 'BCR2DN5TRCG6H2QZ',
     merchantName: 'Alchemy Pay Ramp'
   },
-  callbackIntents: []
+  callbackIntents: ['PAYMENT_AUTHORIZATION']
 }
 
 export const googlePayParamsDirectMinimal: GooglePayParams = {
@@ -212,7 +213,7 @@ export const googlePayParamsDirectMinimal: GooglePayParams = {
     merchantId: 'BCR2DN5TRCG6H2QZ',
     merchantName: 'Alchemy Pay Ramp'
   },
-  callbackIntents: []
+  callbackIntents: ['PAYMENT_AUTHORIZATION']
 }
 
 export const googlePayParamsGateway: GooglePayParams = {
@@ -250,7 +251,7 @@ export const googlePayParamsGateway: GooglePayParams = {
     merchantId: 'BCR2DN4TQTA5V4YV',
     merchantName: 'ramp'
   },
-  callbackIntents: []
+  callbackIntents: ['PAYMENT_AUTHORIZATION']
 }
 
 export const applePayParams: ApplePayParams = {

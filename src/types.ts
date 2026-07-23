@@ -128,7 +128,11 @@ export interface GooglePayParams {
   allowedPaymentMethods: google.payments.api.PaymentMethodSpecification[]
   transactionInfo: google.payments.api.TransactionInfo
   merchantInfo: google.payments.api.MerchantInfo
-  callbackIntents: google.payments.api.CallbackIntent[]
+  /**
+   * SDK 固定为 `['PAYMENT_AUTHORIZATION']`（创建订单下发会被覆盖）。
+   * 并配置 PaymentsClient.paymentDataCallbacks.onPaymentAuthorized。
+   */
+  callbackIntents?: google.payments.api.CallbackIntent[]
 }
 
 export interface ApplePayParams {

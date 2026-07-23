@@ -10,11 +10,23 @@ export const GOOGLE_PAY_TEST_DEFAULTS = {
   gatewayMerchantId: 'googletest'
 } as const
 
+/** 固定 callbackIntents；须配合 PaymentsClient.paymentDataCallbacks */
+export const GOOGLE_PAY_CALLBACK_INTENTS: ['PAYMENT_AUTHORIZATION'] = ['PAYMENT_AUTHORIZATION']
+
 const paymentsClients = new WeakMap<RuntimeWalletConfig, google.payments.api.PaymentsClient>()
+
+interface PendingGooglePay {
+  riskPromise: Promise<import('./types.js').PayRiskPayload>
+  /** 已在 onPaymentAuthorized 里处理过成功/失败，避免 loadPaymentData catch 重复回调 */
+  settled: boolean
+}
+
+const pendingPays = new WeakMap<RuntimeWalletConfig, PendingGooglePay>()
 
 /**
  * TEST 环境下补齐 merchantInfo / PAYMENT_GATEWAY 缺省字段。
  * 响应已有值则保留；无 tokenization 时默认 PAYMENT_GATEWAY。
+ * 始终固定 callbackIntents = ['PAYMENT_AUTHORIZATION']。
  */
 export function applyGooglePayTestDefaults(params: GooglePayParams): GooglePayParams {
   const merchantInfo: google.payments.api.MerchantInfo = {
@@ -70,7 +82,15 @@ export function applyGooglePayTestDefaults(params: GooglePayParams): GooglePayPa
   return {
     ...params,
     merchantInfo,
-    allowedPaymentMethods
+    allowedPaymentMethods,
+    callbackIntents: [...GOOGLE_PAY_CALLBACK_INTENTS]
+  }
+}
+
+function withFixedCallbackIntents(request: GooglePayParams): GooglePayParams {
+  return {
+    ...request,
+    callbackIntents: [...GOOGLE_PAY_CALLBACK_INTENTS]
   }
 }
 
@@ -99,14 +119,59 @@ function merchantInfo(config: RuntimeWalletConfig): google.payments.api.Merchant
   return info as google.payments.api.MerchantInfo
 }
 
+async function onPaymentAuthorized(
+  config: RuntimeWalletConfig,
+  paymentData: google.payments.api.PaymentData
+): Promise<{ transactionState: 'SUCCESS' | 'ERROR'; error?: Record<string, string> }> {
+  const pending = pendingPays.get(config)
+  if (!pending) {
+    return {
+      transactionState: 'ERROR',
+      error: {
+        intent: 'PAYMENT_AUTHORIZATION',
+        message: 'No payment in progress',
+        reason: 'OTHER_ERROR'
+      }
+    }
+  }
+
+  try {
+    const risk = await pending.riskPromise
+    await config.onSuccess?.({ ...normalizeGoogleResult(paymentData), risk })
+    pending.settled = true
+    return { transactionState: 'SUCCESS' }
+  } catch (err) {
+    const error = toError(err)
+    pending.settled = true
+    config.onError?.(error)
+    return {
+      transactionState: 'ERROR',
+      error: {
+        intent: 'PAYMENT_AUTHORIZATION',
+        message: error.message || 'Payment failed',
+        reason: 'PAYMENT_DATA_INVALID'
+      }
+    }
+  }
+}
+
 export function getPaymentsClient(config: RuntimeWalletConfig): google.payments.api.PaymentsClient {
   const cached = paymentsClients.get(config)
   if (cached) return cached
 
-  const client = new google.payments.api.PaymentsClient({
+  // @types/googlepay 可能无 paymentDataCallbacks；运行时 Google Pay JS 需要该字段
+  const clientOptions = {
     environment: config.environment === 'TEST' ? 'TEST' : 'PRODUCTION',
-    merchantInfo: merchantInfo(config)
-  })
+    merchantInfo: merchantInfo(config),
+    paymentDataCallbacks: {
+      onPaymentAuthorized: (paymentData: google.payments.api.PaymentData) =>
+        onPaymentAuthorized(config, paymentData)
+    }
+  }
+
+  const client = new google.payments.api.PaymentsClient(
+    clientOptions as google.payments.api.PaymentOptions
+  )
   paymentsClients.set(config, client)
   return client
 }
@@ -136,7 +201,7 @@ function buildCardPaymentMethod(
   }
 }
 
-// Base request shared by isReadyToPay() and loadPaymentData().
+// Base request shared by isReadyToPay() — 不含 callbackIntents
 export function buildGoogleBaseRequest(
   config: RuntimeWalletConfig
 ): google.payments.api.IsReadyToPayRequest {
@@ -153,17 +218,10 @@ function buildPaymentDataRequest(
 ): google.payments.api.PaymentDataRequest {
   const provided = config.googlePay?.paymentDataRequest
   if (provided) {
-    const base = {
-      ...provided,
-      callbackIntents: (provided.callbackIntents || []).filter(
-        (intent) => intent !== 'PAYMENT_AUTHORIZATION'
-      )
-    } as google.payments.api.PaymentDataRequest
-    return config.environment === 'TEST'
-      ? (applyGooglePayTestDefaults(
-          base as GooglePayParams
-        ) as google.payments.api.PaymentDataRequest)
-      : base
+    const withIntents = withFixedCallbackIntents(provided as GooglePayParams)
+    const base =
+      config.environment === 'TEST' ? applyGooglePayTestDefaults(withIntents) : withIntents
+    return base as google.payments.api.PaymentDataRequest
   }
 
   const payment = config.payment
@@ -178,8 +236,9 @@ function buildPaymentDataRequest(
       totalPriceStatus: 'FINAL',
       totalPrice: String(payment.amount),
       totalPriceLabel: 'Total'
-    }
-  }
+    },
+    callbackIntents: [...GOOGLE_PAY_CALLBACK_INTENTS]
+  } as google.payments.api.PaymentDataRequest
 }
 
 function buttonOptions(
@@ -204,15 +263,21 @@ export function createGoogleButton(config: RuntimeWalletConfig, onClick: () => v
 export async function payWithGoogle(config: RuntimeWalletConfig): Promise<void> {
   const client = getPaymentsClient(config)
   const riskPromise = resolveRiskCollection(config)
+  const pending: PendingGooglePay = { riskPromise, settled: false }
+  pendingPays.set(config, pending)
+
   try {
-    const paymentData = await client.loadPaymentData(buildPaymentDataRequest(config))
-    const risk = await riskPromise
-    await config.onSuccess?.({ ...normalizeGoogleResult(paymentData), risk })
+    await client.loadPaymentData(buildPaymentDataRequest(config))
   } catch (err) {
     if (isGoogleCancel(err)) {
       config.onCancel?.()
       return
     }
-    config.onError?.(toError(err))
+    // onPaymentAuthorized 已 onError 时不再重复
+    if (!pending.settled) {
+      config.onError?.(toError(err))
+    }
+  } finally {
+    pendingPays.delete(config)
   }
 }

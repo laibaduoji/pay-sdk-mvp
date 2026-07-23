@@ -148,5 +148,6 @@ Your server / Apple Developer setup (not included in this repo):
   Google `https://pay.google.com/gp/p/js/pay.js`,
   Apple `https://applepay.cdn-apple.com/jsapi/1.latest/apple-pay-sdk.js`.
 - Type definitions ship in `dist/types/` (config types are exported from the entry).
-- MVP does not implement Google Pay dynamic price updates / `PAYMENT_AUTHORIZATION`
-  callbacks, shipping, or multi-wallet display.
+- Google Pay uses fixed `callbackIntents: ['PAYMENT_AUTHORIZATION']` with
+  `onPaymentAuthorized` (pay API runs while the sheet is open). Shipping /
+  dynamic price updates / multi-wallet display are not implemented.
