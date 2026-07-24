@@ -222,6 +222,9 @@ class PaySdk implements PaySdkInstance {
         this.runtimeConfig.risk,
         this.runtimeConfig.environment
       )
+      void this.runtimeConfig.riskCollection.then((risk) => {
+        this.config.onRiskCollected?.(risk)
+      })
     }
     return detectReady(this.runtimeConfig)
   }

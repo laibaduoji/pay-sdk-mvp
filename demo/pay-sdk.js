@@ -1558,6 +1558,10 @@ apple-pay-button {
           this.runtimeConfig.risk,
           this.runtimeConfig.environment
         );
+        void this.runtimeConfig.riskCollection.then((risk) => {
+          var _a2, _b2;
+          (_b2 = (_a2 = this.config).onRiskCollected) == null ? void 0 : _b2.call(_a2, risk);
+        });
       }
       return ready(this.runtimeConfig);
     }

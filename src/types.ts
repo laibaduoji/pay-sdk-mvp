@@ -281,6 +281,8 @@ interface PaySdkCallbacks {
   onCancel?: () => void
   onOrderCreated?: (order: CreateOrderResponse) => void
   onStatusChange?: (order: QueryOrderResponse) => void
+  /** 创建订单后风控预采集结束（失败项会被跳过，不阻断支付） */
+  onRiskCollected?: (risk: PayRiskPayload) => void
   /**
    * 需要打开 webUrl / 3DS / method / s3ds 时回调。
    * WebView 场景下建议商户自行处理；也可稍后调用 sdk.openAction(action)。
