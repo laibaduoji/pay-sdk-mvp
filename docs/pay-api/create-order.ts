@@ -63,15 +63,8 @@ export interface ApplePayParams {
 }
 
 // ─────────────────────────────────────────────
-// 风控（创建订单下发）
+// 风控（创建订单下发；Fingerprint 由 SDK 独立采集，不在此）
 // ─────────────────────────────────────────────
-
-export interface RiskFingerprintConfig {
-  enabled?: boolean
-  apiKey?: string
-  scriptUrlPattern?: string[]
-  endpoint?: string[]
-}
 
 export interface RiskForterConfig {
   enabled?: boolean
@@ -98,7 +91,6 @@ export interface RiskWorldPayConfig {
 }
 
 export interface CreateOrderRisk {
-  fingerprint?: RiskFingerprintConfig
   forter?: RiskForterConfig
   checkout?: RiskCheckoutConfig
   worldPay?: RiskWorldPayConfig
@@ -280,12 +272,6 @@ export const applePayParamsMinimal: ApplePayParams = {
 }
 
 export const riskCollectAll: CreateOrderRisk = {
-  fingerprint: {
-    enabled: true,
-    apiKey: 'BhQq2qOOYR3oeMTEKIc2',
-    scriptUrlPattern: ['https://fp.alchemypay.org/web/v3/BhQq2qOOYR3oeMTEKIc2/loader_v3.9.9.js'],
-    endpoint: ['https://fp.alchemypay.org']
-  },
   forter: { enabled: true, siteId: 'b132efccafac' },
   // 生产默认 pk_aldlsnx6lhkjggag4qe2nff4c4h；沙盒默认 pk_sbox_srkhzyxmotpo6vnfhqixvs66kyt（environment=TEST）
   checkout: { enabled: true, publicKey: 'pk_aldlsnx6lhkjggag4qe2nff4c4h' },
@@ -293,7 +279,6 @@ export const riskCollectAll: CreateOrderRisk = {
 }
 
 export const riskCollectNone: CreateOrderRisk = {
-  fingerprint: { enabled: false },
   forter: { enabled: false },
   checkout: { enabled: false },
   worldPay: { enabled: false }

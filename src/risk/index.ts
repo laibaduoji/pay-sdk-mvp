@@ -1,5 +1,4 @@
 import type { CreateOrderRisk, Environment, PayRiskPayload, RuntimeWalletConfig } from '../types.js'
-import { collectFingerprint } from './fingerprint.js'
 import { collectForter } from './forter.js'
 import { collectCheckout } from './checkout.js'
 import { collectWorldPay } from './worldpay.js'
@@ -9,7 +8,8 @@ function isEnabled(enabled?: boolean): boolean {
 }
 
 /**
- * 按 Fingerprint → Forter → Checkout → WorldPay 并行采集。
+ * 按 Forter → Checkout → WorldPay 并行采集（支付 body）。
+ * Fingerprint 由 SDK init 独立采集，仅走请求头 fingerprint-id。
  * 仅 enabled === true 的块会执行；失败字段不写入 payload。
  */
 export async function collectRisk(
@@ -20,14 +20,6 @@ export async function collectRisk(
 
   const tasks: Array<Promise<void>> = []
   const payload: PayRiskPayload = {}
-
-  if (isEnabled(risk.fingerprint?.enabled)) {
-    tasks.push(
-      collectFingerprint(risk.fingerprint).then((visitorId) => {
-        if (visitorId) payload.fingerprint = { visitorId }
-      })
-    )
-  }
 
   if (isEnabled(risk.forter?.enabled)) {
     tasks.push(

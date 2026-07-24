@@ -142,14 +142,15 @@ SDK 固定使用 `callbackIntents: ['PAYMENT_AUTHORIZATION']`，并注册
 
 #### `risk`（创建订单下发）
 
-按厂商嵌套。`enabled` 控制是否采集；其余配置**有值覆盖 SDK 默认，无值用默认**（便于服务端热更新）。
+按厂商嵌套。`enabled` 控制是否采集并写入支付 body；其余配置**有值覆盖 SDK 默认，无值用默认**。
 
-| 块            | 可覆盖字段                               |
-| ------------- | ---------------------------------------- |
-| `fingerprint` | `apiKey`、`scriptUrlPattern`、`endpoint` |
-| `forter`      | `siteId`                                 |
-| `checkout`    | `publicKey`、`scriptUrl`、`integrity`    |
-| `worldPay`    | `jwt`、`bin`、`actionUrl`                |
+**Fingerprint 不在创建订单**：由 SDK 独立采集，经请求头 `fingerprint-id` 传递。
+
+| 块         | 可覆盖字段                            |
+| ---------- | ------------------------------------- |
+| `forter`   | `siteId`                              |
+| `checkout` | `publicKey`、`scriptUrl`、`integrity` |
+| `worldPay` | `jwt`、`bin`、`actionUrl`             |
 
 完整示例见 [`create-order.ts`](./create-order.ts)。
 
@@ -188,7 +189,6 @@ SDK 固定使用 `callbackIntents: ['PAYMENT_AUTHORIZATION']`，并注册
   encryptedData: string | object  // GP 加密串 / AP payment.token
   billingAddress?: BillingAddress // 开启账单地址时
   risk?: {
-    fingerprint?: { visitorId: string }
     forter?: { token: string }
     checkout?: { deviceSessionId: string }
     worldPay?: { sessionId: string }

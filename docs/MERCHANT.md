@@ -28,17 +28,18 @@
 ```text
 引入 SDK
   → PaySdk.init(config)
-  → ready()：创建订单 → 按响应选 Google/Apple → 预采风控 → 检查钱包可用
+  → ready()：创建订单 → 按响应选 Google/Apple → 预采订单风控 → 检查钱包可用
   → mount()：渲染官方支付按钮
   → 用户点击并授权钱包
-  → SDK 提交支付（带 token + 风控）
+  → SDK 提交支付（带 token + 订单风控；Fingerprint 已在请求头）
   → 若无二次动作：onSuccess / onComplete
   → 若有 webUrl / 3DS 等：onAction（默认不自动跳转）+ 后台轮询
   → 轮询到成功/失败：onSuccess 或 onError / onComplete
 ```
 
 商户 **不必** 自己调创建订单 / 支付 / 查询接口；只需提供金额等业务参数与鉴权 headers（如需要）。  
-钱包类型、令牌化、风控开关均由**创建订单接口响应**决定。
+钱包类型、令牌化、Forter/Checkout/WorldPay 开关由**创建订单接口响应**决定。  
+**Fingerprint** 由 SDK 在 `init` 时用内置默认自动采集，并通过请求头 `fingerprint-id` 带到所有支付 API。
 
 ---
 
@@ -111,21 +112,22 @@
 
 ## 4. 初始化参数
 
-| 参数             | 类型                     | 必传 | 默认值         | 说明                                                |
-| ---------------- | ------------------------ | :--: | -------------- | --------------------------------------------------- |
-| `container`      | `string \| HTMLElement`  |  是  | —              | 按钮挂载节点，如 `'#pay-container'`                 |
-| `order`          | `object`                 |  是  | —              | 见下表                                              |
-| `environment`    | `'TEST' \| 'PRODUCTION'` |  否  | `'PRODUCTION'` | 影响 API 地址、Google Pay、Checkout 风控环境        |
-| `api`            | `object`                 |  否  | 按环境内置     | headers / 轮询等，见下表；接口地址由 SDK 按环境内置 |
-| `actionMode`     | `'callback' \| 'auto'`   |  否  | `'callback'`   | 二次动作是否自动打开，见第 6 节                     |
-| `openAction`     | `(action) => boolean?`   |  否  | —              | `auto` 时自定义打开（可接 JS Bridge）               |
-| `onOrderCreated` | `(order) => void`        |  否  | —              | 创建订单成功                                        |
-| `onStatusChange` | `(order) => void`        |  否  | —              | 每次查询订单成功                                    |
-| `onAction`       | `(action) => void`       |  否  | —              | 需要打开 webUrl / 3DS 等时                          |
-| `onSuccess`      | `(result) => void`       |  否  | —              | 支付直接成功，或查询到 `succeeded`                  |
-| `onComplete`     | `(result) => void`       |  否  | —              | 编排结束（含 `s3dsComplete` 但状态未必终态）        |
-| `onError`        | `(error) => void`        |  否  | —              | API / 钱包 / 超时 / 失败                            |
-| `onCancel`       | `() => void`             |  否  | —              | 用户关闭钱包 sheet                                  |
+| 参数              | 类型                     | 必传 | 默认值         | 说明                                                |
+| ----------------- | ------------------------ | :--: | -------------- | --------------------------------------------------- |
+| `container`       | `string \| HTMLElement`  |  是  | —              | 按钮挂载节点，如 `'#pay-container'`                 |
+| `order`           | `object`                 |  是  | —              | 见下表                                              |
+| `environment`     | `'TEST' \| 'PRODUCTION'` |  否  | `'PRODUCTION'` | 影响 API 地址、Google Pay、Checkout 风控环境        |
+| `api`             | `object`                 |  否  | 按环境内置     | headers / 轮询等，见下表；接口地址由 SDK 按环境内置 |
+| `actionMode`      | `'callback' \| 'auto'`   |  否  | `'callback'`   | 二次动作是否自动打开，见第 6 节                     |
+| `openAction`      | `(action) => boolean?`   |  否  | —              | `auto` 时自定义打开（可接 JS Bridge）               |
+| `onOrderCreated`  | `(order) => void`        |  否  | —              | 创建订单成功                                        |
+| `onRiskCollected` | `(info) => void`         |  否  | —              | Fingerprint / 订单风控预采集结束                    |
+| `onStatusChange`  | `(order) => void`        |  否  | —              | 每次查询订单成功                                    |
+| `onAction`        | `(action) => void`       |  否  | —              | 需要打开 webUrl / 3DS 等时                          |
+| `onSuccess`       | `(result) => void`       |  否  | —              | 支付直接成功，或查询到 `succeeded`                  |
+| `onComplete`      | `(result) => void`       |  否  | —              | 编排结束（含 `s3dsComplete` 但状态未必终态）        |
+| `onError`         | `(error) => void`        |  否  | —              | API / 钱包 / 超时 / 失败                            |
+| `onCancel`        | `() => void`             |  否  | —              | 用户关闭钱包 sheet                                  |
 
 ### `order`
 
@@ -317,7 +319,8 @@ SDK 内置打开行为：
 
 ### 风控
 
-- 创建订单返回的 `risk.*.enabled === true` 时，SDK 在创建订单后**立即预采集**
+- **Fingerprint**：`init` 即用内置默认采集；所有 API 请求头带 `fingerprint-id`（失败则省略，不阻断）
+- **Forter / Checkout / WorldPay**：创建订单 `risk.*.enabled === true` 时，创建订单后**立即预采集**并写入支付 body
 - 支付时已完成则直接用，进行中则等待；单项失败不阻断支付
 
 ### Apple Pay

@@ -23,6 +23,7 @@ import {
   toError
 } from './normalize.js'
 import { collectRisk } from './risk/index.js'
+import { collectFingerprint } from './risk/fingerprint.js'
 
 export type {
   PaySdkConfig,
@@ -181,6 +182,7 @@ class PaySdk implements PaySdkInstance {
   private readonly config: PaySdkConfig
   private api: PayApiClient
   private readonly actionView = new PaymentActionView()
+  private readonly fingerprintIdPromise: Promise<string>
   private _readyPromise: Promise<true> | null = null
   private _button: HTMLElement | null = null
   private runtimeConfig: RuntimeWalletConfig | null = null
@@ -193,9 +195,15 @@ class PaySdk implements PaySdkInstance {
 
   constructor(config: PaySdkConfig) {
     this.config = config
-    this.api = new PayApiClient(
-      resolvePayApiConfig(resolveEnvironment(config.environment), config.api)
-    )
+    this.fingerprintIdPromise = collectFingerprint()
+    this.api = new PayApiClient(this.buildApiConfig(resolveEnvironment(config.environment)))
+  }
+
+  private buildApiConfig(environment: ReturnType<typeof resolveEnvironment>) {
+    return resolvePayApiConfig(environment, {
+      ...this.config.api,
+      getFingerprintId: () => this.fingerprintIdPromise
+    })
   }
 
   ready(): Promise<true> {
@@ -212,7 +220,7 @@ class PaySdk implements PaySdkInstance {
       this.config.onOrderCreated?.(order)
 
       const environment = resolveEnvironment(this.config.environment || order.environment)
-      this.api = new PayApiClient(resolvePayApiConfig(environment, this.config.api))
+      this.api = new PayApiClient(this.buildApiConfig(environment))
 
       this.runtimeConfig = runtimeConfigFromOrder(this.config, order, this.api, async (result) => {
         await this.processPayment(result)
@@ -222,9 +230,14 @@ class PaySdk implements PaySdkInstance {
         this.runtimeConfig.risk,
         this.runtimeConfig.environment
       )
-      void this.runtimeConfig.riskCollection.then((risk) => {
-        this.config.onRiskCollected?.(risk)
-      })
+      void Promise.all([this.fingerprintIdPromise, this.runtimeConfig.riskCollection]).then(
+        ([fingerprintId, risk]) => {
+          this.config.onRiskCollected?.({
+            fingerprintId: fingerprintId || undefined,
+            risk
+          })
+        }
+      )
     }
     return detectReady(this.runtimeConfig)
   }

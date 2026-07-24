@@ -5,8 +5,7 @@ import type {
   RiskWorldPayConfig
 } from '../types.js'
 
-/** SDK 内置默认；订单 risk 有值时覆盖 */
-const FINGERPRINT_DEFAULTS: Required<Omit<RiskFingerprintConfig, 'enabled'>> = {
+const FINGERPRINT_DEFAULTS: Required<RiskFingerprintConfig> = {
   apiKey: 'BhQq2qOOYR3oeMTEKIc2',
   scriptUrlPattern: ['https://fp.alchemypay.org/web/v3/BhQq2qOOYR3oeMTEKIc2/loader_v3.9.9.js'],
   endpoint: ['https://fp.alchemypay.org']
@@ -37,7 +36,7 @@ const WORLDPAY_DEFAULTS: Required<Omit<RiskWorldPayConfig, 'enabled'>> = {
 
 export function mergeFingerprintConfig(
   cfg?: RiskFingerprintConfig
-): Required<Omit<RiskFingerprintConfig, 'enabled'>> {
+): Required<RiskFingerprintConfig> {
   return {
     apiKey: cfg?.apiKey || FINGERPRINT_DEFAULTS.apiKey,
     scriptUrlPattern: cfg?.scriptUrlPattern?.length

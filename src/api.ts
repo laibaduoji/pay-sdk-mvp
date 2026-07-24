@@ -71,9 +71,16 @@ export class PayApiClient {
   private async headers(includeContentType: boolean): Promise<Record<string, string>> {
     const configured =
       typeof this.config.headers === 'function' ? await this.config.headers() : this.config.headers
-    return includeContentType
+    const headers: Record<string, string> = includeContentType
       ? { 'Content-Type': 'application/json', ...configured }
       : { ...configured }
+
+    if (this.config.getFingerprintId) {
+      const fingerprintId = await this.config.getFingerprintId()
+      if (fingerprintId) headers['fingerprint-id'] = fingerprintId
+    }
+
+    return headers
   }
 
   private async request<T>(url: string, method: 'GET' | 'POST', body?: unknown): Promise<T> {

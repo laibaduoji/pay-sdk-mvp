@@ -45,6 +45,7 @@ export function resolvePayApiConfig(
     payUrl: overrides?.payUrl || defaults.payUrl,
     queryOrderUrl: overrides?.queryOrderUrl || defaults.queryOrderUrl,
     headers: overrides?.headers,
+    getFingerprintId: overrides?.getFingerprintId,
     fetch: overrides?.fetch,
     pollIntervalMs: overrides?.pollIntervalMs,
     pollTimeoutMs: overrides?.pollTimeoutMs

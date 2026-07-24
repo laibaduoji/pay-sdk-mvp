@@ -10,9 +10,8 @@
 
 import type { ApiResponse, BillingAddress } from './common'
 
-/** 支付上送的风控采集结果（仅创建订单里 enabled 的块需要带） */
+/** 支付上送的风控采集结果（仅创建订单里 enabled 的块；Fingerprint 走请求头 fingerprint-id） */
 export interface PayRiskPayload {
-  fingerprint?: { visitorId: string }
   forter?: { token: string }
   checkout?: { deviceSessionId: string }
   worldPay?: { sessionId: string }
@@ -70,7 +69,6 @@ export const payRequestExample: PayRequest = {
     email: 'jane@example.com'
   },
   risk: {
-    fingerprint: { visitorId: 'your visitor id' },
     forter: { token: 'your forter token' },
     checkout: { deviceSessionId: 'dsid_...' },
     worldPay: { sessionId: 'your worldPay sessionId' }

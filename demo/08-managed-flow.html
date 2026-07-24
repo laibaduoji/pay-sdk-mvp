@@ -34,8 +34,7 @@
       </fieldset>
 
       <fieldset>
-        <legend>风控（创建订单 risk.enabled）</legend>
-        <label><input type="checkbox" name="fingerprint" /> Fingerprint</label>
+        <legend>风控（创建订单 risk.enabled；Fingerprint 由 SDK 自动采集并走请求头）</legend>
         <label><input type="checkbox" name="forter" /> Forter</label>
         <label><input type="checkbox" name="checkout" /> Checkout</label>
         <label><input type="checkbox" name="worldPay" /> WorldPay</label>
@@ -67,7 +66,7 @@
     <p id="status">未挂载</p>
     <div id="pay-container"></div>
     <h2 class="section-title">风控数据</h2>
-    <pre id="risk">未启用风控</pre>
+    <pre id="risk">挂载后采集 Fingerprint（请求头 fingerprint-id）…</pre>
     <h2 class="section-title">onAction</h2>
     <pre id="action">—</pre>
     <h2 class="section-title">结果</h2>
@@ -97,7 +96,6 @@
           environment: fd.get('environment') || 'TEST',
           method: fd.get('method') || 'googlePay',
           billingAddress: fd.get('billingAddress') === 'on',
-          fingerprint: fd.get('fingerprint') === 'on',
           forter: fd.get('forter') === 'on',
           checkout: fd.get('checkout') === 'on',
           worldPay: fd.get('worldPay') === 'on',
@@ -107,20 +105,13 @@
         }
       }
 
-      function riskSelected(opts) {
-        return !!(opts.fingerprint || opts.forter || opts.checkout || opts.worldPay)
-      }
-
-      function renderRisk(config, collected, status) {
-        if (!config) {
-          riskEl.textContent = '未启用风控'
-          return
-        }
+      function renderRisk(info) {
         riskEl.textContent = JSON.stringify(
           {
-            status: status || (collected ? 'collected' : 'pending'),
-            config,
-            collected: collected || null
+            note: 'Fingerprint 仅请求头 fingerprint-id，不在支付 body',
+            fingerprintId: (info && info.fingerprintId) || null,
+            orderRiskConfig: lastRiskConfig,
+            payBodyRisk: (info && info.risk) || null
           },
           null,
           2
@@ -150,7 +141,7 @@
         lastRiskConfig = null
         actionEl.textContent = '—'
         outputEl.textContent = '—'
-        riskEl.textContent = riskSelected(opts) ? '挂载后采集中…' : '未启用风控'
+        riskEl.textContent = '挂载后采集中…'
         document.getElementById('pay-container').innerHTML = ''
 
         sdk = PaySdk.init({
@@ -181,18 +172,10 @@
           onOrderCreated(order) {
             statusEl.textContent = 'Order ' + order.orderId + ' created (' + order.method + ').'
             lastRiskConfig = order.risk || null
-            if (riskSelected(opts) && order.risk) {
-              renderRisk(order.risk, null, 'collecting')
-            } else {
-              renderRisk(null)
-            }
+            renderRisk({ fingerprintId: null, risk: null })
           },
-          onRiskCollected(collected) {
-            if (!riskSelected(opts)) {
-              renderRisk(null)
-              return
-            }
-            renderRisk(lastRiskConfig, collected, 'collected')
+          onRiskCollected(info) {
+            renderRisk(info)
           },
           onStatusChange(order) {
             statusEl.textContent =
@@ -200,9 +183,6 @@
           },
           onComplete(result) {
             outputEl.textContent = JSON.stringify(result, null, 2)
-            if (result && result.risk && riskSelected(opts)) {
-              renderRisk(lastRiskConfig, result.risk, 'collected')
-            }
           },
           onSuccess: handlers.onSuccess,
           onError: handlers.onError,

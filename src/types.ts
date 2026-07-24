@@ -60,9 +60,8 @@ export interface BillingAddress {
   email?: string
 }
 
-/** 创建订单下发 / init 传入的风控配置（与 docs/pay-api 对齐） */
+/** SDK 内部 Fingerprint 采集参数（非创建订单契约；用 defaults 合并） */
 export interface RiskFingerprintConfig {
-  enabled?: boolean
   apiKey?: string
   scriptUrlPattern?: string[]
   endpoint?: string[]
@@ -92,16 +91,15 @@ export interface RiskWorldPayConfig {
   actionUrl?: string
 }
 
+/** 创建订单下发的风控开关（Fingerprint 由 SDK 独立采集，不在此） */
 export interface CreateOrderRisk {
-  fingerprint?: RiskFingerprintConfig
   forter?: RiskForterConfig
   checkout?: RiskCheckoutConfig
   worldPay?: RiskWorldPayConfig
 }
 
-/** 采集结果，商户组 PayRequest.risk 时使用 */
+/** 支付 body 风控采集结果（Fingerprint 仅走请求头 fingerprint-id） */
 export interface PayRiskPayload {
-  fingerprint?: { visitorId: string }
   forter?: { token: string }
   checkout?: { deviceSessionId: string }
   worldPay?: { sessionId: string }
@@ -200,6 +198,11 @@ export interface PayApiConfig {
   queryOrderUrl: string
   headers?:
     Record<string, string> | (() => Record<string, string> | Promise<Record<string, string>>)
+  /**
+   * SDK 内部：解析 Fingerprint visitorId，写入请求头 `fingerprint-id`。
+   * 空字符串时不带头。
+   */
+  getFingerprintId?: () => Promise<string>
   fetch?: typeof fetch
   pollIntervalMs?: number
   /** 轮询最长等待；默认 5 分钟 */
@@ -281,8 +284,11 @@ interface PaySdkCallbacks {
   onCancel?: () => void
   onOrderCreated?: (order: CreateOrderResponse) => void
   onStatusChange?: (order: QueryOrderResponse) => void
-  /** 创建订单后风控预采集结束（失败项会被跳过，不阻断支付） */
-  onRiskCollected?: (risk: PayRiskPayload) => void
+  /**
+   * 风控相关回调：Fingerprint（请求头用）settle 与/或订单侧其它风控预采集结束。
+   * `fingerprintId` 为 visitorId（可能为空）；`risk` 为支付 body 用 payload（不含 fingerprint）。
+   */
+  onRiskCollected?: (info: { fingerprintId?: string; risk: PayRiskPayload }) => void
   /**
    * 需要打开 webUrl / 3DS / method / s3ds 时回调。
    * WebView 场景下建议商户自行处理；也可稍后调用 sdk.openAction(action)。

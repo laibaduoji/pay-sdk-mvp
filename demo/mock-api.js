@@ -30,7 +30,6 @@
     environment: 'TEST',
     method: 'googlePay',
     billingAddress: false,
-    fingerprint: false,
     forter: false,
     checkout: false,
     worldPay: false,
@@ -52,16 +51,6 @@
 
   function buildRisk() {
     return {
-      fingerprint: options.fingerprint
-        ? {
-            enabled: true,
-            apiKey: 'BhQq2qOOYR3oeMTEKIc2',
-            scriptUrlPattern: [
-              'https://fp.alchemypay.org/web/v3/BhQq2qOOYR3oeMTEKIc2/loader_v3.9.9.js'
-            ],
-            endpoint: ['https://fp.alchemypay.org']
-          }
-        : { enabled: false },
       forter: options.forter ? { enabled: true, siteId: 'b132efccafac' } : { enabled: false },
       // 不传 publicKey：由 SDK 按 environment 选沙盒/生产默认 key
       checkout: options.checkout ? { enabled: true } : { enabled: false },

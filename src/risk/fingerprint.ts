@@ -7,9 +7,9 @@ let cachedVisitorId: string | null = null
 let inflight: Promise<string> | null = null
 
 /**
- * FingerprintJS Pro 采集 visitorId。
+ * FingerprintJS Pro 采集 visitorId（SDK init 用内置默认启动）。
  * https://dashboard.fingerprint.com
- * enabled 由 collectRisk 判断；失败返回 ""，不阻断支付。
+ * 结果仅写入请求头 fingerprint-id；失败返回 ""，不阻断支付。
  */
 export async function collectFingerprint(cfg?: RiskFingerprintConfig): Promise<string> {
   if (cachedVisitorId) return cachedVisitorId
