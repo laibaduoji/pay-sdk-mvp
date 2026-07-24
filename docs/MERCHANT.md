@@ -70,7 +70,7 @@
           countryCode: 'US'
         },
         api: {
-          // 可选：默认按 environment 使用内置 API 地址
+          // 可选：鉴权等 headers；接口地址由 SDK 按 environment 内置
           headers: () => ({
             Authorization: 'Bearer ' + getAccessToken()
           })
@@ -111,21 +111,21 @@
 
 ## 4. 初始化参数
 
-| 参数             | 类型                     | 必传 | 默认值         | 说明                                         |
-| ---------------- | ------------------------ | :--: | -------------- | -------------------------------------------- |
-| `container`      | `string \| HTMLElement`  |  是  | —              | 按钮挂载节点，如 `'#pay-container'`          |
-| `order`          | `object`                 |  是  | —              | 见下表                                       |
-| `environment`    | `'TEST' \| 'PRODUCTION'` |  否  | `'PRODUCTION'` | 影响 API 地址、Google Pay、Checkout 风控环境 |
-| `api`            | `object`                 |  否  | 按环境内置     | headers / 轮询 / 覆盖 URL，见下表            |
-| `actionMode`     | `'callback' \| 'auto'`   |  否  | `'callback'`   | 二次动作是否自动打开，见第 6 节              |
-| `openAction`     | `(action) => boolean?`   |  否  | —              | `auto` 时自定义打开（可接 JS Bridge）        |
-| `onOrderCreated` | `(order) => void`        |  否  | —              | 创建订单成功                                 |
-| `onStatusChange` | `(order) => void`        |  否  | —              | 每次查询订单成功                             |
-| `onAction`       | `(action) => void`       |  否  | —              | 需要打开 webUrl / 3DS 等时                   |
-| `onSuccess`      | `(result) => void`       |  否  | —              | 支付直接成功，或查询到 `succeeded`           |
-| `onComplete`     | `(result) => void`       |  否  | —              | 编排结束（含 `s3dsComplete` 但状态未必终态） |
-| `onError`        | `(error) => void`        |  否  | —              | API / 钱包 / 超时 / 失败                     |
-| `onCancel`       | `() => void`             |  否  | —              | 用户关闭钱包 sheet                           |
+| 参数             | 类型                     | 必传 | 默认值         | 说明                                                |
+| ---------------- | ------------------------ | :--: | -------------- | --------------------------------------------------- |
+| `container`      | `string \| HTMLElement`  |  是  | —              | 按钮挂载节点，如 `'#pay-container'`                 |
+| `order`          | `object`                 |  是  | —              | 见下表                                              |
+| `environment`    | `'TEST' \| 'PRODUCTION'` |  否  | `'PRODUCTION'` | 影响 API 地址、Google Pay、Checkout 风控环境        |
+| `api`            | `object`                 |  否  | 按环境内置     | headers / 轮询等，见下表；接口地址由 SDK 按环境内置 |
+| `actionMode`     | `'callback' \| 'auto'`   |  否  | `'callback'`   | 二次动作是否自动打开，见第 6 节                     |
+| `openAction`     | `(action) => boolean?`   |  否  | —              | `auto` 时自定义打开（可接 JS Bridge）               |
+| `onOrderCreated` | `(order) => void`        |  否  | —              | 创建订单成功                                        |
+| `onStatusChange` | `(order) => void`        |  否  | —              | 每次查询订单成功                                    |
+| `onAction`       | `(action) => void`       |  否  | —              | 需要打开 webUrl / 3DS 等时                          |
+| `onSuccess`      | `(result) => void`       |  否  | —              | 支付直接成功，或查询到 `succeeded`                  |
+| `onComplete`     | `(result) => void`       |  否  | —              | 编排结束（含 `s3dsComplete` 但状态未必终态）        |
+| `onError`        | `(error) => void`        |  否  | —              | API / 钱包 / 超时 / 失败                            |
+| `onCancel`       | `() => void`             |  否  | —              | 用户关闭钱包 sheet                                  |
 
 ### `order`
 
@@ -137,18 +137,15 @@
 
 ### `api`（均可选）
 
-| 字段                  | 类型                                  | 默认         | 说明                                 |
-| --------------------- | ------------------------------------- | ------------ | ------------------------------------ |
-| `headers`             | `object` 或 `() => object \| Promise` | 无           | 追加到四接口请求（如 Authorization） |
-| `pollIntervalMs`      | `number`                              | `2000`       | 二次动作后轮询间隔（毫秒）           |
-| `pollTimeoutMs`       | `number`                              | `300000`     | 轮询最长等待（默认 5 分钟）          |
-| `createOrderUrl`      | `string`                              | 见下         | 覆盖创建订单地址                     |
-| `payUrl`              | `string`                              | 见下         | 覆盖支付地址                         |
-| `queryOrderUrl`       | `string`                              | 见下         | 支持 `{orderId}` 占位                |
-| `validateMerchantUrl` | `string`                              | 见下         | 覆盖 Apple 域名校验默认地址          |
-| `fetch`               | `typeof fetch`                        | 浏览器 fetch | 自定义请求实现（如 Mock）            |
+接口地址由 SDK 按 `environment` 内置，商户无需配置 URL。
 
-### 内置 API 地址
+| 字段             | 类型                                  | 默认     | 说明                               |
+| ---------------- | ------------------------------------- | -------- | ---------------------------------- |
+| `headers`        | `object` 或 `() => object \| Promise` | 无       | 追加到接口请求（如 Authorization） |
+| `pollIntervalMs` | `number`                              | `2000`   | 二次动作后轮询间隔（毫秒）         |
+| `pollTimeoutMs`  | `number`                              | `300000` | 轮询最长等待（默认 5 分钟）        |
+
+### SDK 内置 API 地址（只读，按环境自动选用）
 
 | 环境                 | 根域名                            |
 | -------------------- | --------------------------------- |
@@ -162,7 +159,7 @@
 | 查询订单       | `GET {根}/v1/pay/orders/{orderId}`      |
 | Apple 域名校验 | `POST {根}/pay/apple/domainName/verify` |
 
-创建订单若返回 `validateMerchantUrl`，优先用响应值。
+创建订单若返回 `validateMerchantUrl`，SDK 会优先使用响应值。
 
 ---
 
@@ -355,7 +352,7 @@ SDK 内置打开行为：
 A：否。默认 `callback` 模式只回调 `onAction`。只有 App 要接管开页/权限时才需要 Bridge。
 
 **Q：要自己调创建订单、支付接口吗？**  
-A：否。SDK 会按内置（或你覆盖的）地址调用；商户主要传 `order` 与可选 `headers`。
+A：否。SDK 按环境使用内置地址调用；商户主要传 `order` 与可选 `headers`。
 
 **Q：npm 安装还是 script？**  
 A：商户 H5 / WebView 用 **script**。当前交付形态是单文件 `pay-sdk.js`。
