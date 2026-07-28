@@ -118,14 +118,28 @@
         )
       }
 
+      function demoOrder(payWayCode) {
+        const p = window.PaySdkDemoConfig.payment
+        return {
+          side: 'BUY',
+          merchantOrderNo: 'm_ord_demo_' + Date.now().toString(36),
+          amount: p.amount,
+          fiatCurrency: p.currency,
+          alpha2: p.countryCode,
+          cryptoCurrency: 'USDT',
+          orderType: '4',
+          address: '0xdemo',
+          network: 'ETH',
+          payWayCode: payWayCode || '701',
+          redirectUrl: location.origin + '/success',
+          callbackUrl: location.origin + '/callback',
+          clientIp: '127.0.0.1'
+        }
+      }
+
       function refreshPreview() {
         mock.setOptions(readOptions())
-        const order = {
-          amount: window.PaySdkDemoConfig.payment.amount,
-          currency: window.PaySdkDemoConfig.payment.currency,
-          countryCode: window.PaySdkDemoConfig.payment.countryCode
-        }
-        previewEl.textContent = JSON.stringify(mock.previewCreateOrder(order), null, 2)
+        previewEl.textContent = JSON.stringify(mock.previewCreateOrder(demoOrder()), null, 2)
       }
 
       function mountSdk() {
@@ -144,19 +158,16 @@
         riskEl.textContent = '挂载后采集中…'
         document.getElementById('pay-container').innerHTML = ''
 
+        const payWayCode = opts.method === 'applePay' ? '501' : '701'
         sdk = PaySdk.init({
           container: '#pay-container',
           environment: opts.environment,
           actionMode: opts.actionMode,
-          order: {
-            amount: window.PaySdkDemoConfig.payment.amount,
-            currency: window.PaySdkDemoConfig.payment.currency,
-            countryCode: window.PaySdkDemoConfig.payment.countryCode
-          },
+          order: demoOrder(payWayCode),
           api: {
             createOrderUrl: '/v1/pay/orders',
             payUrl: '/v1/pay/payments',
-            queryOrderUrl: '/v1/pay/orders/{orderId}',
+            queryOrderUrl: '/v1/pay/orders',
             fetch: mock.fetch.bind(mock),
             pollIntervalMs: 1500,
             pollTimeoutMs: 60000
@@ -170,7 +181,7 @@
             }
           },
           onOrderCreated(order) {
-            statusEl.textContent = 'Order ' + order.orderId + ' created (' + order.method + ').'
+            statusEl.textContent = 'Order ' + order.orderNo + ' created (' + order.method + ').'
             lastRiskConfig = order.risk || null
             renderRisk({ fingerprintId: null, risk: null })
           },

@@ -3,7 +3,7 @@
 `PaySdk.init(config)` 的完整参数说明。图例：**必传** = 必须提供，否则 `init` 抛错；可选 = 不传则使用默认值。
 
 SDK **仅支持完整支付编排**：创建订单 → 钱包授权 → 支付 →（需要时）查询。钱包类型、金额、
-`params`、`risk` 均由创建订单响应决定，不再支持仅钱包初始化。
+`paymentScript`、`risk` 均由创建订单响应决定，不再支持仅钱包初始化。
 
 ---
 
@@ -12,7 +12,7 @@ SDK **仅支持完整支付编排**：创建订单 → 钱包授权 → 支付 �
 | 参数             | 类型                     |  必传  | 默认值         | 说明                                                                                                         |
 | ---------------- | ------------------------ | :----: | -------------- | ------------------------------------------------------------------------------------------------------------ |
 | `container`      | `string \| HTMLElement`  | **是** | —              | 按钮渲染容器                                                                                                 |
-| `order`          | `CreateOrderRequest`     | **是** | —              | `amount` / `currency` / `countryCode`；SDK 调接口 1 创建订单                                                 |
+| `order`          | `CreateOrderRequest`     | **是** | —              | Apifox S2S 字段（`side` / `merchantOrderNo` / `amount` / `fiatCurrency` / …）；SDK 调接口 1                  |
 | `environment`    | `'TEST' \| 'PRODUCTION'` |   否   | `'PRODUCTION'` | 决定内置 API、Google Pay、Checkout Risk                                                                      |
 | `api`            | `Partial<PayApiConfig>`  |   否   | 按环境内置     | 默认用 `src/endpoints.ts`；可只传 headers / 覆盖 URL                                                         |
 | `onOrderCreated` | `(order) => void`        |   否   | —              | 接口 1 成功后回调                                                                                            |
@@ -32,7 +32,21 @@ const sdk = PaySdk.init({
   container: '#pay-container',
   // 不传则默认 PRODUCTION；TEST 时使用测试 API / Google Pay TEST / Checkout 沙盒
   environment: 'TEST',
-  order: { amount: '10.00', currency: 'USD', countryCode: 'US' },
+  order: {
+    side: 'BUY',
+    merchantOrderNo: 'm_ord_xxx',
+    amount: '10.00',
+    fiatCurrency: 'USD',
+    alpha2: 'US',
+    cryptoCurrency: 'USDT',
+    orderType: '4',
+    address: '0xabc...',
+    network: 'ETH',
+    payWayCode: '701',
+    redirectUrl: 'https://merchant.example/success',
+    callbackUrl: 'https://merchant.example/callback',
+    clientIp: '1.2.3.4'
+  },
   // api 可选：默认按 environment 取内置地址（src/endpoints.ts）
   api: {
     appId: 'YOUR_APP_ID',
@@ -45,10 +59,10 @@ const sdk = PaySdk.init({
     console.log(action)
     // 商户自行开窗 / Native Bridge；或授权后调用 sdk.openAction(action)
   },
-  onOrderCreated: (order) => console.log(order.orderId),
+  onOrderCreated: (order) => console.log(order.orderNo),
   onStatusChange: (order) => console.log(order.status),
   onComplete: (result) => console.log('flow complete', result.order?.status),
-  onSuccess: (result) => console.log(result.orderId, result.order?.status),
+  onSuccess: (result) => console.log(result.orderNo, result.order?.status),
   onError: (error) => console.error(error)
 })
 
@@ -96,14 +110,24 @@ Google Pay **TEST** 环境默认（创建订单未下发时 SDK 补齐，有值�
 
 ## 2. `order`
 
-| 参数          | 类型     |  必传  | 说明                     |
-| ------------- | -------- | :----: | ------------------------ |
-| `amount`      | `string` | **是** | 金额字符串，如 `'10.00'` |
-| `currency`    | `string` | **是** | 货币代码，如 `'USD'`     |
-| `countryCode` | `string` | **是** | 国家代码，如 `'US'`      |
+| 参数              | 类型     |  必传  | 说明                                      |
+| ----------------- | -------- | :----: | ----------------------------------------- |
+| `side`            | `string` | **是** | `BUY` / `SELL`                            |
+| `merchantOrderNo` | `string` | **是** | 商户订单号                                |
+| `amount`          | `string` | **是** | 金额，如 `'10.00'`                        |
+| `fiatCurrency`    | `string` | **是** | 法币，如 `'USD'`                          |
+| `alpha2`          | `string` |   否   | 国家码；offramp 必填                      |
+| `cryptoCurrency`  | `string` | **是** | 如 `'USDT'`                               |
+| `orderType`       | `string` | **是** | onramp `'4'` / offramp `'6'`              |
+| `address`         | `string` |   否   | onramp 收款地址                           |
+| `network`         | `string` | **是** | 如 `'ETH'`                                |
+| `payWayCode`      | `string` | **是** | `501` Apple / `701` Google / `10001` card |
+| `redirectUrl`     | `string` | **是** | 成功跳转                                  |
+| `callbackUrl`     | `string` | **是** | 回调地址                                  |
+| `clientIp`        | `string` | **是** | 用户 IPV4                                 |
 
-创建订单响应中的钱包 `params`（含金额展示名、账单地址开关、tokenization 等）由后端决定。
-契约见 [`docs/pay-api/`](./pay-api/)。
+可选：`userAccountId`、`memo`、`extendParams`、`withdrawType`。  
+创建订单响应中的钱包 `paymentScript` 由后端决定。契约见 [`docs/pay-api/`](./pay-api/)。
 
 ---
 
@@ -136,7 +160,7 @@ Google Pay **TEST** 环境默认（创建订单未下发时 SDK 补齐，有值�
     email,
     raw,
     risk,
-    orderId,
+    orderNo,
     paymentResponse,
     order) // 轮询结束时的状态（如有）
 }
@@ -149,7 +173,7 @@ Google Pay **TEST** 环境默认（创建订单未下发时 SDK 补齐，有值�
     shippingContact,
     raw,
     risk,
-    orderId,
+    orderNo,
     paymentResponse,
     order)
 }

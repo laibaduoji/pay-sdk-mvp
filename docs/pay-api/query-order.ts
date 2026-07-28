@@ -8,14 +8,14 @@
 
 import type { ApiResponse, OrderStatus } from './common'
 
-/** GET：orderId 走路径参数 */
+/** GET：orderNo 为 query 参数 */
 export interface QueryOrderRequest {
-  orderId: string
+  orderNo: string
 }
 
 /** 查询订单成功时 data 载荷 */
 export interface QueryOrderResponse {
-  orderId: string
+  orderNo: string
   status: OrderStatus
   failureReason?: string
   /** 有值：跳转该 URL 继续完成 3DS 验证（可仍继续轮询） */
@@ -36,31 +36,31 @@ export type QueryOrderApiResponse = ApiResponse<QueryOrderResponse>
  */
 
 export const queryOrderRequestExample: QueryOrderRequest = {
-  orderId: 'ord_xxx'
+  orderNo: 'ord_xxx'
 }
 
 export const queryOrderPendingExample: QueryOrderResponse = {
-  orderId: 'ord_xxx',
+  orderNo: 'ord_xxx',
   status: 'pending',
   s3dsComplete: false
 }
 
 /** 轮询中出现银行 3DS 挑战 */
 export const queryOrderS3dsUrlExample: QueryOrderResponse = {
-  orderId: 'ord_xxx',
+  orderNo: 'ord_xxx',
   status: 'pending',
   s3dsUrl: 'https://acs.example/challenge',
   s3dsComplete: false
 }
 
 export const queryOrderSucceededExample: QueryOrderResponse = {
-  orderId: 'ord_xxx',
+  orderNo: 'ord_xxx',
   status: 'succeeded',
   s3dsComplete: true
 }
 
 export const queryOrderFailedExample: QueryOrderResponse = {
-  orderId: 'ord_xxx',
+  orderNo: 'ord_xxx',
   status: 'failed',
   failureReason: 'authentication_failed',
   s3dsComplete: true

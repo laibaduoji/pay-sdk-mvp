@@ -5,7 +5,7 @@
 | #   | 文件                                             | 方法     | 类型                                                   | 何时调用                                       |
 | --- | ------------------------------------------------ | -------- | ------------------------------------------------------ | ---------------------------------------------- |
 | —   | [`common.ts`](./common.ts)                       | —        | `ApiResponse` / `OrderStatus` / `BillingAddress`       | 共用                                           |
-| 1   | [`create-order.ts`](./create-order.ts)           | **POST** | `CreateOrderRequest` → `CreateOrderResponse`           | 拿 `params` / `risk`，渲染钱包按钮             |
+| 1   | [`create-order.ts`](./create-order.ts)           | **POST** | `CreateOrderRequest` → `CreateOrderResponse`           | 拿 `paymentScript` / `risk`，渲染钱包按钮      |
 | 2   | [`validate-merchant.ts`](./validate-merchant.ts) | **POST** | `ValidateMerchantRequest` → `ValidateMerchantResponse` | 仅 Apple Pay，`onvalidatemerchant`             |
 | 3   | [`pay.ts`](./pay.ts)                             | **POST** | `PayRequest` → `PayResponse`                           | 钱包授权后；风控宜在创建订单后预采、支付时复用 |
 | 4   | [`query-order.ts`](./query-order.ts)             | **GET**  | `QueryOrderRequest` → `QueryOrderResponse`             | **仅**接口 3 未直接成功时                      |
@@ -53,7 +53,7 @@ sequenceDiagram
   participant Page as WebUrl_or_3DS_Page
 
   M->>API: 1 创建订单 POST
-  API-->>M: params + risk
+  API-->>M: paymentScript + risk
   alt applePay
     M->>Wallet: begin session
     Wallet->>M: onvalidatemerchant
@@ -98,30 +98,22 @@ sequenceDiagram
 
 **POST** `/open/api/v4/merchant/order/create`
 
-### 请求（暂冻结字段）
+### 请求（对齐 Apifox S2S）
 
-```ts
-{
-  amount: string
-  currency: string
-  countryCode: string
-}
-```
-
-其余请求字段待定。见 `CreateOrderRequest`。
+见 `CreateOrderRequest`：必填含 `side`、`merchantOrderNo`、`amount`、`fiatCurrency`、`cryptoCurrency`、`orderType`、`network`、`payWayCode`、`redirectUrl`、`callbackUrl`、`clientIp` 等。钱包：`payWayCode` `501` Apple / `701` Google。
 
 ### 响应 `data`
 
 | 字段                  | 说明                                                     |
 | --------------------- | -------------------------------------------------------- |
-| `orderId`             | 订单号，后续接口必带                                     |
-| `method`              | `'googlePay'` \| `'applePay'`                            |
+| `orderNo`             | 订单号，后续接口必带                                     |
+| `paymentScript`       | 钱包原生唤起参数（见下）                                 |
+| `method`              | 可选 `'googlePay'` \| `'applePay'`；可不传，SDK 可推断   |
 | `environment`         | 可选 `'TEST'` \| `'PRODUCTION'`，不传默认 `'PRODUCTION'` |
-| `params`              | 钱包原生唤起参数（见下）                                 |
 | `risk`                | 风控开关与可覆盖配置                                     |
 | `validateMerchantUrl` | 仅 Apple Pay，可选；有值则覆盖 SDK 当前环境的接口 2 地址 |
 
-#### `params` — Google Pay
+#### `paymentScript` — Google Pay
 
 `PaymentDataRequest`。`totalPriceLabel`、`merchantId`、`merchantName` **必传**。
 SDK 固定使用 `callbackIntents: ['PAYMENT_AUTHORIZATION']`，并注册
@@ -134,11 +126,11 @@ SDK 固定使用 `callbackIntents: ['PAYMENT_AUTHORIZATION']`，并注册
 
 账单地址需要时带 `billingAddressRequired` + `billingAddressParameters`。
 
-#### `params` — Apple Pay
+#### `paymentScript` — Apple Pay
 
 创建 `ApplePaySession` 的 PaymentRequest（`countryCode` / `currencyCode` / `total` 等）。  
 如需覆盖 SDK 内置地址，域名校验 URL 在顶层 `validateMerchantUrl`，**不在**
-`params` 内。未返回时，SDK 按 `init.environment` 使用 `src/endpoints.ts` 中的地址。
+`paymentScript` 内。未返回时，SDK 按 `init.environment` 使用 `src/endpoints.ts` 中的地址。
 
 #### `risk`（创建订单下发）
 
@@ -163,7 +155,7 @@ SDK 固定使用 `callbackIntents: ['PAYMENT_AUTHORIZATION']`，并注册
 ### 请求
 
 ```ts
-{ orderId?: string; validationURL: string }
+{ orderNo?: string; validationURL: string }
 ```
 
 `validationURL` 为 Apple `onvalidatemerchant` 原样转发。
@@ -185,7 +177,7 @@ SDK 固定使用 `callbackIntents: ['PAYMENT_AUTHORIZATION']`，并注册
 
 ```ts
 {
-  orderId: string
+  orderNo: string
   encryptedData: string | object  // GP 加密串 / AP payment.token
   billingAddress?: BillingAddress // 开启账单地址时
   risk?: {
@@ -222,7 +214,7 @@ SDK 固定使用 `callbackIntents: ['PAYMENT_AUTHORIZATION']`，并注册
 
 | 字段            | 说明                                                      |
 | --------------- | --------------------------------------------------------- |
-| `orderId`       | 订单号                                                    |
+| `orderNo`       | 订单号                                                    |
 | `status`        | `pending` \| `requires_action` \| `succeeded` \| `failed` |
 | `failureReason` | 失败原因（可选）                                          |
 | `s3dsUrl`       | 有则跳转继续 3DS 验证                                     |
@@ -234,6 +226,6 @@ SDK 固定使用 `callbackIntents: ['PAYMENT_AUTHORIZATION']`，并注册
 
 ## 7. 备注
 
-- `environment`：钱包 + 风控共用；Google Pay 创建 `PaymentsClient` 时使用，不在 `params` 内。
+- `environment`：钱包 + 风控共用；Google Pay 创建 `PaymentsClient` 时使用，不在 `paymentScript` 内。
 - 含 `PAYMENT_AUTHORIZATION` 时须提供 `onPaymentAuthorized`，否则 sheet 会失败或卡住。
 - 与历史 payment-hub 字段映射由服务端完成；联调以本目录为准。

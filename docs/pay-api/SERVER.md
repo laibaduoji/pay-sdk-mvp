@@ -7,12 +7,12 @@
 
 ## 1. 接口一览
 
-| #   | 方法     | 路径                                  | 说明                           |
-| --- | -------- | ------------------------------------- | ------------------------------ |
-| 1   | **POST** | `/open/api/v4/merchant/order/create`  | 创建订单，返回钱包 params/risk |
-| 2   | **POST** | `/open/api/v4/merchant/domain/verify` | 仅 Apple Pay 域名校验          |
-| 3   | **POST** | `/open/api/v4/merchant/alchemy-pay`   | 提交钱包 token + 风控          |
-| 4   | **GET**  | `/open/api/v4/merchant/order/detail`  | 二次动作后轮询订单状态         |
+| #   | 方法     | 路径                                  | 说明                                  |
+| --- | -------- | ------------------------------------- | ------------------------------------- |
+| 1   | **POST** | `/open/api/v4/merchant/order/create`  | 创建订单，返回钱包 paymentScript/risk |
+| 2   | **POST** | `/open/api/v4/merchant/domain/verify` | 仅 Apple Pay 域名校验                 |
+| 3   | **POST** | `/open/api/v4/merchant/alchemy-pay`   | 提交钱包 token + 风控                 |
+| 4   | **GET**  | `/open/api/v4/merchant/order/detail`  | 二次动作后轮询订单状态                |
 
 仅接口 4 为 GET，query 参数 **`orderNo`**（值为创建订单返回的订单号）；其余均为 POST，`Content-Type: application/json`。
 
@@ -21,7 +21,7 @@
 | Header           | 说明                                                                                |
 | ---------------- | ----------------------------------------------------------------------------------- |
 | `Content-Type`   | POST 时为 `application/json`                                                        |
-| `appId`          | 合作方标识；SDK 在配置了 `api.appId` + `api.appSecret` 时自动带上                   |
+| `appid`          | 合作方标识；SDK 在配置了 `api.appId` + `api.appSecret` 时自动带上（头名 `appid`）   |
 | `timestamp`      | 十三位毫秒时间戳；与签名串一致                                                      |
 | `sign`           | HMAC-SHA256 + Base64；算法见 [API Sign](https://alchemypay.readme.io/docs/api-sign) |
 | `fingerprint-id` | SDK 在 `init` 时用内置默认采集的 Fingerprint `visitorId`；失败时可能不传            |
@@ -100,7 +100,7 @@ sequenceDiagram
   participant Page as WebUrl_or_3DS
 
   SDK->>API: 1 POST 创建订单
-  API-->>SDK: params + risk
+  API-->>SDK: paymentScript + risk
   alt applePay
     SDK->>Wallet: begin session
     Wallet->>SDK: onvalidatemerchant
@@ -133,36 +133,60 @@ SDK 在 `ready()` 时调用；用响应渲染 Google / Apple 按钮，并按 `ri
 
 ### 4.1 请求 `CreateOrderRequest`
 
-| 字段          | 类型     | 必填 | 说明               |
-| ------------- | -------- | ---- | ------------------ |
-| `amount`      | `string` | 是   | 金额，如 `"10.00"` |
-| `currency`    | `string` | 是   | 货币，如 `"USD"`   |
-| `countryCode` | `string` | 是   | 国家，如 `"US"`    |
+对齐 Apifox SDK 目录接口（S2S schema）。钱包场景常用 `payWayCode`：`501` Apple Pay / `701` Google Pay。
 
-其余请求字段暂未冻结。
+| 字段              | 类型     | 必填 | 说明                                      |
+| ----------------- | -------- | ---- | ----------------------------------------- |
+| `side`            | `string` | 是   | onramp: `BUY` / offramp: `SELL`           |
+| `merchantOrderNo` | `string` | 是   | 商户订单号，需唯一                        |
+| `amount`          | `string` | 是   | 金额，如 `"10.00"`                        |
+| `fiatCurrency`    | `string` | 是   | 法币，如 `"USD"`                          |
+| `alpha2`          | `string` | 否*  | ISO 国家码；offramp 必填                  |
+| `cryptoCurrency`  | `string` | 是   | 加密货币大写名，如 `"USDT"`               |
+| `orderType`       | `string` | 是   | onramp: `"4"` / offramp: `"6"`            |
+| `address`         | `string` | 否*  | onramp 收款地址                           |
+| `network`         | `string` | 是   | 网络，如 `"ETH"`                          |
+| `payWayCode`      | `string` | 是   | `10001` card / `501` Apple / `701` Google |
+| `userAccountId`   | `string` | 否   | 用户账号 ID                               |
+| `redirectUrl`     | `string` | 是   | 成功跳转地址                              |
+| `callbackUrl`     | `string` | 是   | 回调地址                                  |
+| `memo`            | `string` | 否   | 按网络/平台要求                           |
+| `extendParams`    | `object` | 否   | 扩展参数                                  |
+| `clientIp`        | `string` | 是   | 用户 IPV4                                 |
+| `withdrawType`    | `number` | 否   | `0` onChain / `1` internal                |
 
 ```json
 {
+  "side": "BUY",
+  "merchantOrderNo": "m_ord_xxx",
   "amount": "10.00",
-  "currency": "USD",
-  "countryCode": "US"
+  "fiatCurrency": "USD",
+  "alpha2": "US",
+  "cryptoCurrency": "USDT",
+  "orderType": "4",
+  "address": "0xabc...",
+  "network": "ETH",
+  "payWayCode": "701",
+  "redirectUrl": "https://merchant.example/success",
+  "callbackUrl": "https://merchant.example/callback",
+  "clientIp": "1.2.3.4"
 }
 ```
 
 ### 4.2 响应 `data` — 共用字段
 
-`method` 决定 `params` 形态（二选一）。
+钱包参数在 `paymentScript`。`method` 服务端可不传，SDK 按 `paymentScript` 形态推断。
 
-| 字段                  | 类型              | 必填          | 说明                                       |
-| --------------------- | ----------------- | ------------- | ------------------------------------------ |
-| `orderId`             | `string`          | 是            | 订单号，后续接口必带                       |
-| `method`              | `'googlePay'      | 'applePay'`   | 是                                         | 钱包类型                                                           |
-| `environment`         | `'TEST'           | 'PRODUCTION'` | 否                                         | 不传时 SDK 按 init 或默认 `PRODUCTION`；影响 Google Pay / Checkout |
-| `params`              | `object`          | 是            | 见下节                                     |
-| `risk`                | `CreateOrderRisk` | 否            | 风控开关与可覆盖配置                       |
-| `validateMerchantUrl` | `string`          | 否            | **仅 Apple**；有值覆盖 SDK 内置接口 2 地址 |
+| 字段                  | 类型                        | 必填 | 说明                                                               |
+| --------------------- | --------------------------- | ---- | ------------------------------------------------------------------ |
+| `orderNo`             | `string`                    | 是   | 订单号，后续接口必带                                               |
+| `paymentScript`       | `object`                    | 是   | Google / Apple 原生唤起参数                                        |
+| `method`              | `'googlePay' \| 'applePay'` | 否   | 服务端可不传；SDK 按 `paymentScript` 推断                          |
+| `environment`         | `'TEST' \| 'PRODUCTION'`    | 否   | 不传时 SDK 按 init 或默认 `PRODUCTION`；影响 Google Pay / Checkout |
+| `risk`                | `CreateOrderRisk`           | 否   | 风控开关与可覆盖配置                                               |
+| `validateMerchantUrl` | `string`                    | 否   | **仅 Apple**；有值覆盖 SDK 内置接口 2 地址                         |
 
-### 4.3 `params` — Google Pay（`PaymentDataRequest`）
+### 4.3 `paymentScript` — Google Pay（`PaymentDataRequest`）
 
 | 字段 / 路径                                               | 必填 | 说明                                                               |
 | --------------------------------------------------------- | ---- | ------------------------------------------------------------------ |
@@ -199,10 +223,10 @@ TEST 环境缺省时 SDK 会补齐；PRODUCTION 请务必下发真实商户信�
   "extend": "",
   "traceId": "68b11d63f919cca7adbb4bbe57939df9",
   "data": {
-    "orderId": "ord_xxx",
+    "orderNo": "ord_xxx",
     "environment": "TEST",
     "method": "googlePay",
-    "params": {
+    "paymentScript": {
       "apiVersion": 2,
       "apiVersionMinor": 0,
       "allowedPaymentMethods": [
@@ -243,7 +267,7 @@ TEST 环境缺省时 SDK 会补齐；PRODUCTION 请务必下发真实商户信�
 }
 ```
 
-### 4.4 `params` — Apple Pay
+### 4.4 `paymentScript` — Apple Pay
 
 | 字段                              | 必填 | 说明                                                      |
 | --------------------------------- | ---- | --------------------------------------------------------- |
@@ -253,7 +277,7 @@ TEST 环境缺省时 SDK 会补齐；PRODUCTION 请务必下发真实商户信�
 | `total.label` / `type` / `amount` | 是   | `type` 如 `"final"`                                       |
 | `requiredBillingContactFields`    | 否   | 需要账单时，如 `["name","postalAddress","phone","email"]` |
 
-域名校验 URL 在响应**顶层** `validateMerchantUrl`（可选），**不在** `params` 内。
+域名校验 URL 在响应**顶层** `validateMerchantUrl`（可选），**不在** `paymentScript` 内。
 
 #### Apple Pay 完整响应示例
 
@@ -265,11 +289,11 @@ TEST 环境缺省时 SDK 会补齐；PRODUCTION 请务必下发真实商户信�
   "extend": "",
   "traceId": "68b11d63f919cca7adbb4bbe57939df9",
   "data": {
-    "orderId": "ord_xxx",
+    "orderNo": "ord_xxx",
     "environment": "TEST",
     "method": "applePay",
     "validateMerchantUrl": "https://openapi-test.alchemypay.org/open/api/v4/merchant/domain/verify",
-    "params": {
+    "paymentScript": {
       "countryCode": "US",
       "currencyCode": "USD",
       "merchantCapabilities": ["supports3DS", "supportsCredit", "supportsDebit"],
@@ -316,12 +340,12 @@ TEST 环境缺省时 SDK 会补齐；PRODUCTION 请务必下发真实商户信�
 
 | 字段            | 类型     | 必填 | 说明                                |
 | --------------- | -------- | ---- | ----------------------------------- |
-| `orderId`       | `string` | 否   | 建议带上，便于审计                  |
+| `orderNo`       | `string` | 否   | 建议带上，便于审计                  |
 | `validationURL` | `string` | 是   | Apple `onvalidatemerchant` 原样转发 |
 
 ```json
 {
-  "orderId": "ord_xxx",
+  "orderNo": "ord_xxx",
   "validationURL": "https://apple-pay-gateway.apple.com/paymentservices/startSession"
 }
 ```
@@ -364,7 +388,7 @@ TEST 环境缺省时 SDK 会补齐；PRODUCTION 请务必下发真实商户信�
 
 | 字段             | 类型             | 必填    | 说明                                                                                        |
 | ---------------- | ---------------- | ------- | ------------------------------------------------------------------------------------------- |
-| `orderId`        | `string`         | 是      |                                                                                             |
+| `orderNo`        | `string`         | 是      |                                                                                             |
 | `encryptedData`  | `string          | object` | 是                                                                                          | Google：加密 token 字符串；Apple：`payment.token` 对象或序列化串 |
 | `billingAddress` | `BillingAddress` | 否      | 创建订单要求账单地址时 SDK 会带上                                                           |
 | `risk`           | `PayRiskPayload` | 否      | 仅包含创建订单里 `enabled === true` 的块；**不含** Fingerprint（走请求头 `fingerprint-id`） |
@@ -398,7 +422,7 @@ Fingerprint `visitorId` 仅在请求头 `fingerprint-id`，不在 body。
 
 ```json
 {
-  "orderId": "ord_xxx",
+  "orderNo": "ord_xxx",
   "encryptedData": "...google-pay-encrypted-token...",
   "billingAddress": {
     "addressLine1": "1 Main St",
@@ -512,7 +536,7 @@ Fingerprint `visitorId` 仅在请求头 `fingerprint-id`，不在 body。
 
 | 字段            | 类型       | 必填              | 说明                       |
 | --------------- | ---------- | ----------------- | -------------------------- |
-| `orderId`       | `string`   | 是                |                            |
+| `orderNo`       | `string`   | 是                |                            |
 | `status`        | `'pending' | 'requires_action' | 'succeeded'                | 'failed'` | 是  |     |
 | `failureReason` | `string`   | 否                | 失败原因                   |
 | `s3dsUrl`       | `string`   | 否                | 有值：继续 3DS（可仍轮询） |
@@ -537,7 +561,7 @@ Fingerprint `visitorId` 仅在请求头 `fingerprint-id`，不在 body。
   "returnMsg": "SUCCESS",
   "extend": "",
   "data": {
-    "orderId": "ord_xxx",
+    "orderNo": "ord_xxx",
     "status": "pending",
     "s3dsComplete": false
   },
@@ -554,7 +578,7 @@ Fingerprint `visitorId` 仅在请求头 `fingerprint-id`，不在 body。
   "returnMsg": "SUCCESS",
   "extend": "",
   "data": {
-    "orderId": "ord_xxx",
+    "orderNo": "ord_xxx",
     "status": "requires_action",
     "s3dsUrl": "https://acs.example/challenge",
     "s3dsComplete": false
@@ -572,7 +596,7 @@ Fingerprint `visitorId` 仅在请求头 `fingerprint-id`，不在 body。
   "returnMsg": "SUCCESS",
   "extend": "",
   "data": {
-    "orderId": "ord_xxx",
+    "orderNo": "ord_xxx",
     "status": "succeeded",
     "s3dsComplete": true
   },
@@ -589,7 +613,7 @@ Fingerprint `visitorId` 仅在请求头 `fingerprint-id`，不在 body。
   "returnMsg": "SUCCESS",
   "extend": "",
   "data": {
-    "orderId": "ord_xxx",
+    "orderNo": "ord_xxx",
     "status": "failed",
     "failureReason": "authentication_failed",
     "s3dsComplete": true
@@ -606,7 +630,7 @@ Fingerprint `visitorId` 仅在请求头 `fingerprint-id`，不在 body。
 
 - 四个接口均返回统一壳；业务成功时 `returnCode` 必须为 `"0000"`
 - 失败时写清 `returnMsg`，便于客户端展示与排查
-- 创建订单 `method` + `params` 足以让 SDK 渲染对应钱包按钮
+- 创建订单 `method` + `paymentScript` 足以让 SDK 渲染对应钱包按钮
 - Google：`merchantInfo`、`transactionInfo`、`tokenizationSpecification` 齐全；TEST 可用 SDK 默认补齐
 - Google：`callbackIntents` 可下发也可不下发，SDK 固定为 `["PAYMENT_AUTHORIZATION"]`
 - Apple：`validateMerchantUrl` 可选；接口 2 的 `data` 为 Apple opaque session

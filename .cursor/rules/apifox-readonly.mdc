@@ -1,0 +1,24 @@
+---
+description: Apifox MCP 仅允许只读，禁止修改远程文档
+alwaysApply: true
+---
+
+# Apifox 只读约束
+
+本仓库已接入 Apifox MCP（如 `Ramp - API 文档` / `apifox-mcp-server`）。**只能读取，不能修改** Apifox 上的接口与文档。
+
+## 允许
+
+- 调用 `read_project_oas_*`、`read_project_oas_ref_resources_*` 读取 OpenAPI
+- 调用 `refresh_project_oas_*` 刷新本地缓存后再读取
+- 基于读到的内容更新**本仓库内**文档（如 `docs/`）或生成代码
+
+## 禁止
+
+- 任何会创建、更新、删除 Apifox 接口/文档/Schema/环境/分支的操作
+- 接入或改用带写入能力的 Apifox MCP（如社区版 write/full 模式）
+- 尝试通过 API、脚本、CLI 等方式回写 Apifox 项目
+
+## 冲突时
+
+若用户要求修改 Apifox 文档，应明确拒绝并说明当前权限为只读；可改为更新本地仓库文档，或请用户在 Apifox 网页端自行修改。

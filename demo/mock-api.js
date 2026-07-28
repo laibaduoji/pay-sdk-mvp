@@ -65,8 +65,9 @@
 
   function googleParams(request) {
     const amount = (request && request.amount) || cfg.payment.amount
-    const currency = (request && request.currency) || cfg.payment.currency
-    const countryCode = (request && request.countryCode) || cfg.payment.countryCode
+    const currency = (request && (request.fiatCurrency || request.currency)) || cfg.payment.currency
+    const countryCode =
+      (request && (request.alpha2 || request.countryCode)) || cfg.payment.countryCode
     const isProd = options.environment === 'PRODUCTION'
     const gp = cfg.googlePay
     const merchantId = isProd ? gp.productionMerchantId || gp.merchantId : gp.merchantId
@@ -119,8 +120,9 @@
 
   function appleParams(request) {
     const amount = (request && request.amount) || cfg.payment.amount
-    const currency = (request && request.currency) || cfg.payment.currency
-    const countryCode = (request && request.countryCode) || cfg.payment.countryCode
+    const currency = (request && (request.fiatCurrency || request.currency)) || cfg.payment.currency
+    const countryCode =
+      (request && (request.alpha2 || request.countryCode)) || cfg.payment.countryCode
     const params = {
       countryCode: countryCode,
       currencyCode: currency,
@@ -138,18 +140,18 @@
     return params
   }
 
-  function buildCreateOrderData(request, orderId) {
+  function buildCreateOrderData(request, orderNo) {
     const environment = options.environment === 'PRODUCTION' ? 'PRODUCTION' : 'TEST'
     /** @type {Record<string, unknown>} */
     const data = {
-      orderId: orderId || 'ord_preview',
+      orderNo: orderNo || 'ord_preview',
       environment: environment,
       method: options.method === 'applePay' ? 'applePay' : 'googlePay',
       risk: buildRisk()
     }
 
     if (data.method === 'applePay') {
-      data.params = appleParams(request)
+      data.paymentScript = appleParams(request)
       if (!options.omitValidateUrl) {
         data.validateMerchantUrl =
           environment === 'TEST'
@@ -157,15 +159,15 @@
             : 'https://api.alchemypay.org/pay/apple/domainName/verify'
       }
     } else {
-      data.params = googleParams(request)
+      data.paymentScript = googleParams(request)
     }
     return data
   }
 
   function createOrder(request) {
-    const orderId = 'ord_demo_' + Date.now().toString(36)
-    const data = buildCreateOrderData(request, orderId)
-    orders[orderId] = { ticks: 0, options: { ...options } }
+    const orderNo = 'ord_demo_' + Date.now().toString(36)
+    const data = buildCreateOrderData(request, orderNo)
+    orders[orderNo] = { ticks: 0, options: { ...options } }
     return envelope(data)
   }
 
@@ -183,12 +185,12 @@
   }
 
   function pay(request) {
-    const orderId = request && request.orderId
-    const state = orderId ? orders[orderId] : null
+    const orderNo = request && (request.orderNo || request.orderId)
+    const state = orderNo ? orders[orderNo] : null
     const outcome = (state && state.options.payOutcome) || options.payOutcome
 
     if (outcome === 'webUrl') {
-      return envelope({ webUrl: 'https://psp.example/checkout/' + (orderId || 'xxx') })
+      return envelope({ webUrl: 'https://psp.example/checkout/' + (orderNo || 'xxx') })
     }
     if (outcome === 'threeDS') {
       return envelope({
@@ -206,15 +208,15 @@
     return envelope({})
   }
 
-  function queryOrder(orderId) {
-    const state = orders[orderId] || { ticks: 0, options: { ...options } }
+  function queryOrder(orderNo) {
+    const state = orders[orderNo] || { ticks: 0, options: { ...options } }
     state.ticks += 1
-    orders[orderId] = state
+    orders[orderNo] = state
     const outcome = state.options.payOutcome || 'success'
 
     if (outcome === 'success') {
       return envelope({
-        orderId: orderId,
+        orderNo: orderNo,
         status: 'succeeded',
         s3dsComplete: true
       })
@@ -222,23 +224,23 @@
 
     if (state.ticks === 2 && outcome === 'webUrl') {
       return envelope({
-        orderId: orderId,
+        orderNo: orderNo,
         status: 'requires_action',
-        s3dsUrl: 'https://acs.example/s3ds/' + orderId,
+        s3dsUrl: 'https://acs.example/s3ds/' + orderNo,
         s3dsComplete: false
       })
     }
 
     if (state.ticks >= 3) {
       return envelope({
-        orderId: orderId,
+        orderNo: orderNo,
         status: 'succeeded',
         s3dsComplete: true
       })
     }
 
     return envelope({
-      orderId: orderId,
+      orderNo: orderNo,
       status: 'requires_action',
       s3dsComplete: false
     })
@@ -260,6 +262,16 @@
       }
     }
     return ''
+  }
+
+  function searchOf(input) {
+    const raw =
+      typeof input === 'string' ? input : input && typeof input.url === 'string' ? input.url : ''
+    try {
+      return new URL(raw, location.origin).searchParams
+    } catch {
+      return new URLSearchParams()
+    }
   }
 
   async function parseBody(init) {
@@ -289,11 +301,12 @@
     if (method === 'POST' && /\/v1\/pay\/payments\/?$/.test(path)) {
       return jsonResponse(pay(body))
     }
-    if (method === 'GET' && /\/v1\/pay\/orders\//.test(path)) {
-      const orderId = decodeURIComponent(path.split('/').pop() || '')
-      return jsonResponse(queryOrder(orderId))
+    if (method === 'GET' && /\/v1\/pay\/orders/.test(path)) {
+      const orderNo =
+        searchOf(input).get('orderNo') || decodeURIComponent(path.split('/').pop() || '')
+      return jsonResponse(queryOrder(orderNo))
     }
-    if (method === 'POST' && /apple|domainName|validate/i.test(path)) {
+    if (method === 'POST' && /apple|domainName|validate|domain\/verify/i.test(path)) {
       return jsonResponse(validateMerchant())
     }
 

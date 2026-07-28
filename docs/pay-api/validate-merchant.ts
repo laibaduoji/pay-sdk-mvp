@@ -11,7 +11,7 @@ import type { ApiResponse } from './common'
 
 export interface ValidateMerchantRequest {
   /** 建议带上，便于审计 */
-  orderId?: string
+  orderNo?: string
   /** Apple onvalidatemerchant 给出的 validationURL，原样转发 */
   validationURL: string
 }
@@ -26,7 +26,7 @@ export type MerchantSession = Record<string, unknown>
 export type ValidateMerchantResponse = ApiResponse<MerchantSession>
 
 export const validateMerchantRequestExample: ValidateMerchantRequest = {
-  orderId: 'ord_xxx',
+  orderNo: 'ord_xxx',
   validationURL: 'https://apple-pay-gateway.apple.com/paymentservices/startSession'
 }
 

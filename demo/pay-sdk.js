@@ -787,6 +787,119 @@ apple-pay-button {
     };
     session.begin();
   }
+  function bytesToBase64(bytes) {
+    const view = new Uint8Array(bytes);
+    let binary = "";
+    for (let i2 = 0; i2 < view.length; i2++) {
+      binary += String.fromCharCode(view[i2]);
+    }
+    return btoa(binary);
+  }
+  async function hmacSha256Base64(content, secretkey) {
+    const enc = new TextEncoder();
+    const key = await crypto.subtle.importKey(
+      "raw",
+      enc.encode(secretkey),
+      { name: "HMAC", hash: "SHA-256" },
+      false,
+      ["sign"]
+    );
+    const signature = await crypto.subtle.sign("HMAC", key, enc.encode(content));
+    return bytesToBase64(signature);
+  }
+  function getPath(requestUrl) {
+    const uri = new URL(requestUrl);
+    const path = uri.pathname;
+    const params = Array.from(uri.searchParams.entries());
+    if (params.length === 0) {
+      return path;
+    }
+    const sortedParams = [...params].sort(([aKey], [bKey]) => aKey.localeCompare(bKey));
+    const queryString = sortedParams.map(([key, value]) => `${key}=${value}`).join("&");
+    return `${path}?${queryString}`;
+  }
+  function removeEmptyKeys(map) {
+    const retMap = {};
+    for (const [key, value] of Object.entries(map)) {
+      if (value !== null && value !== "") {
+        retMap[key] = value;
+      }
+    }
+    return retMap;
+  }
+  function sortList(list) {
+    const objectList = [];
+    const intList = [];
+    const floatList = [];
+    const stringList = [];
+    const jsonArray = [];
+    for (const item of list) {
+      if (typeof item === "object" && item !== null) {
+        jsonArray.push(item);
+      } else if (typeof item === "number" && Number.isInteger(item)) {
+        intList.push(item);
+      } else if (typeof item === "number") {
+        floatList.push(item);
+      } else if (typeof item === "string") {
+        stringList.push(item);
+      } else {
+        intList.push(item);
+      }
+    }
+    intList.sort((a2, b2) => a2 - b2);
+    floatList.sort((a2, b2) => a2 - b2);
+    stringList.sort();
+    objectList.push(...intList, ...floatList, ...stringList, ...jsonArray);
+    list.length = 0;
+    list.push(...objectList);
+    const retList = [];
+    for (const item of list) {
+      if (typeof item === "object" && item !== null) {
+        retList.push(sortObject(item));
+      } else {
+        retList.push(item);
+      }
+    }
+    return retList;
+  }
+  function sortMap(map) {
+    const sortedMap = new Map(
+      Object.entries(removeEmptyKeys(map)).sort(([aKey], [bKey]) => aKey.localeCompare(bKey))
+    );
+    for (const [key, value] of sortedMap.entries()) {
+      if (typeof value === "object" && value !== null) {
+        sortedMap.set(key, sortObject(value));
+      }
+    }
+    return Object.fromEntries(sortedMap.entries());
+  }
+  function sortObject(obj) {
+    if (typeof obj === "object" && obj !== null) {
+      if (Array.isArray(obj)) {
+        return sortList(obj);
+      }
+      return sortMap(obj);
+    }
+    return obj;
+  }
+  function getJsonBody(body) {
+    let map;
+    try {
+      map = JSON.parse(body);
+    } catch {
+      map = {};
+    }
+    if (!map || typeof map !== "object" || Array.isArray(map) || Object.keys(map).length === 0) {
+      return "";
+    }
+    map = removeEmptyKeys(map);
+    map = sortObject(map);
+    return JSON.stringify(map);
+  }
+  async function apiSign(timestamp, method, requestUrl, body, secretkey) {
+    const content = timestamp + method.toUpperCase() + getPath(requestUrl) + getJsonBody(body);
+    return hmacSha256Base64(content, secretkey);
+  }
   const SUCCESS_RETURN_CODE = "0000";
   class PayApiError extends Error {
     constructor(message, details = {}) {
@@ -797,35 +910,87 @@ apple-pay-button {
       this.status = details.status;
     }
   }
+  function isGooglePayScript(script) {
+    return Array.isArray(script.allowedPaymentMethods);
+  }
+  function isApplePayScript(script) {
+    return Array.isArray(script.merchantCapabilities) || "total" in script;
+  }
+  function normalizeCreateOrderResponse(data) {
+    if (!(data == null ? void 0 : data.orderNo)) {
+      throw new PayApiError("Create order response is missing orderNo");
+    }
+    if (!data.paymentScript || typeof data.paymentScript !== "object") {
+      throw new PayApiError("Create order response is missing paymentScript");
+    }
+    let method = data.method;
+    if (!method) {
+      if (isGooglePayScript(data.paymentScript)) method = "googlePay";
+      else if (isApplePayScript(data.paymentScript)) method = "applePay";
+      else throw new PayApiError("Create order response paymentScript is not Google or Apple Pay");
+    }
+    if (method === "googlePay") {
+      const script = { ...data.paymentScript };
+      const environment = data.environment || script.environment;
+      if ("environment" in script) delete script.environment;
+      return {
+        orderNo: data.orderNo,
+        method: "googlePay",
+        environment,
+        paymentScript: script,
+        risk: data.risk
+      };
+    }
+    return {
+      orderNo: data.orderNo,
+      method: "applePay",
+      environment: data.environment,
+      paymentScript: data.paymentScript,
+      validateMerchantUrl: data.validateMerchantUrl,
+      risk: data.risk
+    };
+  }
   class PayApiClient {
     constructor(config) {
       this.config = config;
       this.fetcher = config.fetch || window.fetch.bind(window);
     }
-    createOrder(request) {
-      return this.request(this.config.createOrderUrl, "POST", request);
+    async createOrder(request) {
+      const data = await this.request(
+        this.config.createOrderUrl,
+        "POST",
+        request
+      );
+      return normalizeCreateOrderResponse(data);
     }
     getValidateMerchantUrl(override) {
       return override || this.config.validateMerchantUrl;
     }
-    validateMerchant(url, orderId, validationURL) {
+    validateMerchant(url, orderNo, validationURL) {
       return this.request(this.getValidateMerchantUrl(url), "POST", {
-        orderId,
+        orderNo,
         validationURL
       });
     }
     pay(request) {
       return this.request(this.config.payUrl, "POST", request);
     }
-    queryOrder(orderId) {
-      const encoded = encodeURIComponent(orderId);
-      const template = this.config.queryOrderUrl;
-      const url = template.includes("{orderId}") ? template.replace("{orderId}", encoded) : `${template.replace(/\/$/, "")}/${encoded}`;
+    queryOrder(orderNo) {
+      const base = this.config.queryOrderUrl.replace(/\/$/, "");
+      const url = `${base}?orderNo=${encodeURIComponent(orderNo)}`;
       return this.request(url, "GET");
     }
-    async headers(includeContentType) {
+    async resolveHeaders(url, method, bodyString) {
       const configured = typeof this.config.headers === "function" ? await this.config.headers() : this.config.headers;
-      const headers = includeContentType ? { "Content-Type": "application/json", ...configured } : { ...configured };
+      const headers = bodyString !== "" ? { "Content-Type": "application/json", ...configured } : { ...configured };
+      const { appId, appSecret } = this.config;
+      if (appId && appSecret) {
+        const timestamp = String(Date.now());
+        const sign = await apiSign(timestamp, method, url, bodyString, appSecret);
+        headers.appid = appId;
+        headers.timestamp = timestamp;
+        headers.sign = sign;
+      }
       if (this.config.getFingerprintId) {
         const fingerprintId = await this.config.getFingerprintId();
         if (fingerprintId) headers["fingerprint-id"] = fingerprintId;
@@ -833,12 +998,13 @@ apple-pay-button {
       return headers;
     }
     async request(url, method, body) {
+      const bodyString = body === void 0 ? "" : JSON.stringify(body);
       let response;
       try {
         response = await this.fetcher(url, {
           method,
-          headers: await this.headers(body !== void 0),
-          body: body === void 0 ? void 0 : JSON.stringify(body)
+          headers: await this.resolveHeaders(url, method, bodyString),
+          body: bodyString === "" ? void 0 : bodyString
         });
       } catch (error) {
         throw error instanceof Error ? error : new PayApiError("Pay API network request failed");
@@ -1002,14 +1168,14 @@ apple-pay-button {
     }
   }
   const API_BASE = {
-    TEST: "https://api-test.alchemytech.cc",
-    PRODUCTION: "https://api.alchemypay.org"
+    TEST: "https://openapi-test.alchemypay.org",
+    PRODUCTION: "https://openapi.alchemypay.org"
   };
   const API_PATHS = {
-    createOrder: "/v1/pay/orders",
-    validateMerchant: "/pay/apple/domainName/verify",
-    pay: "/v1/pay/payments",
-    queryOrder: "/v1/pay/orders/{orderId}"
+    createOrder: "/open/api/v4/merchant/order/create",
+    validateMerchant: "/open/api/v4/merchant/domain/verify",
+    pay: "/open/api/v4/merchant/alchemy-pay",
+    queryOrder: "/open/api/v4/merchant/order/detail"
   };
   function getApiEndpoints(environment = "PRODUCTION") {
     const base = API_BASE[environment];
@@ -1027,6 +1193,8 @@ apple-pay-button {
       validateMerchantUrl: (overrides == null ? void 0 : overrides.validateMerchantUrl) || defaults.validateMerchantUrl,
       payUrl: (overrides == null ? void 0 : overrides.payUrl) || defaults.payUrl,
       queryOrderUrl: (overrides == null ? void 0 : overrides.queryOrderUrl) || defaults.queryOrderUrl,
+      appId: overrides == null ? void 0 : overrides.appId,
+      appSecret: overrides == null ? void 0 : overrides.appSecret,
       headers: overrides == null ? void 0 : overrides.headers,
       getFingerprintId: overrides == null ? void 0 : overrides.getFingerprintId,
       fetch: overrides == null ? void 0 : overrides.fetch,
@@ -1442,8 +1610,29 @@ apple-pay-button {
     if (!config.container) {
       throw new Error("config.container is required");
     }
-    if (!config.order || config.order.amount == null || !config.order.currency || !config.order.countryCode) {
-      throw new Error("order.amount, order.currency and order.countryCode are required");
+    const order = config.order;
+    if (!order || typeof order !== "object") {
+      throw new Error("config.order is required");
+    }
+    const required = [
+      "side",
+      "merchantOrderNo",
+      "amount",
+      "fiatCurrency",
+      "cryptoCurrency",
+      "orderType",
+      "network",
+      "payWayCode",
+      "redirectUrl",
+      "callbackUrl",
+      "clientIp"
+    ];
+    const missing = required.filter((key) => {
+      const value = order[key];
+      return value == null || value === "";
+    });
+    if (missing.length) {
+      throw new Error(`order.${missing.join(", order.")} ${missing.length > 1 ? "are" : "is"} required`);
     }
   }
   function hasSecondaryAction(response) {
@@ -1469,8 +1658,8 @@ apple-pay-button {
       onCancel: config.onCancel
     };
     if (order.method === "googlePay") {
-      const params = environment === "TEST" ? applyGooglePayTestDefaults(order.params) : order.params;
-      const card = params.allowedPaymentMethods[0];
+      const paymentScript2 = environment === "TEST" ? applyGooglePayTestDefaults(order.paymentScript) : order.paymentScript;
+      const card = paymentScript2.allowedPaymentMethods[0];
       if (!(card == null ? void 0 : card.tokenizationSpecification)) {
         throw new Error("Create order response is missing Google Pay tokenizationSpecification");
       }
@@ -1479,42 +1668,43 @@ apple-pay-button {
         ...common,
         method: "googlePay",
         payment: {
-          amount: params.transactionInfo.totalPrice,
-          currency: params.transactionInfo.currencyCode,
-          countryCode: params.transactionInfo.countryCode || config.order.countryCode
+          amount: paymentScript2.transactionInfo.totalPrice,
+          currency: paymentScript2.transactionInfo.currencyCode,
+          countryCode: paymentScript2.transactionInfo.countryCode || config.order.alpha2 || ""
         },
         billingAddressRequired: parameters.billingAddressRequired === true,
         googlePay: {
-          merchantId: params.merchantInfo.merchantId,
-          merchantName: params.merchantInfo.merchantName,
+          merchantId: paymentScript2.merchantInfo.merchantId,
+          merchantName: paymentScript2.merchantInfo.merchantName,
           allowedAuthMethods: parameters.allowedAuthMethods,
           allowedCardNetworks: parameters.allowedCardNetworks,
           tokenizationSpecification: card.tokenizationSpecification,
           paymentDataRequest: {
-            ...params,
+            ...paymentScript2,
             callbackIntents: ["PAYMENT_AUTHORIZATION"]
           }
         }
       };
     }
     const validateMerchantUrl = api.getValidateMerchantUrl(order.validateMerchantUrl);
+    const paymentScript = order.paymentScript;
     return {
       ...common,
       method: "applePay",
       payment: {
-        amount: order.params.total.amount,
-        currency: order.params.currencyCode,
-        countryCode: order.params.countryCode
+        amount: paymentScript.total.amount,
+        currency: paymentScript.currencyCode,
+        countryCode: paymentScript.countryCode
       },
-      billingAddressRequired: (((_a = order.params.requiredBillingContactFields) == null ? void 0 : _a.length) || 0) > 0,
+      billingAddressRequired: (((_a = paymentScript.requiredBillingContactFields) == null ? void 0 : _a.length) || 0) > 0,
       applePay: {
         validateMerchantUrl,
-        validateMerchant: (validationURL) => api.validateMerchant(validateMerchantUrl, order.orderId, validationURL),
-        merchantCapabilities: order.params.merchantCapabilities,
-        supportedNetworks: order.params.supportedNetworks,
-        totalLabel: order.params.total.label,
-        totalType: order.params.total.type,
-        paymentRequest: order.params
+        validateMerchant: (validationURL) => api.validateMerchant(validateMerchantUrl, order.orderNo, validationURL),
+        merchantCapabilities: paymentScript.merchantCapabilities,
+        supportedNetworks: paymentScript.supportedNetworks,
+        totalLabel: paymentScript.total.label,
+        totalType: paymentScript.total.type,
+        paymentRequest: paymentScript
       }
     };
   }
@@ -1652,7 +1842,7 @@ apple-pay-button {
       if (walletResult.method === "googlePay") {
         if (!walletResult.token) throw new Error("Google Pay token is missing");
         return {
-          orderId: this.order.orderId,
+          orderNo: this.order.orderNo,
           encryptedData: walletResult.token,
           billingAddress: normalizeGoogleBillingAddress(
             walletResult.billingAddress,
@@ -1663,7 +1853,7 @@ apple-pay-button {
       }
       if (!walletResult.token) throw new Error("Apple Pay token is missing");
       return {
-        orderId: this.order.orderId,
+        orderNo: this.order.orderNo,
         encryptedData: normalizeAppleToken(walletResult.token),
         billingAddress: normalizeAppleBillingAddress(walletResult.billingContact),
         risk: walletResult.risk
@@ -1688,7 +1878,7 @@ apple-pay-button {
           return;
         }
         try {
-          const current = await this.api.queryOrder(this.order.orderId);
+          const current = await this.api.queryOrder(this.order.orderNo);
           if (this.destroyed || generation !== this.pollGeneration) return;
           consecutiveTransientErrors = 0;
           (_b = (_a = this.config).onStatusChange) == null ? void 0 : _b.call(_a, current);
@@ -1749,7 +1939,7 @@ apple-pay-button {
       this.paymentInFlight = false;
       const result = {
         ...walletResult,
-        orderId: (_a = this.order) == null ? void 0 : _a.orderId,
+        orderNo: (_a = this.order) == null ? void 0 : _a.orderNo,
         paymentResponse,
         order
       };
@@ -1763,7 +1953,7 @@ apple-pay-button {
       this.paymentInFlight = false;
       (_c = (_b = this.config).onComplete) == null ? void 0 : _c.call(_b, {
         ...walletResult,
-        orderId: (_a = this.order) == null ? void 0 : _a.orderId,
+        orderNo: (_a = this.order) == null ? void 0 : _a.orderNo,
         paymentResponse,
         order
       });
@@ -1803,6 +1993,7 @@ apple-pay-button {
   exports.describeS3ds = describeS3ds;
   exports.getApiEndpoints = getApiEndpoints;
   exports.init = init;
+  exports.normalizeCreateOrderResponse = normalizeCreateOrderResponse;
   exports.resolveEnvironment = resolveEnvironment;
   exports.resolvePayApiConfig = resolvePayApiConfig;
   Object.defineProperty(exports, Symbol.toStringTag, { value: "Module" });

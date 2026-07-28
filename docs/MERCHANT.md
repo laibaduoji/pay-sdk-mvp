@@ -61,18 +61,28 @@
         container: '#pay-container',
         environment: 'TEST', // 联调用 TEST；上线用 PRODUCTION 或不传（默认生产）
         order: {
+          side: 'BUY',
+          merchantOrderNo: 'm_ord_xxx',
           amount: '10.00',
-          currency: 'USD',
-          countryCode: 'US'
+          fiatCurrency: 'USD',
+          alpha2: 'US',
+          cryptoCurrency: 'USDT',
+          orderType: '4',
+          address: '0xabc...',
+          network: 'ETH',
+          payWayCode: '701',
+          redirectUrl: 'https://merchant.example/success',
+          callbackUrl: 'https://merchant.example/callback',
+          clientIp: '1.2.3.4'
         },
         api: {
-          // 配置后 SDK 按 API Sign 自动带 appId / timestamp / sign
+          // 配置后 SDK 按 API Sign 自动带 appid / timestamp / sign
           // https://alchemypay.readme.io/docs/api-sign
           appId: 'YOUR_APP_ID',
           appSecret: 'YOUR_APP_SECRET'
         },
         onSuccess(result) {
-          console.log('支付成功', result.orderId, result.order && result.order.status)
+          console.log('支付成功', result.orderNo, result.order && result.order.status)
           // 跳转商户成功页
         },
         onError(error) {
@@ -126,11 +136,21 @@
 
 ### `order`
 
-| 字段          | 类型     | 必传 | 说明         |
-| ------------- | -------- | :--: | ------------ |
-| `amount`      | `string` |  是  | 如 `'10.00'` |
-| `currency`    | `string` |  是  | 如 `'USD'`   |
-| `countryCode` | `string` |  是  | 如 `'US'`    |
+| 字段              | 类型     | 必传 | 说明                                      |
+| ----------------- | -------- | :--: | ----------------------------------------- |
+| `side`            | `string` |  是  | `BUY` / `SELL`                            |
+| `merchantOrderNo` | `string` |  是  | 商户订单号                                |
+| `amount`          | `string` |  是  | 如 `'10.00'`                              |
+| `fiatCurrency`    | `string` |  是  | 如 `'USD'`                                |
+| `alpha2`          | `string` |  否  | 国家码；offramp 必填                      |
+| `cryptoCurrency`  | `string` |  是  | 如 `'USDT'`                               |
+| `orderType`       | `string` |  是  | onramp `'4'` / offramp `'6'`              |
+| `address`         | `string` |  否  | onramp 收款地址                           |
+| `network`         | `string` |  是  | 如 `'ETH'`                                |
+| `payWayCode`      | `string` |  是  | `501` Apple / `701` Google / `10001` card |
+| `redirectUrl`     | `string` |  是  | 成功跳转                                  |
+| `callbackUrl`     | `string` |  是  | 回调地址                                  |
+| `clientIp`        | `string` |  是  | 用户 IPV4                                 |
 
 ### `api`（均可选）
 
@@ -138,7 +158,7 @@
 
 | 字段             | 类型                                  | 默认     | 说明                                                                       |
 | ---------------- | ------------------------------------- | -------- | -------------------------------------------------------------------------- |
-| `appId`          | `string`                              | 无       | 与 `appSecret` 同时配置时，SDK 自动签名并带 `appId` / `timestamp` / `sign` |
+| `appId`          | `string`                              | 无       | 与 `appSecret` 同时配置时，SDK 自动签名并带 `appid` / `timestamp` / `sign` |
 | `appSecret`      | `string`                              | 无       | HMAC 密钥；算法见 [API Sign](https://alchemypay.readme.io/docs/api-sign)   |
 | `headers`        | `object` 或 `() => object \| Promise` | 无       | 追加其它自定义头（签名头由 SDK 写入并覆盖同名键）                          |
 | `pollIntervalMs` | `number`                              | `2000`   | 二次动作后轮询间隔（毫秒）                                                 |
@@ -270,7 +290,7 @@ SDK 内置打开行为：
   email: '...',
   raw: { /* PaymentData */ },
   risk: { /* 采集到的风控字段 */ },
-  orderId: 'ord_xxx',
+  orderNo: 'ord_xxx',
   paymentResponse: { /* 支付接口 data */ },
   order: { /* 轮询结束时的查询结果，如有 */ }
 }
@@ -283,7 +303,7 @@ SDK 内置打开行为：
   shippingContact: { /* ... */ },
   raw: { /* ApplePayPayment */ },
   risk: { /* ... */ },
-  orderId: 'ord_xxx',
+  orderNo: 'ord_xxx',
   paymentResponse: { /* ... */ },
   order: { /* ... */ }
 }
@@ -291,7 +311,7 @@ SDK 内置打开行为：
 
 说明：
 
-- 编排成功时商户一般看 `orderId`、`order.status`，不必再自己拿 token 调支付接口（SDK 已调）
+- 编排成功时商户一般看 `orderNo`、`order.status`，不必再自己拿 token 调支付接口（SDK 已调）
 - `onComplete` 在 `s3dsComplete === true` 但状态尚未终态时也可能触发，需结合 `order` 判断
 
 ### 错误与取消
@@ -335,7 +355,7 @@ SDK 内置打开行为：
 
 - [ ] 页面 HTTPS，已引入 `pay-sdk.js`
 - [ ] `container` 存在且可见
-- [ ] `order.amount / currency / countryCode` 正确
+- [ ] `order` S2S 必填字段正确（含 `payWayCode`）
 - [ ] 联调使用 `environment: 'TEST'`
 - [ ] 配置 `api.appId` + `api.appSecret`（SDK 内置 API Sign）
 - [ ] 实现 `onSuccess` / `onError` / `onCancel`

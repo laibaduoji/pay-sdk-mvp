@@ -36,7 +36,7 @@ export interface ApplePayButtonConfig {
 
 export interface ApplePayConfig {
   validateMerchantUrl: string
-  /** 完整编排模式下注入，用于携带 orderId、统一响应壳及自定义 headers。 */
+  /** 完整编排模式下注入，用于携带 orderNo、统一响应壳及自定义 headers。 */
   validateMerchant?: (validationURL: string) => Promise<Record<string, unknown>>
   merchantCapabilities?: ApplePayJS.ApplePayMerchantCapability[]
   supportedNetworks?: string[]
@@ -114,10 +114,36 @@ export interface ApiResponse<T = unknown> {
   traceId?: string
 }
 
+/** 创建订单请求（对齐 Apifox SDK 目录 `/open/api/v4/merchant/order/create`） */
 export interface CreateOrderRequest {
+  /** onramp: BUY / offramp: SELL */
+  side: string
+  /** 商户自定义订单号，需保证唯一 */
+  merchantOrderNo: string
   amount: string
-  currency: string
-  countryCode: string
+  /** 法币，如 USD/EUR */
+  fiatCurrency: string
+  /** ISO 3166-1 alpha-2；offramp 必填 */
+  alpha2?: string
+  /** 加密货币大写名，如 USDT */
+  cryptoCurrency: string
+  /** onramp: 4 / offramp: 6 */
+  orderType: string
+  /** onramp 收款地址 */
+  address?: string
+  /** 网络，如 ETH/BSC/BTC */
+  network: string
+  /** 支付方式：credit card 10001 / apple pay 501 / google pay 701 */
+  payWayCode: string
+  userAccountId?: string
+  redirectUrl: string
+  callbackUrl: string
+  memo?: string
+  extendParams?: Record<string, unknown>
+  /** 用户 IPV4 */
+  clientIp: string
+  /** 0=onChain 1=internal，默认 0 */
+  withdrawType?: number
 }
 
 export interface GooglePayParams {
@@ -131,6 +157,8 @@ export interface GooglePayParams {
    * 并配置 PaymentsClient.paymentDataCallbacks.onPaymentAuthorized。
    */
   callbackIntents?: google.payments.api.CallbackIntent[]
+  /** 部分服务端会把环境塞进 paymentScript；SDK 会提升到 order.environment */
+  environment?: Environment
 }
 
 export interface ApplePayParams {
@@ -143,18 +171,18 @@ export interface ApplePayParams {
 }
 
 export interface CreateOrderResponseGooglePay {
-  orderId: string
+  orderNo: string
   method: 'googlePay'
   environment?: Environment
-  params: GooglePayParams
+  paymentScript: GooglePayParams
   risk?: CreateOrderRisk
 }
 
 export interface CreateOrderResponseApplePay {
-  orderId: string
+  orderNo: string
   method: 'applePay'
   environment?: Environment
-  params: ApplePayParams
+  paymentScript: ApplePayParams
   /** 可选覆盖；未下发时使用当前环境在 endpoints.ts 中的内置地址。 */
   validateMerchantUrl?: string
   risk?: CreateOrderRisk
@@ -163,7 +191,7 @@ export interface CreateOrderResponseApplePay {
 export type CreateOrderResponse = CreateOrderResponseGooglePay | CreateOrderResponseApplePay
 
 export interface PayRequest {
-  orderId: string
+  orderNo: string
   encryptedData: string | Record<string, unknown>
   billingAddress?: BillingAddress
   risk?: PayRiskPayload
@@ -179,7 +207,7 @@ export interface PayResponse {
 }
 
 export interface QueryOrderResponse {
-  orderId: string
+  orderNo: string
   status: OrderStatus
   failureReason?: string
   s3dsUrl?: string
@@ -193,10 +221,10 @@ export interface PayApiConfig {
   payUrl: string
   /**
    * 订单详情 base URL（无 query）。
-   * SDK 自动追加 `?orderNo=`（值为创建订单返回的 orderId）。
+   * SDK 自动追加 `?orderNo=`（值为创建订单返回的 orderNo）。
    */
   queryOrderUrl: string
-  /** AlchemyPay 合作方 appId；与 appSecret 同时存在时自动签名。 */
+  /** AlchemyPay 合作方 appId；与 appSecret 同时存在时自动签名（请求头 `appid`）。 */
   appId?: string
   /** AlchemyPay appSecret；仅用于 HMAC，勿在文档外泄露。 */
   appSecret?: string
@@ -253,7 +281,7 @@ export interface GooglePayResult {
   email?: string
   raw: google.payments.api.PaymentData
   risk?: PayRiskPayload
-  orderId?: string
+  orderNo?: string
   paymentResponse?: PayResponse
   order?: QueryOrderResponse
 }
@@ -265,7 +293,7 @@ export interface ApplePayResult {
   shippingContact?: ApplePayJS.ApplePayPaymentContact
   raw: ApplePayJS.ApplePayPayment
   risk?: PayRiskPayload
-  orderId?: string
+  orderNo?: string
   paymentResponse?: PayResponse
   order?: QueryOrderResponse
 }

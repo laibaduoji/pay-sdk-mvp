@@ -2,7 +2,9 @@
  * 接口 1 — 创建订单
  * POST /open/api/v4/merchant/order/create（路径以 SDK `src/endpoints.ts` 为准）
  *
- * 响应 data 含 params（Google / Apple 原生唤起参数）与 risk。
+ * 请求对齐 Apifox SDK 目录 S2S schema。
+ * 响应 data 含 orderNo、paymentScript（Google / Apple 原生唤起参数）与 risk。
+ * method 服务端可不传，SDK 按 paymentScript 形态推断。
  * environment 可选，不传默认 'PRODUCTION'。
  * risk 配置：有值覆盖 SDK 默认，无值用默认。
  * 说明见 README.md。
@@ -11,7 +13,7 @@
 import type { ApiResponse, Environment } from './common'
 
 // ─────────────────────────────────────────────
-// 钱包 params
+// 钱包 paymentScript
 // ─────────────────────────────────────────────
 
 export interface GooglePayParams {
@@ -51,6 +53,8 @@ export interface GooglePayParams {
   }
   /** SDK 固定覆盖为 ['PAYMENT_AUTHORIZATION'] */
   callbackIntents?: string[]
+  /** 部分服务端会塞进 paymentScript；SDK 提升为 order.environment */
+  environment?: Environment
 }
 
 export interface ApplePayParams {
@@ -100,27 +104,46 @@ export interface CreateOrderRisk {
 // 请求 / 响应
 // ─────────────────────────────────────────────
 
-/** 创建订单请求（其余字段暂未冻结，后续再补） */
+/** 创建订单请求（对齐 Apifox 493866449） */
 export interface CreateOrderRequest {
+  /** onramp: BUY / offramp: SELL */
+  side: string
+  merchantOrderNo: string
   amount: string
-  currency: string
-  countryCode: string
+  fiatCurrency: string
+  /** ISO 3166-1 alpha-2；offramp 必填 */
+  alpha2?: string
+  cryptoCurrency: string
+  /** onramp: 4 / offramp: 6 */
+  orderType: string
+  address?: string
+  network: string
+  /** 10001 card / 501 apple pay / 701 google pay */
+  payWayCode: string
+  userAccountId?: string
+  redirectUrl: string
+  callbackUrl: string
+  memo?: string
+  extendParams?: Record<string, unknown>
+  clientIp: string
+  /** 0=onChain 1=internal */
+  withdrawType?: number
 }
 
 export interface CreateOrderResponseGooglePay {
-  orderId: string
+  orderNo: string
   method: 'googlePay'
   /** 不传时客户端按 PRODUCTION */
   environment?: Environment
-  params: GooglePayParams
+  paymentScript: GooglePayParams
   risk?: CreateOrderRisk
 }
 
 export interface CreateOrderResponseApplePay {
-  orderId: string
+  orderNo: string
   method: 'applePay'
   environment?: Environment
-  params: ApplePayParams
+  paymentScript: ApplePayParams
   /** 可选覆盖；未下发时 SDK 使用当前环境的内置接口 2 地址 */
   validateMerchantUrl?: string
   risk?: CreateOrderRisk
@@ -285,40 +308,50 @@ export const riskCollectNone: CreateOrderRisk = {
 }
 
 export const createOrderRequestExample: CreateOrderRequest = {
+  side: 'BUY',
+  merchantOrderNo: 'm_ord_xxx',
   amount: '10.00',
-  currency: 'USD',
-  countryCode: 'US'
+  fiatCurrency: 'USD',
+  alpha2: 'US',
+  cryptoCurrency: 'USDT',
+  orderType: '4',
+  address: '0xabc...',
+  network: 'ETH',
+  payWayCode: '701',
+  redirectUrl: 'https://merchant.example/success',
+  callbackUrl: 'https://merchant.example/callback',
+  clientIp: '1.2.3.4'
 }
 
 export const createOrderResponseGooglePayDirect: CreateOrderResponseGooglePay = {
-  orderId: 'ord_xxx',
+  orderNo: 'ord_xxx',
   environment: 'TEST',
   method: 'googlePay',
-  params: googlePayParamsDirect,
+  paymentScript: googlePayParamsDirect,
   risk: riskCollectAll
 }
 
 export const createOrderResponseGooglePayGateway: CreateOrderResponseGooglePay = {
-  orderId: 'ord_xxx',
+  orderNo: 'ord_xxx',
   environment: 'TEST',
   method: 'googlePay',
-  params: googlePayParamsGateway,
+  paymentScript: googlePayParamsGateway,
   risk: riskCollectAll
 }
 
 export const createOrderResponseApplePay: CreateOrderResponseApplePay = {
-  orderId: 'ord_xxx',
+  orderNo: 'ord_xxx',
   environment: 'TEST',
   method: 'applePay',
-  params: applePayParams,
+  paymentScript: applePayParams,
   validateMerchantUrl: 'https://openapi-test.alchemypay.org/open/api/v4/merchant/domain/verify',
   risk: riskCollectAll
 }
 
 export const createOrderResponseMinimalNoRisk: CreateOrderResponseGooglePay = {
-  orderId: 'ord_xxx',
+  orderNo: 'ord_xxx',
   method: 'googlePay',
-  params: googlePayParamsDirectMinimal,
+  paymentScript: googlePayParamsDirectMinimal,
   risk: riskCollectNone
 }
 

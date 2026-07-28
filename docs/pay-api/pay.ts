@@ -18,7 +18,7 @@ export interface PayRiskPayload {
 }
 
 export interface PayRequest {
-  orderId: string
+  orderNo: string
   /** Google Pay：加密 token 字符串；Apple Pay：payment.token 对象或序列化字符串 */
   encryptedData: string | Record<string, unknown>
   billingAddress?: BillingAddress
@@ -54,7 +54,7 @@ export type PayApiResponse = ApiResponse<PayResponse>
  */
 
 export const payRequestExample: PayRequest = {
-  orderId: 'ord_xxx',
+  orderNo: 'ord_xxx',
   encryptedData: '...google pay encrypted token...',
   billingAddress: {
     addressLine1: '1 Main St',
@@ -76,7 +76,7 @@ export const payRequestExample: PayRequest = {
 }
 
 export const payRequestMinimal: PayRequest = {
-  orderId: 'ord_xxx',
+  orderNo: 'ord_xxx',
   encryptedData: {/* Apple Pay payment.token */}
 }
 

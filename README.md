@@ -39,9 +39,19 @@ npm run format     # prettier write
     // omit or 'PRODUCTION' for live; 'TEST' → test API + Google Pay TEST + Checkout sandbox
     environment: 'TEST',
     order: {
+      side: 'BUY',
+      merchantOrderNo: 'm_ord_xxx',
       amount: '10.00',
-      currency: 'USD',
-      countryCode: 'US'
+      fiatCurrency: 'USD',
+      alpha2: 'US',
+      cryptoCurrency: 'USDT',
+      orderType: '4',
+      address: '0xabc...',
+      network: 'ETH',
+      payWayCode: '701',
+      redirectUrl: 'https://merchant.example/success',
+      callbackUrl: 'https://merchant.example/callback',
+      clientIp: '1.2.3.4'
     },
     // optional — defaults from src/endpoints.ts by environment
     api: {
@@ -58,7 +68,7 @@ npm run format     # prettier write
       console.log(action)
     },
     onOrderCreated(order) {
-      console.log(order.orderId, order.method)
+      console.log(order.orderNo, order.method)
     },
     onStatusChange(order) {
       console.log(order.status)
@@ -67,7 +77,7 @@ npm run format     # prettier write
       console.log('flow complete', result.order?.status)
     },
     onSuccess(result) {
-      console.log(result.orderId, result.order?.status)
+      console.log(result.orderNo, result.order?.status)
     },
     onError(error) {
       console.error(error)
@@ -81,7 +91,7 @@ npm run format     # prettier write
 Built-in API hosts live in [`src/endpoints.ts`](src/endpoints.ts)
 (`TEST` → `openapi-test.alchemypay.org`, `PRODUCTION` → `openapi.alchemypay.org`).
 Pass `api.appId` + `api.appSecret` to enable [API Sign](https://alchemypay.readme.io/docs/api-sign)
-(`appId` / `timestamp` / `sign` headers). Pass `environment` on `init`; omit `api` URLs unless you need a proxy override.
+(`appid` / `timestamp` / `sign` headers). Pass `environment` on `init`; omit `api` URLs unless you need a proxy override.
 Init `environment` also drives Google Pay and Checkout Risk (sandbox vs prod).
 In Google Pay **TEST**, SDK fills defaults when create-order omits them:
 `merchantId=12345678901234567890`, `merchantName=Example Merchant`,
@@ -90,7 +100,7 @@ Apple Pay merchant validation URL is built in; if create-order returns
 `validateMerchantUrl`, that value takes precedence.
 
 The create-order response selects Google Pay or Apple Pay and supplies wallet
-`params` and `risk`. Risk collection starts **immediately after create-order** for
+`paymentScript` and `risk`. Risk collection starts **immediately after create-order** for
 `enabled` vendors; the pay request awaits or reuses that result.
 
 Secondary actions (`webUrl` / 3DS / method / `s3dsUrl`) default to **callback-only**
@@ -115,7 +125,7 @@ frames / navigate.
   method: 'googlePay',
   token: paymentData.paymentMethodData.tokenizationData.token,
   paymentMethodData, billingAddress, email, raw,
-  risk, orderId, paymentResponse, order
+  risk, orderNo, paymentResponse, order
 }
 
 // Apple Pay
@@ -123,7 +133,7 @@ frames / navigate.
   method: 'applePay',
   token: event.payment.token,
   billingContact, shippingContact, raw,
-  risk, orderId, paymentResponse, order
+  risk, orderNo, paymentResponse, order
 }
 ```
 
@@ -134,7 +144,7 @@ handles the client half:
 
 1. On button tap the SDK creates an `ApplePaySession` and calls `begin()`.
 2. In `onvalidatemerchant`, the SDK `POST`s to the validate-merchant URL with
-   `{ orderId, validationURL }` (unified API headers).
+   `{ orderNo, validationURL }` (unified API headers).
 3. Your server returns `{ returnCode: '0000', data: merchantSession }`.
 4. The SDK extracts `data` and calls `completeMerchantValidation(merchantSession)`.
 

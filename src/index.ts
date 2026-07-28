@@ -63,7 +63,7 @@ export type {
   PaymentActionMode
 } from './types.js'
 
-export { PayApiError } from './api.js'
+export { PayApiError, normalizeCreateOrderResponse } from './api.js'
 export { describePayResponse, describeS3ds } from './actions.js'
 export { getApiEndpoints, resolvePayApiConfig, resolveEnvironment } from './endpoints.js'
 export {
@@ -79,13 +79,31 @@ function validateConfig(config: PaySdkConfig): void {
   if (!config.container) {
     throw new Error('config.container is required')
   }
-  if (
-    !config.order ||
-    config.order.amount == null ||
-    !config.order.currency ||
-    !config.order.countryCode
-  ) {
-    throw new Error('order.amount, order.currency and order.countryCode are required')
+  const order = config.order
+  if (!order || typeof order !== 'object') {
+    throw new Error('config.order is required')
+  }
+  const required: Array<keyof typeof order> = [
+    'side',
+    'merchantOrderNo',
+    'amount',
+    'fiatCurrency',
+    'cryptoCurrency',
+    'orderType',
+    'network',
+    'payWayCode',
+    'redirectUrl',
+    'callbackUrl',
+    'clientIp'
+  ]
+  const missing = required.filter((key) => {
+    const value = order[key]
+    return value == null || value === ''
+  })
+  if (missing.length) {
+    throw new Error(
+      `order.${missing.join(', order.')} ${missing.length > 1 ? 'are' : 'is'} required`
+    )
   }
 }
 
@@ -126,8 +144,9 @@ function runtimeConfigFromOrder(
   }
 
   if (order.method === 'googlePay') {
-    const params = environment === 'TEST' ? applyGooglePayTestDefaults(order.params) : order.params
-    const card = params.allowedPaymentMethods[0]
+    const paymentScript =
+      environment === 'TEST' ? applyGooglePayTestDefaults(order.paymentScript) : order.paymentScript
+    const card = paymentScript.allowedPaymentMethods[0]
     if (!card?.tokenizationSpecification) {
       throw new Error('Create order response is missing Google Pay tokenizationSpecification')
     }
@@ -136,19 +155,19 @@ function runtimeConfigFromOrder(
       ...common,
       method: 'googlePay',
       payment: {
-        amount: params.transactionInfo.totalPrice,
-        currency: params.transactionInfo.currencyCode,
-        countryCode: params.transactionInfo.countryCode || config.order.countryCode
+        amount: paymentScript.transactionInfo.totalPrice,
+        currency: paymentScript.transactionInfo.currencyCode,
+        countryCode: paymentScript.transactionInfo.countryCode || config.order.alpha2 || ''
       },
       billingAddressRequired: parameters.billingAddressRequired === true,
       googlePay: {
-        merchantId: params.merchantInfo.merchantId,
-        merchantName: params.merchantInfo.merchantName,
+        merchantId: paymentScript.merchantInfo.merchantId,
+        merchantName: paymentScript.merchantInfo.merchantName,
         allowedAuthMethods: parameters.allowedAuthMethods,
         allowedCardNetworks: parameters.allowedCardNetworks,
         tokenizationSpecification: card.tokenizationSpecification,
         paymentDataRequest: {
-          ...params,
+          ...paymentScript,
           callbackIntents: ['PAYMENT_AUTHORIZATION']
         }
       }
@@ -156,24 +175,25 @@ function runtimeConfigFromOrder(
   }
 
   const validateMerchantUrl = api.getValidateMerchantUrl(order.validateMerchantUrl)
+  const paymentScript = order.paymentScript
   return {
     ...common,
     method: 'applePay',
     payment: {
-      amount: order.params.total.amount,
-      currency: order.params.currencyCode,
-      countryCode: order.params.countryCode
+      amount: paymentScript.total.amount,
+      currency: paymentScript.currencyCode,
+      countryCode: paymentScript.countryCode
     },
-    billingAddressRequired: (order.params.requiredBillingContactFields?.length || 0) > 0,
+    billingAddressRequired: (paymentScript.requiredBillingContactFields?.length || 0) > 0,
     applePay: {
       validateMerchantUrl,
       validateMerchant: (validationURL) =>
-        api.validateMerchant(validateMerchantUrl, order.orderId, validationURL),
-      merchantCapabilities: order.params.merchantCapabilities,
-      supportedNetworks: order.params.supportedNetworks,
-      totalLabel: order.params.total.label,
-      totalType: order.params.total.type,
-      paymentRequest: order.params
+        api.validateMerchant(validateMerchantUrl, order.orderNo, validationURL),
+      merchantCapabilities: paymentScript.merchantCapabilities,
+      supportedNetworks: paymentScript.supportedNetworks,
+      totalLabel: paymentScript.total.label,
+      totalType: paymentScript.total.type,
+      paymentRequest: paymentScript
     }
   }
 }
@@ -333,7 +353,7 @@ class PaySdk implements PaySdkInstance {
     if (walletResult.method === 'googlePay') {
       if (!walletResult.token) throw new Error('Google Pay token is missing')
       return {
-        orderId: this.order.orderId,
+        orderNo: this.order.orderNo,
         encryptedData: walletResult.token,
         billingAddress: normalizeGoogleBillingAddress(
           walletResult.billingAddress,
@@ -345,7 +365,7 @@ class PaySdk implements PaySdkInstance {
 
     if (!walletResult.token) throw new Error('Apple Pay token is missing')
     return {
-      orderId: this.order.orderId,
+      orderNo: this.order.orderNo,
       encryptedData: normalizeAppleToken(walletResult.token),
       billingAddress: normalizeAppleBillingAddress(walletResult.billingContact),
       risk: walletResult.risk
@@ -373,7 +393,7 @@ class PaySdk implements PaySdkInstance {
       }
 
       try {
-        const current = await this.api.queryOrder(this.order.orderId)
+        const current = await this.api.queryOrder(this.order.orderNo)
         if (this.destroyed || generation !== this.pollGeneration) return
         consecutiveTransientErrors = 0
         this.config.onStatusChange?.(current)
@@ -442,7 +462,7 @@ class PaySdk implements PaySdkInstance {
     this.paymentInFlight = false
     const result = {
       ...walletResult,
-      orderId: this.order?.orderId,
+      orderNo: this.order?.orderNo,
       paymentResponse,
       order
     }
@@ -460,7 +480,7 @@ class PaySdk implements PaySdkInstance {
     this.paymentInFlight = false
     this.config.onComplete?.({
       ...walletResult,
-      orderId: this.order?.orderId,
+      orderNo: this.order?.orderNo,
       paymentResponse,
       order
     })
