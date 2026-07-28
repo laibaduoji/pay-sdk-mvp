@@ -155,10 +155,13 @@ SDK 固定使用 `callbackIntents: ['PAYMENT_AUTHORIZATION']`，并注册
 ### 请求
 
 ```ts
-{ orderNo?: string; validationURL: string }
+{
+  orderNo: string
+  validationURL: string
+}
 ```
 
-`validationURL` 为 Apple `onvalidatemerchant` 原样转发。
+两字段均必填。`orderNo` 为创建订单返回的订单号；`validationURL` 为 Apple `onvalidatemerchant` 原样转发。
 
 ### 响应
 

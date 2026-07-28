@@ -338,9 +338,11 @@ TEST 环境缺省时 SDK 会补齐；PRODUCTION 请务必下发真实商户信�
 
 ### 5.1 请求 `ValidateMerchantRequest`
 
+对齐 Apifox SDK 目录 `/open/api/v4/merchant/domain/verify`：两字段均必填。
+
 | 字段            | 类型     | 必填 | 说明                                |
 | --------------- | -------- | ---- | ----------------------------------- |
-| `orderNo`       | `string` | 否   | 建议带上，便于审计                  |
+| `orderNo`       | `string` | 是   | 创建订单返回的订单号                |
 | `validationURL` | `string` | 是   | Apple `onvalidatemerchant` 原样转发 |
 
 ```json
@@ -352,7 +354,7 @@ TEST 环境缺省时 SDK 会补齐；PRODUCTION 请务必下发真实商户信�
 
 ### 5.2 响应
 
-统一壳；`returnCode === '0000'` 时 `**data` 即为 Apple opaque `merchantSession**`（字段对商户不透明，原样返回即可）。
+统一壳；`returnCode === '0000'` 时 **`data` 即为 Apple opaque `merchantSession`**（字段对商户不透明，原样返回即可）。常见键示意：
 
 ```json
 {
@@ -361,14 +363,17 @@ TEST 环境缺省时 SDK 会补齐；PRODUCTION 请务必下发真实商户信�
   "returnMsg": "SUCCESS",
   "extend": "",
   "data": {
-    "epochTimestamp": 1620000000000,
-    "expiresAt": 1620000300000,
-    "merchantSessionIdentifier": "...",
-    "nonce": "...",
-    "merchantIdentifier": "...",
-    "domainName": "pay.example.com",
-    "displayName": "Example Merchant",
-    "signature": "..."
+    "epochTimestamp": 1728461305683,
+    "expiresAt": 1728464905683,
+    "merchantSessionIdentifier": "SSH05B54D411631466D9542B93941E05E23_…",
+    "nonce": "bbb64401",
+    "merchantIdentifier": "A0A833BAC15813A005A54FE28FE9E236A0594BFEDF0EDCD7A4DCEB278A2F0CAE",
+    "domainName": "ramp.alchemypay.org",
+    "displayName": "rampservice",
+    "signature": "308006092a864886f70d010702a080…",
+    "operationalAnalyticsIdentifier": "rampservice:A0A833…",
+    "retries": 0,
+    "pspId": "A0A833BAC15813A005A54FE28FE9E236A0594BFEDF0EDCD7A4DCEB278A2F0CAE"
   },
   "traceId": "68b11d63f919cca7adbb4bbe57939df9"
 }

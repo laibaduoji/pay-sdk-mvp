@@ -172,15 +172,19 @@
   }
 
   function validateMerchant() {
+    const now = Date.now()
     return envelope({
-      epochTimestamp: Date.now(),
-      expiresAt: Date.now() + 300000,
+      epochTimestamp: now,
+      expiresAt: now + 300000,
       merchantSessionIdentifier: 'demo-merchant-session',
       nonce: 'demo-nonce',
       merchantIdentifier: 'merchant.demo',
       domainName: location.hostname,
       displayName: 'Demo Merchant',
-      signature: 'demo-signature'
+      signature: 'demo-signature',
+      operationalAnalyticsIdentifier: 'Demo Merchant:merchant.demo',
+      retries: 0,
+      pspId: 'merchant.demo'
     })
   }
 

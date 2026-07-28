@@ -144,7 +144,7 @@ handles the client half:
 
 1. On button tap the SDK creates an `ApplePaySession` and calls `begin()`.
 2. In `onvalidatemerchant`, the SDK `POST`s to the validate-merchant URL with
-   `{ orderNo, validationURL }` (unified API headers).
+   required `{ orderNo, validationURL }` (and signed headers when configured).
 3. Your server returns `{ returnCode: '0000', data: merchantSession }`.
 4. The SDK extracts `data` and calls `completeMerchantValidation(merchantSession)`.
 
