@@ -1,6 +1,6 @@
 /**
  * 接口 1 — 创建订单
- * POST /v1/pay/orders（路径建议，以实际网关为准）
+ * POST /open/api/v4/merchant/order/create（路径以 SDK `src/endpoints.ts` 为准）
  *
  * 响应 data 含 params（Google / Apple 原生唤起参数）与 risk。
  * environment 可选，不传默认 'PRODUCTION'。
@@ -311,7 +311,7 @@ export const createOrderResponseApplePay: CreateOrderResponseApplePay = {
   environment: 'TEST',
   method: 'applePay',
   params: applePayParams,
-  validateMerchantUrl: 'https://api-test.alchemytech.cc/pay/apple/domainName/verify',
+  validateMerchantUrl: 'https://openapi-test.alchemypay.org/open/api/v4/merchant/domain/verify',
   risk: riskCollectAll
 }
 

@@ -10,8 +10,8 @@
 | 3   | [`pay.ts`](./pay.ts)                             | **POST** | `PayRequest` → `PayResponse`                           | 钱包授权后；风控宜在创建订单后预采、支付时复用 |
 | 4   | [`query-order.ts`](./query-order.ts)             | **GET**  | `QueryOrderRequest` → `QueryOrderResponse`             | **仅**接口 3 未直接成功时                      |
 
-> 仅接口 4 为 GET（`GET /v1/pay/orders/{orderId}`）；其余均为 POST。  
-> 路径为建议值，以实际网关为准。入口：`import … from './pay-api'`（[`index.ts`](./index.ts)）。
+> 仅接口 4 为 GET（`GET /open/api/v4/merchant/order/detail?orderNo=`）；其余均为 POST。  
+> 路径见 SDK `src/endpoints.ts`。入口：`import … from './pay-api'`（[`index.ts`](./index.ts)）。
 
 ---
 
@@ -96,7 +96,7 @@ sequenceDiagram
 
 ## 3. 接口 1 — 创建订单
 
-**POST** `/v1/pay/orders`
+**POST** `/open/api/v4/merchant/order/create`
 
 ### 请求（暂冻结字段）
 
@@ -179,7 +179,7 @@ SDK 固定使用 `callbackIntents: ['PAYMENT_AUTHORIZATION']`，并注册
 
 ## 5. 接口 3 — 支付
 
-**POST** `/v1/pay/payments`
+**POST** `/open/api/v4/merchant/alchemy-pay`
 
 ### 请求
 
@@ -216,7 +216,7 @@ SDK 固定使用 `callbackIntents: ['PAYMENT_AUTHORIZATION']`，并注册
 
 ## 6. 接口 4 — 查询订单状态
 
-**GET** `/v1/pay/orders/{orderId}`
+**GET** `/open/api/v4/merchant/order/detail?orderNo=`
 
 ### 响应 `data`
 

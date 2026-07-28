@@ -1,6 +1,6 @@
 /**
  * 接口 3 — 支付
- * POST /v1/pay/payments
+ * POST /open/api/v4/merchant/alchemy-pay
  *
  * 先看外层 returnCode==='0000'，再看 data 里是否有二次动作字段：
  * 1) 无 webUrl / MD+JWT+action / threeDSMethodData+methodUrl → 成功结束，不调接口 4

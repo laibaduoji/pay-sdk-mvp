@@ -192,10 +192,14 @@ export interface PayApiConfig {
   validateMerchantUrl: string
   payUrl: string
   /**
-   * 查询地址。支持 `/orders/{orderId}` 模板；无占位符时自动追加
-   * `/{encodeURIComponent(orderId)}`。
+   * 订单详情 base URL（无 query）。
+   * SDK 自动追加 `?orderNo=`（值为创建订单返回的 orderId）。
    */
   queryOrderUrl: string
+  /** AlchemyPay 合作方 appId；与 appSecret 同时存在时自动签名。 */
+  appId?: string
+  /** AlchemyPay appSecret；仅用于 HMAC，勿在文档外泄露。 */
+  appSecret?: string
   headers?:
     Record<string, string> | (() => Record<string, string> | Promise<Record<string, string>>)
   /**

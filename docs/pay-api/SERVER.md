@@ -7,38 +7,41 @@
 
 ## 1. 接口一览
 
-| #   | 方法     | 路径（建议）                             | 说明                           |
-| --- | -------- | ---------------------------------------- | ------------------------------ |
-| 1   | **POST** | `/v1/pay/orders`                         | 创建订单，返回钱包 params/risk |
-| 2   | **POST** | `/pay/apple/domainName/verify`（可覆盖） | 仅 Apple Pay 域名校验          |
-| 3   | **POST** | `/v1/pay/payments`                       | 提交钱包 token + 风控          |
-| 4   | **GET**  | `/v1/pay/orders/{orderId}`               | 二次动作后轮询订单状态         |
+| #   | 方法     | 路径                                  | 说明                           |
+| --- | -------- | ------------------------------------- | ------------------------------ |
+| 1   | **POST** | `/open/api/v4/merchant/order/create`  | 创建订单，返回钱包 params/risk |
+| 2   | **POST** | `/open/api/v4/merchant/domain/verify` | 仅 Apple Pay 域名校验          |
+| 3   | **POST** | `/open/api/v4/merchant/alchemy-pay`   | 提交钱包 token + 风控          |
+| 4   | **GET**  | `/open/api/v4/merchant/order/detail`  | 二次动作后轮询订单状态         |
 
-仅接口 4 为 GET；其余均为 POST，`Content-Type: application/json`。
+仅接口 4 为 GET，query 参数 **`orderNo`**（值为创建订单返回的订单号）；其余均为 POST，`Content-Type: application/json`。
 
 ### 公共请求头
 
-| Header           | 说明                                                                     |
-| ---------------- | ------------------------------------------------------------------------ |
-| `Content-Type`   | POST 时为 `application/json`                                             |
-| `fingerprint-id` | SDK 在 `init` 时用内置默认采集的 Fingerprint `visitorId`；失败时可能不传 |
-| （商户自定义）   | 如 `Authorization`，由商户在 SDK `api.headers` 中配置                    |
+| Header           | 说明                                                                                |
+| ---------------- | ----------------------------------------------------------------------------------- |
+| `Content-Type`   | POST 时为 `application/json`                                                        |
+| `appId`          | 合作方标识；SDK 在配置了 `api.appId` + `api.appSecret` 时自动带上                   |
+| `timestamp`      | 十三位毫秒时间戳；与签名串一致                                                      |
+| `sign`           | HMAC-SHA256 + Base64；算法见 [API Sign](https://alchemypay.readme.io/docs/api-sign) |
+| `fingerprint-id` | SDK 在 `init` 时用内置默认采集的 Fingerprint `visitorId`；失败时可能不传            |
+| （其它自定义）   | 可由商户在 SDK `api.headers` 中追加                                                 |
 
 Fingerprint **不**出现在创建订单响应或支付 body 中，服务端一律从请求头读取。
 
 ### 环境根域名（SDK 默认）
 
-| 环境                 | API 根域名                        |
-| -------------------- | --------------------------------- |
-| `TEST`               | `https://api-test.alchemytech.cc` |
-| `PRODUCTION`（默认） | `https://api.alchemypay.org`      |
+| 环境                 | API 根域名                            |
+| -------------------- | ------------------------------------- |
+| `TEST`               | `https://openapi-test.alchemypay.org` |
+| `PRODUCTION`（默认） | `https://openapi.alchemypay.org`      |
 
 完整 URL = 根域名 + 上表路径。商户也可在 SDK `init.api` 中覆盖个别地址。
 
 Apple 域名校验默认：
 
-- TEST：`https://api-test.alchemytech.cc/pay/apple/domainName/verify`
-- PRODUCTION：`https://api.alchemypay.org/pay/apple/domainName/verify`
+- TEST：`https://openapi-test.alchemypay.org/open/api/v4/merchant/domain/verify`
+- PRODUCTION：`https://openapi.alchemypay.org/open/api/v4/merchant/domain/verify`
 
 创建订单若返回 `validateMerchantUrl`，SDK 优先用响应值。
 
@@ -124,7 +127,7 @@ sequenceDiagram
 
 ## 4. 接口 1 — 创建订单
 
-**POST** `/v1/pay/orders`
+**POST** `/open/api/v4/merchant/order/create`
 
 SDK 在 `ready()` 时调用；用响应渲染 Google / Apple 按钮，并按 `risk.*.enabled` **立即预采集**风控。
 
@@ -265,7 +268,7 @@ TEST 环境缺省时 SDK 会补齐；PRODUCTION 请务必下发真实商户信�
     "orderId": "ord_xxx",
     "environment": "TEST",
     "method": "applePay",
-    "validateMerchantUrl": "https://api-test.alchemytech.cc/pay/apple/domainName/verify",
+    "validateMerchantUrl": "https://openapi-test.alchemypay.org/open/api/v4/merchant/domain/verify",
     "params": {
       "countryCode": "US",
       "currencyCode": "USD",
@@ -353,7 +356,7 @@ TEST 环境缺省时 SDK 会补齐；PRODUCTION 请务必下发真实商户信�
 
 ## 6. 接口 3 — 支付
 
-**POST** `/v1/pay/payments`
+**POST** `/open/api/v4/merchant/alchemy-pay`
 
 钱包授权完成后调用。先看外层 `returnCode`，再看 `data` 是否含二次动作字段。
 
@@ -501,9 +504,9 @@ Fingerprint `visitorId` 仅在请求头 `fingerprint-id`，不在 body。
 
 ## 7. 接口 4 — 查询订单状态
 
-**GET** `/v1/pay/orders/{orderId}`
+**GET** `/open/api/v4/merchant/order/detail?orderNo={orderNo}`
 
-**仅**接口 3 进入二次动作后需要。SDK 默认约每 2s 轮询，最长约 5 分钟。
+**仅**接口 3 进入二次动作后需要。SDK 默认约每 2s 轮询，最长约 5 分钟。Query 参数名为 `orderNo`（SDK 传入创建订单返回的订单号）。
 
 ### 7.1 响应 `data` — `QueryOrderResponse`
 

@@ -45,7 +45,8 @@ npm run format     # prettier write
     },
     // optional — defaults from src/endpoints.ts by environment
     api: {
-      headers: () => ({ Authorization: `Bearer ${getAccessToken()}` }),
+      appId: 'YOUR_APP_ID',
+      appSecret: 'YOUR_APP_SECRET',
       pollIntervalMs: 2000,
       pollTimeoutMs: 300000
     },
@@ -78,8 +79,9 @@ npm run format     # prettier write
 ```
 
 Built-in API hosts live in [`src/endpoints.ts`](src/endpoints.ts)
-(`TEST` → `api-test.alchemytech.cc`, `PRODUCTION` → `api.alchemypay.org`).
-Pass `environment` on `init`; omit `api` URLs unless you need a proxy override.
+(`TEST` → `openapi-test.alchemypay.org`, `PRODUCTION` → `openapi.alchemypay.org`).
+Pass `api.appId` + `api.appSecret` to enable [API Sign](https://alchemypay.readme.io/docs/api-sign)
+(`appId` / `timestamp` / `sign` headers). Pass `environment` on `init`; omit `api` URLs unless you need a proxy override.
 Init `environment` also drives Google Pay and Checkout Risk (sandbox vs prod).
 In Google Pay **TEST**, SDK fills defaults when create-order omits them:
 `merchantId=12345678901234567890`, `merchantName=Example Merchant`,

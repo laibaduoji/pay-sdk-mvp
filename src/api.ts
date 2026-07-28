@@ -7,6 +7,7 @@ import type {
   PayResponse,
   QueryOrderResponse
 } from './types.js'
+import { apiSign } from './sign.js'
 
 const SUCCESS_RETURN_CODE = '0000'
 
@@ -60,20 +61,29 @@ export class PayApiClient {
   }
 
   queryOrder(orderId: string): Promise<QueryOrderResponse> {
-    const encoded = encodeURIComponent(orderId)
-    const template = this.config.queryOrderUrl
-    const url = template.includes('{orderId}')
-      ? template.replace('{orderId}', encoded)
-      : `${template.replace(/\/$/, '')}/${encoded}`
+    const base = this.config.queryOrderUrl.replace(/\/$/, '')
+    const url = `${base}?orderNo=${encodeURIComponent(orderId)}`
     return this.request<QueryOrderResponse>(url, 'GET')
   }
 
-  private async headers(includeContentType: boolean): Promise<Record<string, string>> {
+  private async resolveHeaders(
+    url: string,
+    method: 'GET' | 'POST',
+    bodyString: string
+  ): Promise<Record<string, string>> {
     const configured =
       typeof this.config.headers === 'function' ? await this.config.headers() : this.config.headers
-    const headers: Record<string, string> = includeContentType
-      ? { 'Content-Type': 'application/json', ...configured }
-      : { ...configured }
+    const headers: Record<string, string> =
+      bodyString !== '' ? { 'Content-Type': 'application/json', ...configured } : { ...configured }
+
+    const { appId, appSecret } = this.config
+    if (appId && appSecret) {
+      const timestamp = String(Date.now())
+      const sign = await apiSign(timestamp, method, url, bodyString, appSecret)
+      headers.appId = appId
+      headers.timestamp = timestamp
+      headers.sign = sign
+    }
 
     if (this.config.getFingerprintId) {
       const fingerprintId = await this.config.getFingerprintId()
@@ -84,12 +94,13 @@ export class PayApiClient {
   }
 
   private async request<T>(url: string, method: 'GET' | 'POST', body?: unknown): Promise<T> {
+    const bodyString = body === undefined ? '' : JSON.stringify(body)
     let response: Response
     try {
       response = await this.fetcher(url, {
         method,
-        headers: await this.headers(body !== undefined),
-        body: body === undefined ? undefined : JSON.stringify(body)
+        headers: await this.resolveHeaders(url, method, bodyString),
+        body: bodyString === '' ? undefined : bodyString
       })
     } catch (error) {
       throw error instanceof Error ? error : new PayApiError('Pay API network request failed')

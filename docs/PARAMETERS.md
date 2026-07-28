@@ -35,7 +35,8 @@ const sdk = PaySdk.init({
   order: { amount: '10.00', currency: 'USD', countryCode: 'US' },
   // api 可选：默认按 environment 取内置地址（src/endpoints.ts）
   api: {
-    headers: () => ({ Authorization: `Bearer ${getAccessToken()}` }),
+    appId: 'YOUR_APP_ID',
+    appSecret: 'YOUR_APP_SECRET',
     pollIntervalMs: 2000,
     pollTimeoutMs: 300000
   },
@@ -56,13 +57,15 @@ sdk.ready().then(() => sdk.mount())
 
 内置地址（见 [`src/endpoints.ts`](../src/endpoints.ts)）：
 
-| 环境                 | API 根域名                        |
-| -------------------- | --------------------------------- |
-| `TEST`               | `https://api-test.alchemytech.cc` |
-| `PRODUCTION`（默认） | `https://api.alchemypay.org`      |
+| 环境                 | API 根域名                            |
+| -------------------- | ------------------------------------- |
+| `TEST`               | `https://openapi-test.alchemypay.org` |
+| `PRODUCTION`（默认） | `https://openapi.alchemypay.org`      |
 
-路径：`/v1/pay/orders`、`/pay/apple/domainName/verify`（Apple Pay 域名校验）、
-`/v1/pay/payments`、`/v1/pay/orders/{orderId}`。本地代理时可在 `api` 里覆盖 URL。
+路径：`/open/api/v4/merchant/order/create`、`/open/api/v4/merchant/domain/verify`、
+`/open/api/v4/merchant/alchemy-pay`、`/open/api/v4/merchant/order/detail?orderNo=`。
+配置 `api.appId` + `api.appSecret` 后，SDK 按 [API Sign](https://alchemypay.readme.io/docs/api-sign) 自动签名。
+本地代理时可在 `api` 里覆盖 URL。
 创建订单若返回 `validateMerchantUrl`，优先使用响应值；未返回则使用环境内置地址。
 
 Google Pay **TEST** 环境默认（创建订单未下发时 SDK 补齐，有值则保留）：

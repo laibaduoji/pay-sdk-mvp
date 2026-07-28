@@ -37,7 +37,7 @@
   → 轮询到成功/失败：onSuccess 或 onError / onComplete
 ```
 
-商户 **不必** 自己调创建订单 / 支付 / 查询接口；只需提供金额等业务参数与鉴权 headers（如需要）。  
+商户 **不必** 自己调创建订单 / 支付 / 查询接口；只需提供金额等业务参数，并配置 `api.appId` + `api.appSecret`（SDK 按 [API Sign](https://alchemypay.readme.io/docs/api-sign) 自动签名）。  
 钱包类型、令牌化、Forter/Checkout/WorldPay 开关由**创建订单接口响应**决定。  
 **Fingerprint** 由 SDK 在 `init` 时用内置默认自动采集，并通过请求头 `fingerprint-id` 带到所有支付 API。
 
@@ -57,11 +57,6 @@
     <div id="pay-container"></div>
     <script src="https://你的CDN域名/pay-sdk.js"></script>
     <script>
-      function getAccessToken() {
-        // 商户自行实现：返回调用支付 API 所需的鉴权 token
-        return '...'
-      }
-
       const sdk = PaySdk.init({
         container: '#pay-container',
         environment: 'TEST', // 联调用 TEST；上线用 PRODUCTION 或不传（默认生产）
@@ -71,10 +66,10 @@
           countryCode: 'US'
         },
         api: {
-          // 可选：鉴权等 headers；接口地址由 SDK 按 environment 内置
-          headers: () => ({
-            Authorization: 'Bearer ' + getAccessToken()
-          })
+          // 配置后 SDK 按 API Sign 自动带 appId / timestamp / sign
+          // https://alchemypay.readme.io/docs/api-sign
+          appId: 'YOUR_APP_ID',
+          appSecret: 'YOUR_APP_SECRET'
         },
         onSuccess(result) {
           console.log('支付成功', result.orderId, result.order && result.order.status)
@@ -112,22 +107,22 @@
 
 ## 4. 初始化参数
 
-| 参数              | 类型                     | 必传 | 默认值         | 说明                                                |
-| ----------------- | ------------------------ | :--: | -------------- | --------------------------------------------------- |
-| `container`       | `string \| HTMLElement`  |  是  | —              | 按钮挂载节点，如 `'#pay-container'`                 |
-| `order`           | `object`                 |  是  | —              | 见下表                                              |
-| `environment`     | `'TEST' \| 'PRODUCTION'` |  否  | `'PRODUCTION'` | 影响 API 地址、Google Pay、Checkout 风控环境        |
-| `api`             | `object`                 |  否  | 按环境内置     | headers / 轮询等，见下表；接口地址由 SDK 按环境内置 |
-| `actionMode`      | `'callback' \| 'auto'`   |  否  | `'callback'`   | 二次动作是否自动打开，见第 6 节                     |
-| `openAction`      | `(action) => boolean?`   |  否  | —              | `auto` 时自定义打开（可接 JS Bridge）               |
-| `onOrderCreated`  | `(order) => void`        |  否  | —              | 创建订单成功                                        |
-| `onRiskCollected` | `(info) => void`         |  否  | —              | Fingerprint / 订单风控预采集结束                    |
-| `onStatusChange`  | `(order) => void`        |  否  | —              | 每次查询订单成功                                    |
-| `onAction`        | `(action) => void`       |  否  | —              | 需要打开 webUrl / 3DS 等时                          |
-| `onSuccess`       | `(result) => void`       |  否  | —              | 支付直接成功，或查询到 `succeeded`                  |
-| `onComplete`      | `(result) => void`       |  否  | —              | 编排结束（含 `s3dsComplete` 但状态未必终态）        |
-| `onError`         | `(error) => void`        |  否  | —              | API / 钱包 / 超时 / 失败                            |
-| `onCancel`        | `() => void`             |  否  | —              | 用户关闭钱包 sheet                                  |
+| 参数              | 类型                     | 必传 | 默认值         | 说明                                                            |
+| ----------------- | ------------------------ | :--: | -------------- | --------------------------------------------------------------- |
+| `container`       | `string \| HTMLElement`  |  是  | —              | 按钮挂载节点，如 `'#pay-container'`                             |
+| `order`           | `object`                 |  是  | —              | 见下表                                                          |
+| `environment`     | `'TEST' \| 'PRODUCTION'` |  否  | `'PRODUCTION'` | 影响 API 地址、Google Pay、Checkout 风控环境                    |
+| `api`             | `object`                 |  否  | 按环境内置     | appId / appSecret / headers / 轮询等；接口地址由 SDK 按环境内置 |
+| `actionMode`      | `'callback' \| 'auto'`   |  否  | `'callback'`   | 二次动作是否自动打开，见第 6 节                                 |
+| `openAction`      | `(action) => boolean?`   |  否  | —              | `auto` 时自定义打开（可接 JS Bridge）                           |
+| `onOrderCreated`  | `(order) => void`        |  否  | —              | 创建订单成功                                                    |
+| `onRiskCollected` | `(info) => void`         |  否  | —              | Fingerprint / 订单风控预采集结束                                |
+| `onStatusChange`  | `(order) => void`        |  否  | —              | 每次查询订单成功                                                |
+| `onAction`        | `(action) => void`       |  否  | —              | 需要打开 webUrl / 3DS 等时                                      |
+| `onSuccess`       | `(result) => void`       |  否  | —              | 支付直接成功，或查询到 `succeeded`                              |
+| `onComplete`      | `(result) => void`       |  否  | —              | 编排结束（含 `s3dsComplete` 但状态未必终态）                    |
+| `onError`         | `(error) => void`        |  否  | —              | API / 钱包 / 超时 / 失败                                        |
+| `onCancel`        | `() => void`             |  否  | —              | 用户关闭钱包 sheet                                              |
 
 ### `order`
 
@@ -141,25 +136,27 @@
 
 接口地址由 SDK 按 `environment` 内置，商户无需配置 URL。
 
-| 字段             | 类型                                  | 默认     | 说明                               |
-| ---------------- | ------------------------------------- | -------- | ---------------------------------- |
-| `headers`        | `object` 或 `() => object \| Promise` | 无       | 追加到接口请求（如 Authorization） |
-| `pollIntervalMs` | `number`                              | `2000`   | 二次动作后轮询间隔（毫秒）         |
-| `pollTimeoutMs`  | `number`                              | `300000` | 轮询最长等待（默认 5 分钟）        |
+| 字段             | 类型                                  | 默认     | 说明                                                                       |
+| ---------------- | ------------------------------------- | -------- | -------------------------------------------------------------------------- |
+| `appId`          | `string`                              | 无       | 与 `appSecret` 同时配置时，SDK 自动签名并带 `appId` / `timestamp` / `sign` |
+| `appSecret`      | `string`                              | 无       | HMAC 密钥；算法见 [API Sign](https://alchemypay.readme.io/docs/api-sign)   |
+| `headers`        | `object` 或 `() => object \| Promise` | 无       | 追加其它自定义头（签名头由 SDK 写入并覆盖同名键）                          |
+| `pollIntervalMs` | `number`                              | `2000`   | 二次动作后轮询间隔（毫秒）                                                 |
+| `pollTimeoutMs`  | `number`                              | `300000` | 轮询最长等待（默认 5 分钟）                                                |
 
 ### SDK 内置 API 地址（只读，按环境自动选用）
 
-| 环境                 | 根域名                            |
-| -------------------- | --------------------------------- |
-| `TEST`               | `https://api-test.alchemytech.cc` |
-| `PRODUCTION`（默认） | `https://api.alchemypay.org`      |
+| 环境                 | 根域名                                |
+| -------------------- | ------------------------------------- |
+| `TEST`               | `https://openapi-test.alchemypay.org` |
+| `PRODUCTION`（默认） | `https://openapi.alchemypay.org`      |
 
-| 用途           | 路径                                    |
-| -------------- | --------------------------------------- |
-| 创建订单       | `POST {根}/v1/pay/orders`               |
-| 支付           | `POST {根}/v1/pay/payments`             |
-| 查询订单       | `GET {根}/v1/pay/orders/{orderId}`      |
-| Apple 域名校验 | `POST {根}/pay/apple/domainName/verify` |
+| 用途           | 路径                                                  |
+| -------------- | ----------------------------------------------------- |
+| 创建订单       | `POST {根}/open/api/v4/merchant/order/create`         |
+| 支付           | `POST {根}/open/api/v4/merchant/alchemy-pay`          |
+| 查询订单       | `GET {根}/open/api/v4/merchant/order/detail?orderNo=` |
+| Apple 域名校验 | `POST {根}/open/api/v4/merchant/domain/verify`        |
 
 创建订单若返回 `validateMerchantUrl`，SDK 会优先使用响应值。
 
@@ -340,7 +337,7 @@ SDK 内置打开行为：
 - [ ] `container` 存在且可见
 - [ ] `order.amount / currency / countryCode` 正确
 - [ ] 联调使用 `environment: 'TEST'`
-- [ ] 若 API 需鉴权，配置 `api.headers`
+- [ ] 配置 `api.appId` + `api.appSecret`（SDK 内置 API Sign）
 - [ ] 实现 `onSuccess` / `onError` / `onCancel`
 - [ ] WebView 场景实现 `onAction`（或 `auto` + Bridge），避免二次动作无响应
 - [ ] 离开支付页时调用 `sdk.destroy()`
@@ -355,7 +352,10 @@ SDK 内置打开行为：
 A：否。默认 `callback` 模式只回调 `onAction`。只有 App 要接管开页/权限时才需要 Bridge。
 
 **Q：要自己调创建订单、支付接口吗？**  
-A：否。SDK 按环境使用内置地址调用；商户主要传 `order` 与可选 `headers`。
+A：否。SDK 按环境使用内置地址调用；商户主要传 `order` 与 `api.appId` / `api.appSecret`（可选 `headers`）。
+
+**Q：签名怎么做？**  
+A：配置 `appId` + `appSecret` 后，SDK 按 [API Sign](https://alchemypay.readme.io/docs/api-sign) 自动生成 `timestamp` / `sign` 并写入请求头。
 
 **Q：npm 安装还是 script？**  
 A：商户 H5 / WebView 用 **script**。当前交付形态是单文件 `pay-sdk.js`。

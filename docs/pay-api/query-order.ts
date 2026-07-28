@@ -1,6 +1,6 @@
 /**
  * 接口 4 — 查询订单状态
- * GET /v1/pay/orders/{orderId}（仅本接口为 GET；接口 1–3 均为 POST）
+ * GET /open/api/v4/merchant/order/detail?orderNo=（仅本接口为 GET；接口 1–3 均为 POST）
  *
  * 何时需要：支付接口进入 requires_action（webUrl / 3DS / shift4）之后。
  * 建议间隔 2s；停止条件见下方轮询说明。

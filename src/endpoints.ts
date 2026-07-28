@@ -2,16 +2,16 @@ import type { Environment, PayApiConfig } from './types.js'
 
 /** 环境对应的 API 根域名（不常改，集中维护） */
 const API_BASE: Record<Environment, string> = {
-  TEST: 'https://api-test.alchemytech.cc',
-  PRODUCTION: 'https://api.alchemypay.org'
+  TEST: 'https://openapi-test.alchemypay.org',
+  PRODUCTION: 'https://openapi.alchemypay.org'
 }
 
 /** 四接口相对路径（相对根域名） */
 const API_PATHS = {
-  createOrder: '/v1/pay/orders',
-  validateMerchant: '/pay/apple/domainName/verify',
-  pay: '/v1/pay/payments',
-  queryOrder: '/v1/pay/orders/{orderId}'
+  createOrder: '/open/api/v4/merchant/order/create',
+  validateMerchant: '/open/api/v4/merchant/domain/verify',
+  pay: '/open/api/v4/merchant/alchemy-pay',
+  queryOrder: '/open/api/v4/merchant/order/detail'
 } as const
 
 export type PayApiEndpoints = Pick<
@@ -31,7 +31,7 @@ export function getApiEndpoints(environment: Environment = 'PRODUCTION'): PayApi
 }
 
 /**
- * 合并内置地址与商户覆盖项（headers / poll / 自定义 URL）。
+ * 合并内置地址与商户覆盖项（headers / poll / 自定义 URL / 签名凭证）。
  * 未传的 URL 使用对应环境的内置地址。
  */
 export function resolvePayApiConfig(
@@ -44,6 +44,8 @@ export function resolvePayApiConfig(
     validateMerchantUrl: overrides?.validateMerchantUrl || defaults.validateMerchantUrl,
     payUrl: overrides?.payUrl || defaults.payUrl,
     queryOrderUrl: overrides?.queryOrderUrl || defaults.queryOrderUrl,
+    appId: overrides?.appId,
+    appSecret: overrides?.appSecret,
     headers: overrides?.headers,
     getFingerprintId: overrides?.getFingerprintId,
     fetch: overrides?.fetch,
