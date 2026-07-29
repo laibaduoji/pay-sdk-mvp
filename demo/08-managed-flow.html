@@ -128,7 +128,9 @@
           alpha2: p.countryCode,
           cryptoCurrency: 'USDT',
           orderType: '4',
-          address: '0xdemo',
+          address:
+            (window.PaySdkDemoConfig.payment && window.PaySdkDemoConfig.payment.address) ||
+            '0x1a6E411AcDe0fD218061B28f0D36e0Df43836563',
           network: 'ETH',
           payWayCode: payWayCode || '701',
           redirectUrl: location.origin + '/success',
