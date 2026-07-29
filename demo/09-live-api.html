@@ -424,9 +424,7 @@
           if (ensured.from === 'getToken') {
             el('accessToken').value = accessToken
             persistIdentity(readIdentity())
-            if (ensured.traceId) {
-              document.getElementById('trace-id').textContent = ensured.traceId
-            }
+            if (ensured.traceId) ui.showTraceId(ensured.traceId)
           }
         } catch (err) {
           statusEl.textContent = 'getToken 失败：' + (err.message || err)
@@ -435,9 +433,7 @@
             null,
             2
           )
-          if (err && err.traceId) {
-            document.getElementById('trace-id').textContent = err.traceId
-          }
+          ui.showTraceId(err && err.traceId)
           return
         }
 
@@ -460,17 +456,13 @@
             null,
             2
           )
-          if (err && err.traceId) {
-            document.getElementById('trace-id').textContent = err.traceId
-          }
+          ui.showTraceId(err && err.traceId)
           return
         }
 
         const orderResponse = createResult.data
         orderResponseEl.textContent = JSON.stringify(orderResponse, null, 2)
-        if (createResult.traceId) {
-          document.getElementById('trace-id').textContent = createResult.traceId
-        }
+        ui.showTraceId(createResult.traceId)
 
         if (!orderResponse || !orderResponse.token) {
           statusEl.textContent = '创建订单成功但缺少 token，无法挂载 SDK'

@@ -23,35 +23,73 @@ window.PaySdkDemoUI = {
     el.dataset.traceId = value || ''
   },
 
-  bindTraceCopy() {
-    const { traceCopy, traceId } = this.els()
-    if (!traceCopy || traceCopy.dataset.bound === '1') return
-    traceCopy.dataset.bound = '1'
-    traceCopy.addEventListener('click', async () => {
-      const value = (traceId && traceId.dataset.traceId) || ''
-      if (!value) return
+  /** Resolve current traceId from dataset or visible text (ignore placeholder). */
+  currentTraceId() {
+    const { traceId: el } = this.els()
+    if (!el) return ''
+    const fromData = (el.dataset.traceId || '').trim()
+    if (fromData) return fromData
+    const text = (el.textContent || '').trim()
+    if (!text || text === '—') return ''
+    return text
+  },
+
+  async copyText(value) {
+    if (!value) return false
+    if (navigator.clipboard && typeof navigator.clipboard.writeText === 'function') {
       try {
         await navigator.clipboard.writeText(value)
+        return true
+      } catch (_) {
+        /* fall through */
+      }
+    }
+    const ta = document.createElement('textarea')
+    ta.value = value
+    ta.setAttribute('readonly', '')
+    ta.style.position = 'fixed'
+    ta.style.top = '0'
+    ta.style.left = '0'
+    ta.style.width = '1px'
+    ta.style.height = '1px'
+    ta.style.padding = '0'
+    ta.style.border = 'none'
+    ta.style.opacity = '0'
+    document.body.appendChild(ta)
+    ta.focus()
+    ta.select()
+    ta.setSelectionRange(0, value.length)
+    let ok = false
+    try {
+      ok = document.execCommand('copy')
+    } catch (_) {
+      ok = false
+    }
+    ta.remove()
+    return ok
+  },
+
+  bindTraceCopy() {
+    const { traceCopy } = this.els()
+    if (!traceCopy || traceCopy.dataset.bound === '1') return
+    traceCopy.dataset.bound = '1'
+    const self = this
+    traceCopy.addEventListener('click', async () => {
+      const value = self.currentTraceId()
+      if (!value) {
         const prev = traceCopy.textContent
-        traceCopy.textContent = '已复制'
+        traceCopy.textContent = '无可复制'
         setTimeout(() => {
           traceCopy.textContent = prev || '复制'
         }, 1200)
-      } catch (_) {
-        // fallback
-        const ta = document.createElement('textarea')
-        ta.value = value
-        document.body.appendChild(ta)
-        ta.select()
-        try {
-          document.execCommand('copy')
-          traceCopy.textContent = '已复制'
-        } catch (_) {}
-        ta.remove()
-        setTimeout(() => {
-          traceCopy.textContent = '复制'
-        }, 1200)
+        return
       }
+      const ok = await self.copyText(value)
+      const prev = traceCopy.textContent
+      traceCopy.textContent = ok ? '已复制' : '复制失败'
+      setTimeout(() => {
+        traceCopy.textContent = prev || '复制'
+      }, 1200)
     })
   },
 
