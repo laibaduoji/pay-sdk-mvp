@@ -1,0 +1,30 @@
+---
+description: 仅本仓库：Plan 实现并 build 通过后自动 commit 且 push 远端
+alwaysApply: true
+---
+
+# Plan 完成后自动提交并推送（仅 pay-sdk-mvp）
+
+本规则只作用于**当前仓库**（`.cursor/rules/` 项目规则，非用户全局规则）。其他项目不适用。
+
+当用户要求 **Implement the plan**（或等价地按已确认 plan 落地）且相关 to-do **全部完成** 后，在结束对话前必须：
+
+1. 若 plan 含 build / typecheck / verify 类验收，先跑通（如 `npm run build`）；失败则修到通过，**不要**在失败状态下提交。
+2. 有未提交改动时，按仓库既有 commit 规范自动 **commit**（无需再问用户是否提交）。
+3. Commit 成功后自动 **`git push`** 到当前分支跟踪的远端（无上游则 `git push -u origin HEAD`）。
+4. 回复中给出 commit hash 与远端推送结果（或 PR/分支 URL 若已有）。
+
+## Commit 要求
+
+- 先 `git status` / `git diff` / `git log`，再 stage 相关文件并 commit。
+- 信息风格对齐近期 commit（简短说明 why）；用 HEREDOC 传 `-m`。
+- **不要**提交密钥、`.env`、含真实 `appSecret` 的本地配置。
+- **不要** `--force` / `--no-verify`（除非用户在本轮明确要求）。
+- 钩子失败：修问题后 **新建** commit，不要 amend 已推送提交。
+
+## 不做
+
+- 无改动时不造空 commit、不无意义 push。
+- 非「执行 plan」类任务，仍仅在用户明确要求时才 commit/push。
+- 不要编辑 plan 文件本身（若用户要求勿改 plan）。
+- 不要把本规则复制到用户级 `~/.cursor/rules/` 或其它仓库。

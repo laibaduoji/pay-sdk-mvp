@@ -1,0 +1,370 @@
+<!doctype html>
+<html lang="zh-CN">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>SDK Managed Flow — Live API</title>
+    <link rel="stylesheet" href="./common.css" />
+    <style>
+      .panel label.field {
+        display: grid;
+        grid-template-columns: 140px 1fr;
+        align-items: center;
+        gap: 8px;
+        margin: 6px 0;
+        cursor: default;
+      }
+      .panel label.field input,
+      .panel label.field select {
+        min-width: 0;
+        padding: 6px 8px;
+        font-size: 13px;
+        border: 1px solid #ccc;
+        border-radius: 4px;
+      }
+      .panel label.field input[readonly] {
+        background: #eee;
+        color: #555;
+      }
+    </style>
+  </head>
+  <body>
+    <p class="meta"><a href="./index.html">← Demos</a> · PARAMETERS</p>
+    <h1>SDK 完整支付编排（真实 API）</h1>
+    <p class="meta">
+      使用 SDK 内置 openapi 地址 + <code>appId</code> / <code>appSecret</code> 签名，不走
+      Mock。浏览器直连可能遇 CORS；密钥仅保存在本页 <code>sessionStorage</code>，请勿提交仓库。
+    </p>
+
+    <form id="controls" class="panel" onsubmit="return false">
+      <fieldset>
+        <legend>API 凭据</legend>
+        <label class="field">
+          appId
+          <input type="text" name="appId" autocomplete="off" placeholder="必填" />
+        </label>
+        <label class="field">
+          appSecret
+          <input type="password" name="appSecret" autocomplete="off" placeholder="必填" />
+        </label>
+      </fieldset>
+
+      <fieldset>
+        <legend>环境</legend>
+        <label><input type="radio" name="environment" value="TEST" checked /> TEST</label>
+        <label><input type="radio" name="environment" value="PRODUCTION" /> PRODUCTION</label>
+      </fieldset>
+
+      <fieldset>
+        <legend>钱包</legend>
+        <label><input type="radio" name="method" value="googlePay" checked /> Google Pay</label>
+        <label><input type="radio" name="method" value="applePay" /> Apple Pay</label>
+      </fieldset>
+
+      <fieldset>
+        <legend>二次动作</legend>
+        <label
+          ><input type="radio" name="actionMode" value="callback" checked /> callback（只
+          onAction）</label
+        >
+        <label><input type="radio" name="actionMode" value="auto" /> auto（SDK 自动打开）</label>
+      </fieldset>
+
+      <fieldset>
+        <legend>创建订单</legend>
+        <label class="field">
+          side
+          <select name="side">
+            <option value="BUY" selected>BUY</option>
+            <option value="SELL">SELL</option>
+          </select>
+        </label>
+        <label class="field">
+          merchantOrderNo
+          <input type="text" name="merchantOrderNo" autocomplete="off" />
+        </label>
+        <label class="field">
+          amount
+          <input type="text" name="amount" />
+        </label>
+        <label class="field">
+          fiatCurrency
+          <input type="text" name="fiatCurrency" />
+        </label>
+        <label class="field">
+          alpha2
+          <input type="text" name="alpha2" />
+        </label>
+        <label class="field">
+          cryptoCurrency
+          <input type="text" name="cryptoCurrency" />
+        </label>
+        <label class="field">
+          orderType
+          <input type="text" name="orderType" />
+        </label>
+        <label class="field">
+          address
+          <input type="text" name="address" />
+        </label>
+        <label class="field">
+          network
+          <input type="text" name="network" />
+        </label>
+        <label class="field">
+          payWayCode
+          <input type="text" name="payWayCode" readonly />
+        </label>
+        <label class="field">
+          userAccountId
+          <input type="text" name="userAccountId" placeholder="可选" />
+        </label>
+        <label class="field">
+          redirectUrl
+          <input type="text" name="redirectUrl" />
+        </label>
+        <label class="field">
+          callbackUrl
+          <input type="text" name="callbackUrl" />
+        </label>
+        <label class="field">
+          clientIp
+          <input type="text" name="clientIp" />
+        </label>
+        <label class="field">
+          memo
+          <input type="text" name="memo" placeholder="可选" />
+        </label>
+        <label class="field">
+          withdrawType
+          <input type="text" name="withdrawType" placeholder="可选，空则不传" />
+        </label>
+      </fieldset>
+
+      <button type="button" id="regen-order-no">重新生成 merchantOrderNo</button>
+      <button type="button" id="apply-btn">应用并挂载</button>
+    </form>
+
+    <h2 class="section-title">将提交的 order</h2>
+    <pre id="preview">—</pre>
+
+    <p id="status">未挂载</p>
+    <div id="pay-container"></div>
+    <h2 class="section-title">风控数据</h2>
+    <pre id="risk">挂载后采集 Fingerprint（请求头 fingerprint-id）…</pre>
+    <h2 class="section-title">onAction</h2>
+    <pre id="action">—</pre>
+    <h2 class="section-title">结果</h2>
+    <pre id="output">—</pre>
+
+    <script src="./pay-sdk.js"></script>
+    <script src="./config.js"></script>
+    <script src="./demo-ui.js"></script>
+    <script>
+      const SS_APP_ID = 'paySdkDemo.appId'
+      const SS_APP_SECRET = 'paySdkDemo.appSecret'
+
+      const ui = window.PaySdkDemoUI
+      const handlers = ui.handlers()
+      const form = document.getElementById('controls')
+      const previewEl = document.getElementById('preview')
+      const riskEl = document.getElementById('risk')
+      const actionEl = document.getElementById('action')
+      const outputEl = document.getElementById('output')
+      const statusEl = document.getElementById('status')
+
+      let sdk = null
+      let lastRiskConfig = null
+
+      function el(name) {
+        return form.elements.namedItem(name)
+      }
+
+      function payWayForMethod(method) {
+        return method === 'applePay' ? '501' : '701'
+      }
+
+      function newMerchantOrderNo() {
+        return 'm_ord_live_' + Date.now().toString(36)
+      }
+
+      function applyDefaults() {
+        const p = (window.PaySdkDemoConfig && window.PaySdkDemoConfig.payment) || {}
+        el('side').value = 'BUY'
+        el('merchantOrderNo').value = newMerchantOrderNo()
+        el('amount').value = p.amount || '10.00'
+        el('fiatCurrency').value = p.currency || 'USD'
+        el('alpha2').value = p.countryCode || 'US'
+        el('cryptoCurrency').value = 'USDT'
+        el('orderType').value = '4'
+        el('address').value = '0xdemo'
+        el('network').value = 'ETH'
+        el('userAccountId').value = ''
+        el('redirectUrl').value = location.origin + '/success'
+        el('callbackUrl').value = location.origin + '/callback'
+        el('clientIp').value = '127.0.0.1'
+        el('memo').value = ''
+        el('withdrawType').value = ''
+        syncPayWayCode()
+
+        try {
+          const savedId = sessionStorage.getItem(SS_APP_ID)
+          const savedSecret = sessionStorage.getItem(SS_APP_SECRET)
+          if (savedId) el('appId').value = savedId
+          if (savedSecret) el('appSecret').value = savedSecret
+        } catch (_) {}
+      }
+
+      function syncPayWayCode() {
+        const method = new FormData(form).get('method') || 'googlePay'
+        el('payWayCode').value = payWayForMethod(method)
+      }
+
+      function readOrderFromForm() {
+        const v = (name) => String(el(name).value || '').trim()
+        const order = {
+          side: v('side') || 'BUY',
+          merchantOrderNo: v('merchantOrderNo') || newMerchantOrderNo(),
+          amount: v('amount'),
+          fiatCurrency: v('fiatCurrency'),
+          alpha2: v('alpha2'),
+          cryptoCurrency: v('cryptoCurrency'),
+          orderType: v('orderType'),
+          address: v('address'),
+          network: v('network'),
+          payWayCode: v('payWayCode') || payWayForMethod('googlePay'),
+          redirectUrl: v('redirectUrl'),
+          callbackUrl: v('callbackUrl'),
+          clientIp: v('clientIp')
+        }
+        const userAccountId = v('userAccountId')
+        if (userAccountId) order.userAccountId = userAccountId
+        const memo = v('memo')
+        if (memo) order.memo = memo
+        const withdrawType = v('withdrawType')
+        if (withdrawType !== '') {
+          const n = Number(withdrawType)
+          if (Number.isFinite(n)) order.withdrawType = n
+        }
+        return order
+      }
+
+      function readCreds() {
+        return {
+          appId: String(el('appId').value || '').trim(),
+          appSecret: String(el('appSecret').value || '').trim()
+        }
+      }
+
+      function persistCreds(creds) {
+        try {
+          sessionStorage.setItem(SS_APP_ID, creds.appId)
+          sessionStorage.setItem(SS_APP_SECRET, creds.appSecret)
+        } catch (_) {}
+      }
+
+      function refreshPreview() {
+        syncPayWayCode()
+        previewEl.textContent = JSON.stringify(readOrderFromForm(), null, 2)
+      }
+
+      function renderRisk(info) {
+        riskEl.textContent = JSON.stringify(
+          {
+            note: 'Fingerprint 仅请求头 fingerprint-id，不在支付 body',
+            fingerprintId: (info && info.fingerprintId) || null,
+            orderRiskConfig: lastRiskConfig,
+            payBodyRisk: (info && info.risk) || null
+          },
+          null,
+          2
+        )
+      }
+
+      function mountSdk() {
+        const creds = readCreds()
+        if (!creds.appId || !creds.appSecret) {
+          statusEl.textContent = '请填写 appId 与 appSecret'
+          return
+        }
+        persistCreds(creds)
+
+        if (sdk) {
+          try {
+            sdk.destroy()
+          } catch (_) {}
+          sdk = null
+        }
+
+        const fd = new FormData(form)
+        const environment = fd.get('environment') || 'TEST'
+        const actionMode = fd.get('actionMode') || 'callback'
+        const order = readOrderFromForm()
+        if (!order.merchantOrderNo) {
+          order.merchantOrderNo = newMerchantOrderNo()
+          el('merchantOrderNo').value = order.merchantOrderNo
+        }
+
+        refreshPreview()
+        lastRiskConfig = null
+        actionEl.textContent = '—'
+        outputEl.textContent = '—'
+        riskEl.textContent = '挂载后采集中…'
+        document.getElementById('pay-container').innerHTML = ''
+        statusEl.textContent = '挂载中…'
+
+        sdk = PaySdk.init({
+          container: '#pay-container',
+          environment: environment,
+          actionMode: actionMode,
+          order: order,
+          api: {
+            appId: creds.appId,
+            appSecret: creds.appSecret
+          },
+          onAction(action) {
+            actionEl.textContent = JSON.stringify(action, null, 2)
+            if (actionMode === 'callback') {
+              if (confirm('收到二次动作 ' + action.type + '，是否 sdk.openAction？')) {
+                sdk.openAction(action)
+              }
+            }
+          },
+          onOrderCreated(orderRes) {
+            statusEl.textContent =
+              'Order ' + orderRes.orderNo + ' created (' + orderRes.method + ').'
+            lastRiskConfig = orderRes.risk || null
+            renderRisk({ fingerprintId: null, risk: null })
+          },
+          onRiskCollected(info) {
+            renderRisk(info)
+          },
+          onStatusChange(orderStatus) {
+            statusEl.textContent =
+              'Payment status: ' +
+              orderStatus.orderState +
+              (orderStatus.s3dsUrl ? ' · s3dsUrl' : '')
+          },
+          onComplete(result) {
+            outputEl.textContent = JSON.stringify(result, null, 2)
+          },
+          onSuccess: handlers.onSuccess,
+          onError: handlers.onError,
+          onCancel: handlers.onCancel
+        })
+
+        ui.run(sdk)
+      }
+
+      applyDefaults()
+      form.addEventListener('change', refreshPreview)
+      form.addEventListener('input', refreshPreview)
+      document.getElementById('regen-order-no').addEventListener('click', function () {
+        el('merchantOrderNo').value = newMerchantOrderNo()
+        refreshPreview()
+      })
+      document.getElementById('apply-btn').addEventListener('click', mountSdk)
+      refreshPreview()
+    </script>
+  </body>
+</html>
