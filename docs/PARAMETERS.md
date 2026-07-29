@@ -76,17 +76,19 @@ sdk.ready().then(() => sdk.mount())
 
 内置地址（见 [`src/endpoints.ts`](../src/endpoints.ts)）：
 
-| 环境                 | API 根域名                            |
-| -------------------- | ------------------------------------- |
-| `TEST`               | `https://openapi-test.alchemypay.org` |
-| `PRODUCTION`（默认） | `https://openapi.alchemypay.org`      |
+| 环境                 | API 根域名                        |
+| -------------------- | --------------------------------- |
+| `TEST`               | `https://api-test.alchemytech.cc` |
+| `PRODUCTION`（默认） | `https://openapi.alchemypay.org`  |
 
 路径：`/open/api/v4/merchant/getToken`、`/open/api/v4/merchant/order/create`、`/open/api/v4/merchant/domain/verify`、
 `/open/api/v4/merchant/alchemy-pay`、`/open/api/v4/merchant/order/detail?orderNo=`。
 配置 `api.appId` + `api.appSecret` 后，SDK 按 [API Sign](https://alchemypay.readme.io/docs/api-sign) 自动签名；业务接口自动带 `access-token`。
 **建议**商户服务端 getToken 后传入 `accessToken`，否则须传 `email`/`uid`（SDK 代调 getToken，出按钮更慢）。
-本地代理时可在 `api` 里覆盖 URL。
-创建订单若返回 `validateMerchantUrl`，优先使用响应值；未返回则使用环境内置地址。
+
+> **TEMP（当前联调）：** 服务端暂不校验 `access-token`；SDK 已暂时跳过 getToken / 带头（代码保留）。可不传 `accessToken` / `email` / `uid`。
+> 本地代理时可在 `api` 里覆盖 URL。
+> 创建订单若返回 `validateMerchantUrl`，优先使用响应值；未返回则使用环境内置地址。
 
 Google Pay **TEST** 环境默认（创建订单未下发时 SDK 补齐，有值则保留）：
 

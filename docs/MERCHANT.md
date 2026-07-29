@@ -42,6 +42,8 @@
 
 **强烈建议传入 `accessToken`：** 由商户服务端调用 [Get Token](https://alchemypay.readme.io/docs/get-token) 后传入 `PaySdk.init`。若未传，须提供 `email` 或 `uid`，由 JS SDK 在创建订单前代调 getToken——**会多一次网络请求，拖慢支付按钮渲染**；生产也不宜把换 token 完全放在浏览器。
 
+> **TEMP（当前联调）：** 服务端暂不校验请求头 `access-token`；SDK 已暂时跳过 getToken / 带头逻辑（代码保留，后续可能恢复）。此时可不传 `accessToken` / `email` / `uid`。
+
 钱包类型、令牌化、Forter/Checkout/WorldPay 开关由**创建订单接口响应**决定。  
 **Fingerprint** 由 SDK 在 `init` 时用内置默认自动采集，并通过请求头 `fingerprint-id` 带到所有支付 API。
 
@@ -176,10 +178,10 @@
 
 ### SDK 内置 API 地址（只读，按环境自动选用）
 
-| 环境                 | 根域名                                |
-| -------------------- | ------------------------------------- |
-| `TEST`               | `https://openapi-test.alchemypay.org` |
-| `PRODUCTION`（默认） | `https://openapi.alchemypay.org`      |
+| 环境                 | 根域名                            |
+| -------------------- | --------------------------------- |
+| `TEST`               | `https://api-test.alchemytech.cc` |
+| `PRODUCTION`（默认） | `https://openapi.alchemypay.org`  |
 
 | 用途           | 路径                                                  |
 | -------------- | ----------------------------------------------------- |

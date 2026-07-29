@@ -344,7 +344,7 @@ export const createOrderResponseApplePay: CreateOrderResponseApplePay = {
   environment: 'TEST',
   method: 'applePay',
   paymentScript: applePayParams,
-  validateMerchantUrl: 'https://openapi-test.alchemypay.org/open/api/v4/merchant/domain/verify',
+  validateMerchantUrl: 'https://api-test.alchemytech.cc/open/api/v4/merchant/domain/verify',
   risk: riskCollectAll
 }
 

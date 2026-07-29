@@ -241,11 +241,12 @@ export class PayApiClient {
       headers.sign = sign
     }
 
-    // getToken 本身不需要 access-token；其它业务接口需要
-    const isGetToken = url.replace(/\/$/, '') === this.config.getTokenUrl.replace(/\/$/, '')
-    if (this.accessToken && !isGetToken) {
-      headers['access-token'] = this.accessToken
-    }
+    // TEMP: server currently does not require access-token; keep for later restore
+    // // getToken 本身不需要 access-token；其它业务接口需要
+    // const isGetToken = url.replace(/\/$/, '') === this.config.getTokenUrl.replace(/\/$/, '')
+    // if (this.accessToken && !isGetToken) {
+    //   headers['access-token'] = this.accessToken
+    // }
 
     if (this.config.getFingerprintId) {
       const fingerprintId = await this.config.getFingerprintId()

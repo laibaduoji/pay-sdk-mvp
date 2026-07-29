@@ -13,6 +13,7 @@
 
 > 接口 1–4 请求头需 `access-token`（来自接口 0）。仅接口 4 为 GET（`GET /open/api/v4/merchant/order/detail?orderNo=`）；其余均为 POST。  
 > **建议**商户服务端 getToken 后把 `accessToken` 传给 SDK；否则 SDK 用 `email`/`uid` 代调，会拖慢出按钮。  
+> **TEMP：** 当前联调服务端暂不校验 `access-token`；SDK 已暂时跳过相关逻辑（代码保留）。  
 > 路径见 SDK `src/endpoints.ts`。入口：`import … from './pay-api'`（[`index.ts`](./index.ts)）。
 
 ---

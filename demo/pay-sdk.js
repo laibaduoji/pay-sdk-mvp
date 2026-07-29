@@ -1091,10 +1091,6 @@ apple-pay-button {
         headers.timestamp = timestamp;
         headers.sign = sign;
       }
-      const isGetToken = url.replace(/\/$/, "") === this.config.getTokenUrl.replace(/\/$/, "");
-      if (this.accessToken && !isGetToken) {
-        headers["access-token"] = this.accessToken;
-      }
       if (this.config.getFingerprintId) {
         const fingerprintId = await this.config.getFingerprintId();
         if (fingerprintId) headers["fingerprint-id"] = fingerprintId;
@@ -1275,7 +1271,7 @@ apple-pay-button {
     }
   }
   const API_BASE = {
-    TEST: "https://openapi-test.alchemypay.org",
+    TEST: "https://api-test.alchemytech.cc",
     PRODUCTION: "https://openapi.alchemypay.org"
   };
   const API_PATHS = {
@@ -1770,14 +1766,6 @@ apple-pay-button {
         `order.${missing.join(", order.")} ${missing.length > 1 ? "are" : "is"} required`
       );
     }
-    const hasToken = !!(config.accessToken && String(config.accessToken).trim());
-    const hasEmail = !!(config.email && String(config.email).trim());
-    const hasUid = !!(config.uid && String(config.uid).trim());
-    if (!hasToken && !hasEmail && !hasUid) {
-      throw new Error(
-        "accessToken or email/uid is required (prefer accessToken from your server to avoid getToken delay)"
-      );
-    }
   }
   function hasSecondaryAction(response) {
     return !!(response.webUrl || response.MD || response.JWT || response.action || response.threeDSMethodData || response.methodUrl);
@@ -1885,11 +1873,6 @@ apple-pay-button {
     async prepare() {
       var _a, _b;
       if (!this.runtimeConfig) {
-        await this.api.ensureAccessToken({
-          accessToken: this.config.accessToken,
-          email: this.config.email,
-          uid: this.config.uid
-        });
         const order = await this.api.createOrder(this.config.order);
         this.order = order;
         (_b = (_a = this.config).onOrderCreated) == null ? void 0 : _b.call(_a, order);

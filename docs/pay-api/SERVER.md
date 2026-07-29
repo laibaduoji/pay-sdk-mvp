@@ -22,7 +22,7 @@
 | Header           | 说明                                                                                |
 | ---------------- | ----------------------------------------------------------------------------------- |
 | `Content-Type`   | POST 时为 `application/json`                                                        |
-| `access-token`   | 业务接口（1–4）必填；getToken 返回的 `accessToken`。getToken 本身不需要             |
+| `access-token`   | 业务接口（1–4）设计上可带；**TEMP：** 当前联调服务端暂不校验，SDK 已暂时不带头      |
 | `appid`          | 合作方标识；SDK 在配置了 `api.appId` + `api.appSecret` 时自动带上（头名 `appid`）   |
 | `timestamp`      | 十三位毫秒时间戳；与签名串一致                                                      |
 | `sign`           | HMAC-SHA256 + Base64；算法见 [API Sign](https://alchemypay.readme.io/docs/api-sign) |
@@ -33,16 +33,16 @@ Fingerprint **不**出现在创建订单响应或支付 body 中，服务端一�
 
 ### 环境根域名（SDK 默认）
 
-| 环境                 | API 根域名                            |
-| -------------------- | ------------------------------------- |
-| `TEST`               | `https://openapi-test.alchemypay.org` |
-| `PRODUCTION`（默认） | `https://openapi.alchemypay.org`      |
+| 环境                 | API 根域名                        |
+| -------------------- | --------------------------------- |
+| `TEST`               | `https://api-test.alchemytech.cc` |
+| `PRODUCTION`（默认） | `https://openapi.alchemypay.org`  |
 
 完整 URL = 根域名 + 上表路径。商户也可在 SDK `init.api` 中覆盖个别地址。
 
 Apple 域名校验默认：
 
-- TEST：`https://openapi-test.alchemypay.org/open/api/v4/merchant/domain/verify`
+- TEST：`https://api-test.alchemytech.cc/open/api/v4/merchant/domain/verify`
 - PRODUCTION：`https://openapi.alchemypay.org/open/api/v4/merchant/domain/verify`
 
 创建订单若返回 `validateMerchantUrl`，SDK 优先用响应值。
@@ -294,7 +294,7 @@ TEST 环境缺省时 SDK 会补齐；PRODUCTION 请务必下发真实商户信�
     "orderNo": "ord_xxx",
     "environment": "TEST",
     "method": "applePay",
-    "validateMerchantUrl": "https://openapi-test.alchemypay.org/open/api/v4/merchant/domain/verify",
+    "validateMerchantUrl": "https://api-test.alchemytech.cc/open/api/v4/merchant/domain/verify",
     "paymentScript": {
       "countryCode": "US",
       "currencyCode": "USD",

@@ -33,8 +33,8 @@
     <h1>SDK 完整支付编排（真实 API）</h1>
     <p class="meta">
       使用 SDK 内置 openapi 地址 + <code>appId</code> / <code>appSecret</code> 签名，不走 Mock。
-      <strong>建议</strong>填 <code>accessToken</code>（服务端 getToken）；未填则用 email/uid，SDK
-      会先 getToken 再创建订单（出按钮更慢）。TEST 凭据见 <code>config.js</code>。
+      TEST 根域名：<code>https://api-test.alchemytech.cc</code>。当前服务端暂不校验
+      <code>access-token</code>（SDK 已暂时跳过 getToken / 带头）；登录态表单可留空联调。
     </p>
 
     <form id="controls" class="panel" onsubmit="return false">
@@ -367,10 +367,11 @@
           return
         }
         const identity = readIdentity()
-        if (!identity.accessToken && !identity.email && !identity.uid) {
-          statusEl.textContent = '请填写 accessToken，或 email / uid（二选一）'
-          return
-        }
+        // TEMP: server currently does not require access-token; keep for later restore
+        // if (!identity.accessToken && !identity.email && !identity.uid) {
+        //   statusEl.textContent = '请填写 accessToken，或 email / uid（二选一）'
+        //   return
+        // }
         persistCreds(creds)
         persistIdentity(identity)
 
@@ -396,9 +397,7 @@
         outputEl.textContent = '—'
         riskEl.textContent = '挂载后采集中…'
         document.getElementById('pay-container').innerHTML = ''
-        statusEl.textContent = identity.accessToken
-          ? '挂载中（已有 accessToken）…'
-          : '挂载中（将先 getToken）…'
+        statusEl.textContent = '挂载中…'
 
         const initConfig = {
           container: '#pay-container',
