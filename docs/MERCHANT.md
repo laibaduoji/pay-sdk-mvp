@@ -27,8 +27,9 @@
 
 ```text
 引入 SDK
-  → PaySdk.init(config)
-  → ready()：创建订单 → 按响应选 Google/Apple → 预采订单风控 → 检查钱包可用
+  →（建议）商户服务端 Get Token → 拿到 accessToken
+  → PaySdk.init(config)  // 建议传入 accessToken
+  → ready()：若无 token 则 SDK 代调 getToken → 创建订单 → 选钱包 → 预采风控 → 检查可用
   → mount()：渲染官方支付按钮
   → 用户点击并授权钱包
   → SDK 提交支付（带 token + 订单风控；Fingerprint 已在请求头）
@@ -37,7 +38,10 @@
   → 轮询到成功/失败：onSuccess 或 onError / onComplete
 ```
 
-商户 **不必** 自己调创建订单 / 支付 / 查询接口；只需提供金额等业务参数，并配置 `api.appId` + `api.appSecret`（SDK 按 [API Sign](https://alchemypay.readme.io/docs/api-sign) 自动签名）。  
+商户 **不必** 自己调创建订单 / 支付 / 查询接口；只需提供金额等业务参数，并配置 `api.appId` + `api.appSecret`（SDK 按 [API Sign](https://alchemypay.readme.io/docs/api-sign) 自动签名）。
+
+**强烈建议传入 `accessToken`：** 由商户服务端调用 [Get Token](https://alchemypay.readme.io/docs/get-token) 后传入 `PaySdk.init`。若未传，须提供 `email` 或 `uid`，由 JS SDK 在创建订单前代调 getToken——**会多一次网络请求，拖慢支付按钮渲染**；生产也不宜把换 token 完全放在浏览器。
+
 钱包类型、令牌化、Forter/Checkout/WorldPay 开关由**创建订单接口响应**决定。  
 **Fingerprint** 由 SDK 在 `init` 时用内置默认自动采集，并通过请求头 `fingerprint-id` 带到所有支付 API。
 
@@ -60,6 +64,10 @@
       const sdk = PaySdk.init({
         container: '#pay-container',
         environment: 'TEST', // 联调用 TEST；上线用 PRODUCTION 或不传（默认生产）
+        // 建议：服务端 getToken 后传入，避免 SDK 再请求 getToken（拖慢出按钮）
+        accessToken: 'YOUR_ACCESS_TOKEN',
+        // 未传 accessToken 时二选一：email 或 uid
+        // email: 'user@example.com',
         order: {
           side: 'BUY',
           merchantOrderNo: 'm_ord_xxx',
@@ -120,6 +128,8 @@
 | 参数              | 类型                     | 必传 | 默认值         | 说明                                                            |
 | ----------------- | ------------------------ | :--: | -------------- | --------------------------------------------------------------- |
 | `container`       | `string \| HTMLElement`  |  是  | —              | 按钮挂载节点，如 `'#pay-container'`                             |
+| `accessToken`     | `string`                 | 建议 | —              | **建议传入**：服务端 getToken 结果；有则跳过 SDK 内 getToken    |
+| `email` / `uid`   | `string`                 | 条件 | —              | 未传 `accessToken` 时二选一；SDK 会代调 getToken（出按钮更慢）  |
 | `order`           | `object`                 |  是  | —              | 见下表                                                          |
 | `environment`     | `'TEST' \| 'PRODUCTION'` |  否  | `'PRODUCTION'` | 影响 API 地址、Google Pay、Checkout 风控环境                    |
 | `api`             | `object`                 |  否  | 按环境内置     | appId / appSecret / headers / 轮询等；接口地址由 SDK 按环境内置 |
@@ -358,6 +368,7 @@ SDK 内置打开行为：
 - [ ] `order` S2S 必填字段正确（含 `payWayCode`）
 - [ ] 联调使用 `environment: 'TEST'`
 - [ ] 配置 `api.appId` + `api.appSecret`（SDK 内置 API Sign）
+- [ ] **建议**服务端 getToken 后传入 `accessToken`（否则传 `email`/`uid`，出按钮更慢）
 - [ ] 实现 `onSuccess` / `onError` / `onCancel`
 - [ ] WebView 场景实现 `onAction`（或 `auto` + Bridge），避免二次动作无响应
 - [ ] 离开支付页时调用 `sdk.destroy()`
@@ -372,10 +383,13 @@ SDK 内置打开行为：
 A：否。默认 `callback` 模式只回调 `onAction`。只有 App 要接管开页/权限时才需要 Bridge。
 
 **Q：要自己调创建订单、支付接口吗？**  
-A：否。SDK 按环境使用内置地址调用；商户主要传 `order` 与 `api.appId` / `api.appSecret`（可选 `headers`）。
+A：否。SDK 按环境使用内置地址调用；商户主要传 `order`、`accessToken`（建议）与 `api.appId` / `api.appSecret`。
+
+**Q：必须自己 getToken 吗？**  
+A：**建议**服务端 getToken 后把 `accessToken` 传给 SDK。未传时须提供 `email` 或 `uid`，由 SDK 代调——会多一次请求，拖慢支付按钮渲染。
 
 **Q：签名怎么做？**  
-A：配置 `appId` + `appSecret` 后，SDK 按 [API Sign](https://alchemypay.readme.io/docs/api-sign) 自动生成 `timestamp` / `sign` 并写入请求头。
+A：配置 `appId` + `appSecret` 后，SDK 按 [API Sign](https://alchemypay.readme.io/docs/api-sign) 自动生成 `timestamp` / `sign` 并写入请求头；业务接口还会带 `access-token`。
 
 **Q：npm 安装还是 script？**  
 A：商户 H5 / WebView 用 **script**。当前交付形态是单文件 `pay-sdk.js`。

@@ -25,6 +25,7 @@ npm run format     # prettier write
 | ------------------------------------------------------ | ----------------------------------------- |
 | [demo/index.html](demo/index.html)                     | 目录页                                    |
 | [demo/08-managed-flow.html](demo/08-managed-flow.html) | 完整编排 Mock（勾选环境 / 风控 / 账单等） |
+| [demo/09-live-api.html](demo/09-live-api.html)         | 真实 openapi（可编辑创建订单 + 凭据）     |
 
 共享 Mock 参数见 [`demo/config.js`](demo/config.js)、[`demo/mock-api.js`](demo/mock-api.js)。
 
@@ -38,6 +39,9 @@ npm run format     # prettier write
     container: '#pay-container',
     // omit or 'PRODUCTION' for live; 'TEST' → test API + Google Pay TEST + Checkout sandbox
     environment: 'TEST',
+    // Prefer server-side getToken, then pass accessToken (faster button render)
+    accessToken: 'YOUR_ACCESS_TOKEN',
+    // email: 'user@example.com', // required if accessToken omitted (SDK calls getToken)
     order: {
       side: 'BUY',
       merchantOrderNo: 'm_ord_xxx',
@@ -91,7 +95,10 @@ npm run format     # prettier write
 Built-in API hosts live in [`src/endpoints.ts`](src/endpoints.ts)
 (`TEST` → `openapi-test.alchemypay.org`, `PRODUCTION` → `openapi.alchemypay.org`).
 Pass `api.appId` + `api.appSecret` to enable [API Sign](https://alchemypay.readme.io/docs/api-sign)
-(`appid` / `timestamp` / `sign` headers). Pass `environment` on `init`; omit `api` URLs unless you need a proxy override.
+(`appid` / `timestamp` / `sign` headers). Business APIs also need `access-token`:
+**prefer** passing `accessToken` from your server ([Get Token](https://alchemypay.readme.io/docs/get-token));
+otherwise pass `email` or `uid` and the SDK will call getToken before create-order (extra latency before the pay button).
+Pass `environment` on `init`; omit `api` URLs unless you need a proxy override.
 Init `environment` also drives Google Pay and Checkout Risk (sandbox vs prod).
 In Google Pay **TEST**, SDK fills defaults when create-order omits them:
 `merchantId=12345678901234567890`, `merchantName=Example Merchant`,

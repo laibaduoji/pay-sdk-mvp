@@ -1,8 +1,9 @@
 /**
- * 前后端对接契约入口（钱包支付四个 HTTP 接口）。
+ * 前后端对接契约入口（钱包支付 HTTP 接口）。
  *
  * | # | 文件 | 方法 | 说明 |
  * |---|------|------|------|
+ * | 0 | get-token.ts | POST | 获取免登 accessToken（建议商户服务端调用） |
  * | 1 | create-order.ts | POST | 创建订单 |
  * | 2 | validate-merchant.ts | POST | Apple Pay 域名校验 |
  * | 3 | pay.ts | POST | 支付 |
@@ -12,6 +13,7 @@
  */
 
 export * from './common'
+export * from './get-token'
 export * from './create-order'
 export * from './validate-merchant'
 export * from './pay'

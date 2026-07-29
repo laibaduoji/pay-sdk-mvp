@@ -12,6 +12,8 @@ SDK **仅支持完整支付编排**：创建订单 → 钱包授权 → 支付 �
 | 参数             | 类型                     |  必传  | 默认值         | 说明                                                                                                         |
 | ---------------- | ------------------------ | :----: | -------------- | ------------------------------------------------------------------------------------------------------------ |
 | `container`      | `string \| HTMLElement`  | **是** | —              | 按钮渲染容器                                                                                                 |
+| `accessToken`    | `string`                 |  建议  | —              | **建议传入**：服务端 [Get Token](https://alchemypay.readme.io/docs/get-token) 结果；有则跳过 SDK 内 getToken |
+| `email` / `uid`  | `string`                 |  条件  | —              | 未传 `accessToken` 时二选一必填；SDK 代调 getToken（**会拖慢出按钮**）                                       |
 | `order`          | `CreateOrderRequest`     | **是** | —              | Apifox S2S 字段（`side` / `merchantOrderNo` / `amount` / `fiatCurrency` / …）；SDK 调接口 1                  |
 | `environment`    | `'TEST' \| 'PRODUCTION'` |   否   | `'PRODUCTION'` | 决定内置 API、Google Pay、Checkout Risk                                                                      |
 | `api`            | `Partial<PayApiConfig>`  |   否   | 按环境内置     | 默认用 `src/endpoints.ts`；可只传 headers / 覆盖 URL                                                         |
@@ -32,6 +34,9 @@ const sdk = PaySdk.init({
   container: '#pay-container',
   // 不传则默认 PRODUCTION；TEST 时使用测试 API / Google Pay TEST / Checkout 沙盒
   environment: 'TEST',
+  // 建议：服务端 getToken 后传入，避免 SDK 再请求 getToken（拖慢出按钮）
+  accessToken: 'YOUR_ACCESS_TOKEN',
+  // email: 'user@example.com', // 未传 accessToken 时与 uid 二选一
   order: {
     side: 'BUY',
     merchantOrderNo: 'm_ord_xxx',
@@ -76,9 +81,10 @@ sdk.ready().then(() => sdk.mount())
 | `TEST`               | `https://openapi-test.alchemypay.org` |
 | `PRODUCTION`（默认） | `https://openapi.alchemypay.org`      |
 
-路径：`/open/api/v4/merchant/order/create`、`/open/api/v4/merchant/domain/verify`、
+路径：`/open/api/v4/merchant/getToken`、`/open/api/v4/merchant/order/create`、`/open/api/v4/merchant/domain/verify`、
 `/open/api/v4/merchant/alchemy-pay`、`/open/api/v4/merchant/order/detail?orderNo=`。
-配置 `api.appId` + `api.appSecret` 后，SDK 按 [API Sign](https://alchemypay.readme.io/docs/api-sign) 自动签名。
+配置 `api.appId` + `api.appSecret` 后，SDK 按 [API Sign](https://alchemypay.readme.io/docs/api-sign) 自动签名；业务接口自动带 `access-token`。
+**建议**商户服务端 getToken 后传入 `accessToken`，否则须传 `email`/`uid`（SDK 代调 getToken，出按钮更慢）。
 本地代理时可在 `api` 里覆盖 URL。
 创建订单若返回 `validateMerchantUrl`，优先使用响应值；未返回则使用环境内置地址。
 
@@ -91,8 +97,8 @@ Google Pay **TEST** 环境默认（创建订单未下发时 SDK 补齐，有值�
 | `gateway`           | `unlimint`             |
 | `gatewayMerchantId` | `googletest`           |
 
-`ready()` 先创建订单，再按响应加载钱包并检查可用性；`mount()` 也可直接调用，会自动完成这一步。
-四个 API 统一响应须满足 `returnCode === '0000'`。轮询默认每 2 秒一次，最长 5 分钟，瞬时网络错误最多连续重试 4 次。
+`ready()` 先确保 accessToken（或 getToken），再创建订单，再按响应加载钱包并检查可用性；`mount()` 也可直接调用，会自动完成这一步。
+五个 API 统一响应须满足 `returnCode === '0000'`。轮询默认每 2 秒一次，最长 5 分钟，瞬时网络错误最多连续重试 4 次。
 
 创建订单成功后，按响应 `risk.*.enabled` **立即预采集**风控；支付时已完成则直接用，进行中则
 `await`。

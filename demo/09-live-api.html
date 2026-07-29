@@ -32,9 +32,9 @@
     <p class="meta"><a href="./index.html">← Demos</a> · PARAMETERS</p>
     <h1>SDK 完整支付编排（真实 API）</h1>
     <p class="meta">
-      使用 SDK 内置 openapi 地址 + <code>appId</code> / <code>appSecret</code> 签名，不走 Mock。TEST
-      凭据已预填（见 <code>config.js</code>）；浏览器直连可能遇 CORS。密钥变更会写入
-      <code>sessionStorage</code>。
+      使用 SDK 内置 openapi 地址 + <code>appId</code> / <code>appSecret</code> 签名，不走 Mock。
+      <strong>建议</strong>填 <code>accessToken</code>（服务端 getToken）；未填则用 email/uid，SDK
+      会先 getToken 再创建订单（出按钮更慢）。TEST 凭据见 <code>config.js</code>。
     </p>
 
     <form id="controls" class="panel" onsubmit="return false">
@@ -47,6 +47,37 @@
         <label class="field">
           appSecret
           <input type="password" name="appSecret" autocomplete="off" placeholder="必填" />
+        </label>
+      </fieldset>
+
+      <fieldset>
+        <legend>登录态（建议 accessToken；否则 email 或 uid）</legend>
+        <label class="field">
+          accessToken
+          <input
+            type="text"
+            name="accessToken"
+            autocomplete="off"
+            placeholder="建议：服务端 getToken"
+          />
+        </label>
+        <label class="field">
+          email
+          <input
+            type="email"
+            name="email"
+            autocomplete="off"
+            placeholder="无 token 时与 uid 二选一"
+          />
+        </label>
+        <label class="field">
+          uid
+          <input
+            type="text"
+            name="uid"
+            autocomplete="off"
+            placeholder="无 token 时与 email 二选一"
+          />
         </label>
       </fieldset>
 
@@ -164,6 +195,9 @@
     <script>
       const SS_APP_ID = 'paySdkDemo.appId'
       const SS_APP_SECRET = 'paySdkDemo.appSecret'
+      const SS_ACCESS_TOKEN = 'paySdkDemo.accessToken'
+      const SS_EMAIL = 'paySdkDemo.email'
+      const SS_UID = 'paySdkDemo.uid'
 
       const ui = window.PaySdkDemoUI
       const handlers = ui.handlers()
@@ -219,6 +253,21 @@
         } catch (_) {}
         el('appId').value = appId
         el('appSecret').value = appSecret
+
+        let accessToken = ''
+        let email = 'demo@example.com'
+        let uid = ''
+        try {
+          const savedToken = sessionStorage.getItem(SS_ACCESS_TOKEN)
+          const savedEmail = sessionStorage.getItem(SS_EMAIL)
+          const savedUid = sessionStorage.getItem(SS_UID)
+          if (savedToken) accessToken = savedToken
+          if (savedEmail != null && savedEmail !== '') email = savedEmail
+          if (savedUid) uid = savedUid
+        } catch (_) {}
+        el('accessToken').value = accessToken
+        el('email').value = email
+        el('uid').value = uid
       }
 
       function syncPayWayCode() {
@@ -262,10 +311,26 @@
         }
       }
 
+      function readIdentity() {
+        return {
+          accessToken: String(el('accessToken').value || '').trim(),
+          email: String(el('email').value || '').trim(),
+          uid: String(el('uid').value || '').trim()
+        }
+      }
+
       function persistCreds(creds) {
         try {
           sessionStorage.setItem(SS_APP_ID, creds.appId)
           sessionStorage.setItem(SS_APP_SECRET, creds.appSecret)
+        } catch (_) {}
+      }
+
+      function persistIdentity(identity) {
+        try {
+          sessionStorage.setItem(SS_ACCESS_TOKEN, identity.accessToken || '')
+          sessionStorage.setItem(SS_EMAIL, identity.email || '')
+          sessionStorage.setItem(SS_UID, identity.uid || '')
         } catch (_) {}
       }
 
@@ -293,7 +358,13 @@
           statusEl.textContent = '请填写 appId 与 appSecret'
           return
         }
+        const identity = readIdentity()
+        if (!identity.accessToken && !identity.email && !identity.uid) {
+          statusEl.textContent = '请填写 accessToken，或 email / uid（二选一）'
+          return
+        }
         persistCreds(creds)
+        persistIdentity(identity)
 
         if (sdk) {
           try {
@@ -317,9 +388,11 @@
         outputEl.textContent = '—'
         riskEl.textContent = '挂载后采集中…'
         document.getElementById('pay-container').innerHTML = ''
-        statusEl.textContent = '挂载中…'
+        statusEl.textContent = identity.accessToken
+          ? '挂载中（已有 accessToken）…'
+          : '挂载中（将先 getToken）…'
 
-        sdk = PaySdk.init({
+        const initConfig = {
           container: '#pay-container',
           environment: environment,
           actionMode: actionMode,
@@ -357,7 +430,12 @@
           onSuccess: handlers.onSuccess,
           onError: handlers.onError,
           onCancel: handlers.onCancel
-        })
+        }
+        if (identity.accessToken) initConfig.accessToken = identity.accessToken
+        if (identity.email) initConfig.email = identity.email
+        if (identity.uid) initConfig.uid = identity.uid
+
+        sdk = PaySdk.init(initConfig)
 
         ui.run(sdk)
       }

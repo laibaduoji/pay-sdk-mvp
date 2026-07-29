@@ -7,20 +7,22 @@
 
 ## 1. 接口一览
 
-| #   | 方法     | 路径                                  | 说明                                  |
-| --- | -------- | ------------------------------------- | ------------------------------------- |
-| 1   | **POST** | `/open/api/v4/merchant/order/create`  | 创建订单，返回钱包 paymentScript/risk |
-| 2   | **POST** | `/open/api/v4/merchant/domain/verify` | 仅 Apple Pay 域名校验                 |
-| 3   | **POST** | `/open/api/v4/merchant/alchemy-pay`   | 提交钱包 token + 风控                 |
-| 4   | **GET**  | `/open/api/v4/merchant/order/detail`  | 二次动作后轮询订单状态                |
+| #   | 方法     | 路径                                  | 说明                                   |
+| --- | -------- | ------------------------------------- | -------------------------------------- |
+| 0   | **POST** | `/open/api/v4/merchant/getToken`      | 获取免登 accessToken（建议服务端调用） |
+| 1   | **POST** | `/open/api/v4/merchant/order/create`  | 创建订单，返回钱包 paymentScript/risk  |
+| 2   | **POST** | `/open/api/v4/merchant/domain/verify` | 仅 Apple Pay 域名校验                  |
+| 3   | **POST** | `/open/api/v4/merchant/alchemy-pay`   | 提交钱包 token + 风控                  |
+| 4   | **GET**  | `/open/api/v4/merchant/order/detail`  | 二次动作后轮询订单状态                 |
 
-仅接口 4 为 GET，query 参数 **`orderNo`**（值为创建订单返回的订单号）；其余均为 POST，`Content-Type: application/json`。
+接口 0 仅需签名头；接口 1–4 另需请求头 **`access-token`**（来自接口 0 的 `accessToken`）。接口 4 为 GET，query 参数 **`orderNo`**；其余均为 POST，`Content-Type: application/json`。
 
 ### 公共请求头
 
 | Header           | 说明                                                                                |
 | ---------------- | ----------------------------------------------------------------------------------- |
 | `Content-Type`   | POST 时为 `application/json`                                                        |
+| `access-token`   | 业务接口（1–4）必填；getToken 返回的 `accessToken`。getToken 本身不需要             |
 | `appid`          | 合作方标识；SDK 在配置了 `api.appId` + `api.appSecret` 时自动带上（头名 `appid`）   |
 | `timestamp`      | 十三位毫秒时间戳；与签名串一致                                                      |
 | `sign`           | HMAC-SHA256 + Base64；算法见 [API Sign](https://alchemypay.readme.io/docs/api-sign) |
@@ -380,6 +382,20 @@ SDK 采集的风控结果映射到接口 3 的 `businessParams` / `sessionId`（
 ```
 
 客户端：`completeMerchantValidation(response.data)`。
+
+---
+
+## 5.5 接口 0 — Get Token（建议服务端）
+
+**POST** `/open/api/v4/merchant/getToken`
+
+业务接口 1–4 需要请求头 `access-token`。**建议商户在服务端调用本接口**，将 `data.accessToken` 传入 `PaySdk.init({ accessToken })`，再挂载 SDK；否则 JS SDK 会在创建订单前代调 getToken，**多一次网络往返，拖慢支付按钮渲染**。
+
+Header：仅需 `appid` / `timestamp` / `sign`（**不要**带 `access-token`）。
+
+Body：`email` 与 `uid` **二选一**必填。
+
+见 [`get-token.ts`](./get-token.ts)。
 
 ---
 

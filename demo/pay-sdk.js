@@ -1009,8 +1009,43 @@ apple-pay-button {
   }
   class PayApiClient {
     constructor(config) {
+      var _a;
       this.config = config;
       this.fetcher = config.fetch || window.fetch.bind(window);
+      this.accessToken = ((_a = config.accessToken) == null ? void 0 : _a.trim()) || void 0;
+    }
+    getAccessToken() {
+      return this.accessToken;
+    }
+    /**
+     * 优先使用已有 / 传入的 accessToken；否则用 email 或 uid 调 getToken。
+     */
+    async ensureAccessToken(identity) {
+      var _a, _b, _c, _d;
+      const provided = (_a = identity.accessToken) == null ? void 0 : _a.trim();
+      if (provided) {
+        this.accessToken = provided;
+        return provided;
+      }
+      if (this.accessToken) return this.accessToken;
+      const email = (_b = identity.email) == null ? void 0 : _b.trim();
+      const uid = (_c = identity.uid) == null ? void 0 : _c.trim();
+      if (!email && !uid) {
+        throw new PayApiError(
+          "accessToken or email/uid is required (prefer passing accessToken from your server)"
+        );
+      }
+      const body = email ? { email } : { uid };
+      const data = await this.getToken(body);
+      const token = (_d = data == null ? void 0 : data.accessToken) == null ? void 0 : _d.trim();
+      if (!token) {
+        throw new PayApiError("Get token response is missing accessToken");
+      }
+      this.accessToken = token;
+      return token;
+    }
+    getToken(request) {
+      return this.request(this.config.getTokenUrl, "POST", request);
     }
     async createOrder(request) {
       const data = await this.request(
@@ -1048,6 +1083,10 @@ apple-pay-button {
         headers.appid = appId;
         headers.timestamp = timestamp;
         headers.sign = sign;
+      }
+      const isGetToken = url.replace(/\/$/, "") === this.config.getTokenUrl.replace(/\/$/, "");
+      if (this.accessToken && !isGetToken) {
+        headers["access-token"] = this.accessToken;
       }
       if (this.config.getFingerprintId) {
         const fingerprintId = await this.config.getFingerprintId();
@@ -1230,6 +1269,7 @@ apple-pay-button {
     PRODUCTION: "https://openapi.alchemypay.org"
   };
   const API_PATHS = {
+    getToken: "/open/api/v4/merchant/getToken",
     createOrder: "/open/api/v4/merchant/order/create",
     validateMerchant: "/open/api/v4/merchant/domain/verify",
     pay: "/open/api/v4/merchant/alchemy-pay",
@@ -1238,6 +1278,7 @@ apple-pay-button {
   function getApiEndpoints(environment = "PRODUCTION") {
     const base = API_BASE[environment];
     return {
+      getTokenUrl: `${base}${API_PATHS.getToken}`,
       createOrderUrl: `${base}${API_PATHS.createOrder}`,
       validateMerchantUrl: `${base}${API_PATHS.validateMerchant}`,
       payUrl: `${base}${API_PATHS.pay}`,
@@ -1247,10 +1288,12 @@ apple-pay-button {
   function resolvePayApiConfig(environment, overrides) {
     const defaults = getApiEndpoints(environment);
     return {
+      getTokenUrl: (overrides == null ? void 0 : overrides.getTokenUrl) || defaults.getTokenUrl,
       createOrderUrl: (overrides == null ? void 0 : overrides.createOrderUrl) || defaults.createOrderUrl,
       validateMerchantUrl: (overrides == null ? void 0 : overrides.validateMerchantUrl) || defaults.validateMerchantUrl,
       payUrl: (overrides == null ? void 0 : overrides.payUrl) || defaults.payUrl,
       queryOrderUrl: (overrides == null ? void 0 : overrides.queryOrderUrl) || defaults.queryOrderUrl,
+      accessToken: overrides == null ? void 0 : overrides.accessToken,
       appId: overrides == null ? void 0 : overrides.appId,
       appSecret: overrides == null ? void 0 : overrides.appSecret,
       headers: overrides == null ? void 0 : overrides.headers,
@@ -1717,6 +1760,14 @@ apple-pay-button {
         `order.${missing.join(", order.")} ${missing.length > 1 ? "are" : "is"} required`
       );
     }
+    const hasToken = !!(config.accessToken && String(config.accessToken).trim());
+    const hasEmail = !!(config.email && String(config.email).trim());
+    const hasUid = !!(config.uid && String(config.uid).trim());
+    if (!hasToken && !hasEmail && !hasUid) {
+      throw new Error(
+        "accessToken or email/uid is required (prefer accessToken from your server to avoid getToken delay)"
+      );
+    }
   }
   function hasSecondaryAction(response) {
     return !!(response.webUrl || response.MD || response.JWT || response.action || response.threeDSMethodData || response.methodUrl);
@@ -1808,8 +1859,10 @@ apple-pay-button {
       this.api = new PayApiClient(this.buildApiConfig(resolveEnvironment(config.environment)));
     }
     buildApiConfig(environment) {
+      var _a;
       return resolvePayApiConfig(environment, {
         ...this.config.api,
+        accessToken: ((_a = this.api) == null ? void 0 : _a.getAccessToken()) || this.config.accessToken,
         getFingerprintId: () => this.fingerprintIdPromise
       });
     }
@@ -1822,6 +1875,11 @@ apple-pay-button {
     async prepare() {
       var _a, _b;
       if (!this.runtimeConfig) {
+        await this.api.ensureAccessToken({
+          accessToken: this.config.accessToken,
+          email: this.config.email,
+          uid: this.config.uid
+        });
         const order = await this.api.createOrder(this.config.order);
         this.order = order;
         (_b = (_a = this.config).onOrderCreated) == null ? void 0 : _b.call(_a, order);

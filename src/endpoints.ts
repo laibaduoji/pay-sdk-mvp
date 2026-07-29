@@ -6,8 +6,9 @@ const API_BASE: Record<Environment, string> = {
   PRODUCTION: 'https://openapi.alchemypay.org'
 }
 
-/** 四接口相对路径（相对根域名） */
+/** 接口相对路径（相对根域名） */
 const API_PATHS = {
+  getToken: '/open/api/v4/merchant/getToken',
   createOrder: '/open/api/v4/merchant/order/create',
   validateMerchant: '/open/api/v4/merchant/domain/verify',
   pay: '/open/api/v4/merchant/alchemy-pay',
@@ -16,13 +17,14 @@ const API_PATHS = {
 
 export type PayApiEndpoints = Pick<
   PayApiConfig,
-  'createOrderUrl' | 'validateMerchantUrl' | 'payUrl' | 'queryOrderUrl'
+  'getTokenUrl' | 'createOrderUrl' | 'validateMerchantUrl' | 'payUrl' | 'queryOrderUrl'
 >
 
-/** 按环境取内置四接口地址 */
+/** 按环境取内置接口地址 */
 export function getApiEndpoints(environment: Environment = 'PRODUCTION'): PayApiEndpoints {
   const base = API_BASE[environment]
   return {
+    getTokenUrl: `${base}${API_PATHS.getToken}`,
     createOrderUrl: `${base}${API_PATHS.createOrder}`,
     validateMerchantUrl: `${base}${API_PATHS.validateMerchant}`,
     payUrl: `${base}${API_PATHS.pay}`,
@@ -40,10 +42,12 @@ export function resolvePayApiConfig(
 ): PayApiConfig {
   const defaults = getApiEndpoints(environment)
   return {
+    getTokenUrl: overrides?.getTokenUrl || defaults.getTokenUrl,
     createOrderUrl: overrides?.createOrderUrl || defaults.createOrderUrl,
     validateMerchantUrl: overrides?.validateMerchantUrl || defaults.validateMerchantUrl,
     payUrl: overrides?.payUrl || defaults.payUrl,
     queryOrderUrl: overrides?.queryOrderUrl || defaults.queryOrderUrl,
+    accessToken: overrides?.accessToken,
     appId: overrides?.appId,
     appSecret: overrides?.appSecret,
     headers: overrides?.headers,

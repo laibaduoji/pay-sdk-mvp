@@ -163,6 +163,8 @@
           container: '#pay-container',
           environment: opts.environment,
           actionMode: opts.actionMode,
+          // Mock 不走真实 getToken；生产请传服务端换取的 accessToken
+          accessToken: 'demo-mock-access-token',
           order: demoOrder(payWayCode),
           api: {
             createOrderUrl: '/v1/pay/orders',

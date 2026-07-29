@@ -125,6 +125,14 @@ function validateConfig(config: PaySdkConfig): void {
       `order.${missing.join(', order.')} ${missing.length > 1 ? 'are' : 'is'} required`
     )
   }
+  const hasToken = !!(config.accessToken && String(config.accessToken).trim())
+  const hasEmail = !!(config.email && String(config.email).trim())
+  const hasUid = !!(config.uid && String(config.uid).trim())
+  if (!hasToken && !hasEmail && !hasUid) {
+    throw new Error(
+      'accessToken or email/uid is required (prefer accessToken from your server to avoid getToken delay)'
+    )
+  }
 }
 
 function hasSecondaryAction(response: PayResponse): boolean {
@@ -242,6 +250,7 @@ class PaySdk implements PaySdkInstance {
   private buildApiConfig(environment: ReturnType<typeof resolveEnvironment>) {
     return resolvePayApiConfig(environment, {
       ...this.config.api,
+      accessToken: this.api?.getAccessToken() || this.config.accessToken,
       getFingerprintId: () => this.fingerprintIdPromise
     })
   }
@@ -255,6 +264,12 @@ class PaySdk implements PaySdkInstance {
 
   private async prepare(): Promise<true> {
     if (!this.runtimeConfig) {
+      await this.api.ensureAccessToken({
+        accessToken: this.config.accessToken,
+        email: this.config.email,
+        uid: this.config.uid
+      })
+
       const order = await this.api.createOrder(this.config.order)
       this.order = order
       this.config.onOrderCreated?.(order)

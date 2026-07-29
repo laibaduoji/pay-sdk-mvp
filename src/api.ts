@@ -16,6 +16,17 @@ import { apiSign } from './sign.js'
 
 const SUCCESS_RETURN_CODE = '0000'
 
+export interface GetTokenRequest {
+  email?: string
+  uid?: string
+}
+
+export interface GetTokenResponse {
+  accessToken: string
+  id?: string
+  email?: string
+}
+
 export class PayApiError extends Error {
   readonly returnCode?: string
   readonly traceId?: string
@@ -117,10 +128,53 @@ export function normalizeQueryOrderResponse(data: QueryOrderWireData): QueryOrde
 export class PayApiClient {
   private readonly config: PayApiConfig
   private readonly fetcher: typeof fetch
+  private accessToken: string | undefined
 
   constructor(config: PayApiConfig) {
     this.config = config
     this.fetcher = config.fetch || window.fetch.bind(window)
+    this.accessToken = config.accessToken?.trim() || undefined
+  }
+
+  getAccessToken(): string | undefined {
+    return this.accessToken
+  }
+
+  /**
+   * 优先使用已有 / 传入的 accessToken；否则用 email 或 uid 调 getToken。
+   */
+  async ensureAccessToken(identity: {
+    accessToken?: string
+    email?: string
+    uid?: string
+  }): Promise<string> {
+    const provided = identity.accessToken?.trim()
+    if (provided) {
+      this.accessToken = provided
+      return provided
+    }
+    if (this.accessToken) return this.accessToken
+
+    const email = identity.email?.trim()
+    const uid = identity.uid?.trim()
+    if (!email && !uid) {
+      throw new PayApiError(
+        'accessToken or email/uid is required (prefer passing accessToken from your server)'
+      )
+    }
+
+    const body: GetTokenRequest = email ? { email } : { uid: uid! }
+    const data = await this.getToken(body)
+    const token = data?.accessToken?.trim()
+    if (!token) {
+      throw new PayApiError('Get token response is missing accessToken')
+    }
+    this.accessToken = token
+    return token
+  }
+
+  getToken(request: GetTokenRequest): Promise<GetTokenResponse> {
+    return this.request<GetTokenResponse>(this.config.getTokenUrl, 'POST', request)
   }
 
   async createOrder(request: CreateOrderRequest): Promise<CreateOrderResponse> {
@@ -175,6 +229,12 @@ export class PayApiClient {
       headers.appid = appId
       headers.timestamp = timestamp
       headers.sign = sign
+    }
+
+    // getToken 本身不需要 access-token；其它业务接口需要
+    const isGetToken = url.replace(/\/$/, '') === this.config.getTokenUrl.replace(/\/$/, '')
+    if (this.accessToken && !isGetToken) {
+      headers['access-token'] = this.accessToken
     }
 
     if (this.config.getFingerprintId) {

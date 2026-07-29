@@ -313,6 +313,13 @@ export interface PayApiConfig {
    * SDK 自动追加 `?orderNo=`（值为创建订单返回的 orderNo）。
    */
   queryOrderUrl: string
+  /** Get Token 地址；默认按环境内置。 */
+  getTokenUrl: string
+  /**
+   * 免登 accessToken；有值时写入请求头 `access-token`。
+   * 建议商户服务端 getToken 后传入，避免 SDK 再调 getToken 拖慢出按钮。
+   */
+  accessToken?: string
   /** AlchemyPay 合作方 appId；与 appSecret 同时存在时自动签名（请求头 `appid`）。 */
   appId?: string
   /** AlchemyPay appSecret；仅用于 HMAC，勿在文档外泄露。 */
@@ -428,12 +435,25 @@ interface PaySdkBaseConfig extends PaySdkCallbacks {
 export interface PaySdkConfig extends PaySdkBaseConfig {
   order: CreateOrderRequest
   /**
+   * 建议：商户服务端 [Get Token](https://alchemypay.readme.io/docs/get-token) 后传入。
+   * 有值时 SDK 不再请求 getToken，可更快渲染支付按钮。
+   */
+  accessToken?: string
+  /**
+   * 未传 `accessToken` 时，与 `uid` 二选一：由 SDK 代调 getToken（会多一次网络往返）。
+   */
+  email?: string
+  /**
+   * 未传 `accessToken` 时，与 `email` 二选一：商户侧用户 UUID。
+   */
+  uid?: string
+  /**
    * SDK 运行环境，默认 `PRODUCTION`。
    * 决定内置 API 地址、Google Pay 环境、Checkout Risk 沙盒/生产等。
    */
   environment?: Environment
   /**
-   * 可选。默认按 `environment` 使用内置四接口地址（见 `src/endpoints.ts`）。
+   * 可选。默认按 `environment` 使用内置接口地址（见 `src/endpoints.ts`）。
    * 可只传 `headers` / 轮询配置，或覆盖个别 URL（如本地代理）。
    */
   api?: Partial<PayApiConfig>
