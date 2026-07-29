@@ -351,7 +351,7 @@ export const createOrderResponseApplePay: CreateOrderResponseApplePay = {
   method: 'applePay',
   paymentScript: applePayParams,
   token: 'payment-hub-token-example',
-  validateMerchantUrl: 'https://api-test.alchemytech.cc/open/api/v4/merchant/domain/verify',
+  validateMerchantUrl: 'https://api-test.alchemytech.cc/payment-hub/domain/verify',
   risk: riskCollectAll
 }
 

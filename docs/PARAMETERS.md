@@ -59,9 +59,9 @@ sdk.ready().then(() => sdk.mount())
 | `TEST`               | `https://api-test.alchemytech.cc` |
 | `PRODUCTION`（默认） | `https://openapi.alchemypay.org`  |
 
-路径：`/open/api/v4/merchant/domain/verify`、`/open/api/v4/merchant/alchemy-pay`、
-`/open/api/v4/merchant/order/detail?orderNo=`。  
-SDK 自动带 `payment-hub-token: <order.token>`。创建订单路径仍内置，供 demo / 商户服务端参考，**SDK 编排不调用**。
+路径：`/payment-hub/domain/verify`、`/payment-hub/alchemy-pay`、
+`/payment-hub/order/detail`。  
+SDK 自动带 `payment-hub-token: <order.token>`（订单详情凭 token 查，不传 orderNo）。创建订单路径仍内置，供 demo / 商户服务端参考，**SDK 编排不调用**。
 
 > 创建订单若返回 `validateMerchantUrl`，优先使用响应值；未返回则使用环境内置地址。
 

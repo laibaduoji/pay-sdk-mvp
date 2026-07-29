@@ -986,10 +986,8 @@ apple-pay-button {
     pay(request) {
       return this.request(this.config.payUrl, "POST", request);
     }
-    async queryOrder(orderNo) {
-      const base = this.config.queryOrderUrl.replace(/\/$/, "");
-      const url = `${base}?orderNo=${encodeURIComponent(orderNo)}`;
-      const data = await this.request(url, "GET");
+    async queryOrder() {
+      const data = await this.request(this.config.queryOrderUrl, "GET");
       return normalizeQueryOrderResponse(data);
     }
     async resolveHeaders(_url, _method, bodyString) {
@@ -1184,9 +1182,9 @@ apple-pay-button {
   const API_PATHS = {
     getToken: "/open/api/v4/merchant/getToken",
     createOrder: "/open/api/v4/merchant/order/create",
-    validateMerchant: "/open/api/v4/merchant/domain/verify",
-    pay: "/open/api/v4/merchant/alchemy-pay",
-    queryOrder: "/open/api/v4/merchant/order/detail"
+    validateMerchant: "/payment-hub/domain/verify",
+    pay: "/payment-hub/alchemy-pay",
+    queryOrder: "/payment-hub/order/detail"
   };
   function getApiEndpoints(environment = "PRODUCTION") {
     const base = API_BASE[environment];
@@ -1915,7 +1913,7 @@ apple-pay-button {
           return;
         }
         try {
-          const current = await this.api.queryOrder(this.order.orderNo);
+          const current = await this.api.queryOrder();
           if (this.destroyed || generation !== this.pollGeneration) return;
           consecutiveTransientErrors = 0;
           (_b = (_a = this.config).onStatusChange) == null ? void 0 : _b.call(_a, current);

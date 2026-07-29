@@ -176,7 +176,7 @@ SDK 固定使用 `callbackIntents: ['PAYMENT_AUTHORIZATION']`，并注册
 
 ## 5. 接口 3 — 支付
 
-**POST** `/open/api/v4/merchant/alchemy-pay`
+**POST** `/payment-hub/alchemy-pay`
 
 对齐 ramp-vue；Apifox 493859922 成功示例不可信。
 
@@ -220,7 +220,7 @@ SDK 从钱包结果映射：`encryptedData` → `customParam`；账单扁平进 
 
 ## 6. 接口 4 — 查询订单状态
 
-**GET** `/open/api/v4/merchant/order/detail?orderNo=`
+**GET** `/payment-hub/order/detail`（凭 `payment-hub-token`，无 query）
 
 ### 响应 `data`
 

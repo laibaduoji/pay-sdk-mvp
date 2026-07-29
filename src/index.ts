@@ -416,7 +416,7 @@ class PaySdk implements PaySdkInstance {
       }
 
       try {
-        const current = await this.api.queryOrder(this.order.orderNo)
+        const current = await this.api.queryOrder()
         if (this.destroyed || generation !== this.pollGeneration) return
         consecutiveTransientErrors = 0
         this.config.onStatusChange?.(current)

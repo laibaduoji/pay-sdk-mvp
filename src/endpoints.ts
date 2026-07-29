@@ -10,9 +10,9 @@ const API_BASE: Record<Environment, string> = {
 const API_PATHS = {
   getToken: '/open/api/v4/merchant/getToken',
   createOrder: '/open/api/v4/merchant/order/create',
-  validateMerchant: '/open/api/v4/merchant/domain/verify',
-  pay: '/open/api/v4/merchant/alchemy-pay',
-  queryOrder: '/open/api/v4/merchant/order/detail'
+  validateMerchant: '/payment-hub/domain/verify',
+  pay: '/payment-hub/alchemy-pay',
+  queryOrder: '/payment-hub/order/detail'
 } as const
 
 export type PayApiEndpoints = Pick<

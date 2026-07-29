@@ -251,10 +251,8 @@ export class PayApiClient {
     return this.request<PayResponse>(this.config.payUrl, 'POST', request)
   }
 
-  async queryOrder(orderNo: string): Promise<QueryOrderResponse> {
-    const base = this.config.queryOrderUrl.replace(/\/$/, '')
-    const url = `${base}?orderNo=${encodeURIComponent(orderNo)}`
-    const data = await this.request<QueryOrderWireData>(url, 'GET')
+  async queryOrder(): Promise<QueryOrderResponse> {
+    const data = await this.request<QueryOrderWireData>(this.config.queryOrderUrl, 'GET')
     return normalizeQueryOrderResponse(data)
   }
 

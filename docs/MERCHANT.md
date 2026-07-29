@@ -151,12 +151,12 @@ SDK **不**调用创建订单、**不**签名、**不**需要 `appId` / `appSecr
 | `TEST`               | `https://api-test.alchemytech.cc` |
 | `PRODUCTION`（默认） | `https://openapi.alchemypay.org`  |
 
-| 用途           | 路径                                                  | 谁调用         |
-| -------------- | ----------------------------------------------------- | -------------- |
-| 创建订单       | `POST {根}/open/api/v4/merchant/order/create`         | **商户服务端** |
-| 支付           | `POST {根}/open/api/v4/merchant/alchemy-pay`          | SDK            |
-| 查询订单       | `GET {根}/open/api/v4/merchant/order/detail?orderNo=` | SDK            |
-| Apple 域名校验 | `POST {根}/open/api/v4/merchant/domain/verify`        | SDK            |
+| 用途           | 路径                                          | 谁调用         |
+| -------------- | --------------------------------------------- | -------------- |
+| 创建订单       | `POST {根}/open/api/v4/merchant/order/create` | **商户服务端** |
+| 支付           | `POST {根}/payment-hub/alchemy-pay`           | SDK            |
+| 查询订单       | `GET {根}/payment-hub/order/detail`           | SDK            |
+| Apple 域名校验 | `POST {根}/payment-hub/domain/verify`         | SDK            |
 
 创建订单若返回 `validateMerchantUrl`，SDK 会优先使用响应值。
 

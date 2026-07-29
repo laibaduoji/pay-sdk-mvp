@@ -1,6 +1,6 @@
 /**
  * 接口 3 — 支付
- * POST /open/api/v4/merchant/alchemy-pay
+ * POST /payment-hub/alchemy-pay
  *
  * 请求形态对齐 ramp-vue（GP/AP）；Apifox 493859922 body/成功示例不可信。
  *

@@ -327,8 +327,8 @@ export interface PayApiConfig {
   validateMerchantUrl: string
   payUrl: string
   /**
-   * 订单详情 base URL（无 query）。
-   * SDK 自动追加 `?orderNo=`（值为创建订单返回的 orderNo）。
+   * 订单详情 URL（无 query）。
+   * 订单由请求头 `payment-hub-token` 标识，不传 orderNo。
    */
   queryOrderUrl: string
   /** Get Token 地址；默认按环境内置（legacy / demo 用）。 */

@@ -7,15 +7,15 @@
 
 ## 1. 接口一览
 
-| #   | 方法     | 路径                                  | 说明                                      |
-| --- | -------- | ------------------------------------- | ----------------------------------------- |
-| 0   | **POST** | `/open/api/v4/merchant/getToken`      | 获取免登 accessToken（建议服务端调用）    |
-| 1   | **POST** | `/open/api/v4/merchant/order/create`  | 创建订单，返回 paymentScript/risk/`token` |
-| 2   | **POST** | `/open/api/v4/merchant/domain/verify` | 仅 Apple Pay 域名校验                     |
-| 3   | **POST** | `/open/api/v4/merchant/alchemy-pay`   | 提交钱包 token + 风控                     |
-| 4   | **GET**  | `/open/api/v4/merchant/order/detail`  | 二次动作后轮询订单状态                    |
+| #   | 方法     | 路径                                 | 说明                                      |
+| --- | -------- | ------------------------------------ | ----------------------------------------- |
+| 0   | **POST** | `/open/api/v4/merchant/getToken`     | 获取免登 accessToken（建议服务端调用）    |
+| 1   | **POST** | `/open/api/v4/merchant/order/create` | 创建订单，返回 paymentScript/risk/`token` |
+| 2   | **POST** | `/payment-hub/domain/verify`         | 仅 Apple Pay 域名校验                     |
+| 3   | **POST** | `/payment-hub/alchemy-pay`           | 提交钱包 token + 风控                     |
+| 4   | **GET**  | `/payment-hub/order/detail`          | 二次动作后轮询订单状态                    |
 
-**商户服务端**调用接口 1（签名）；将响应（含 `token`）交给浏览器 SDK。SDK 只调接口 2–4，请求头带 **`payment-hub-token: <token>`**，**不签名**。接口 4 为 GET，query 参数 **`orderNo`**；其余均为 POST，`Content-Type: application/json`。
+**商户服务端**调用接口 1（签名）；将响应（含 `token`）交给浏览器 SDK。SDK 只调接口 2–4，请求头带 **`payment-hub-token: <token>`**，**不签名**。接口 4 为 GET（无 query，凭 token 查单）；其余均为 POST，`Content-Type: application/json`。
 
 ### 公共请求头
 
@@ -40,8 +40,8 @@ Fingerprint **不**出现在创建订单响应或支付 body 中，服务端一�
 
 Apple 域名校验默认：
 
-- TEST：`https://api-test.alchemytech.cc/open/api/v4/merchant/domain/verify`
-- PRODUCTION：`https://openapi.alchemypay.org/open/api/v4/merchant/domain/verify`
+- TEST：`https://api-test.alchemytech.cc/payment-hub/domain/verify`
+- PRODUCTION：`https://openapi.alchemypay.org/payment-hub/domain/verify`
 
 创建订单若返回 `validateMerchantUrl`，SDK 优先用响应值。
 
@@ -295,7 +295,7 @@ TEST 环境缺省时 SDK 会补齐；PRODUCTION 请务必下发真实商户信�
     "environment": "TEST",
     "method": "applePay",
     "token": "payment-hub-token-example",
-    "validateMerchantUrl": "https://api-test.alchemytech.cc/open/api/v4/merchant/domain/verify",
+    "validateMerchantUrl": "https://api-test.alchemytech.cc/payment-hub/domain/verify",
     "paymentScript": {
       "countryCode": "US",
       "currencyCode": "USD",
@@ -341,7 +341,7 @@ SDK 采集的风控结果映射到接口 3 的 `businessParams` / `sessionId`（
 
 ### 5.1 请求 `ValidateMerchantRequest`
 
-对齐 Apifox SDK 目录 `/open/api/v4/merchant/domain/verify`：两字段均必填。
+对齐 `/payment-hub/domain/verify`：两字段均必填。
 
 | 字段            | 类型     | 必填 | 说明                                |
 | --------------- | -------- | ---- | ----------------------------------- |
@@ -402,7 +402,7 @@ Body：`email` 与 `uid` **二选一**必填。
 
 ## 6. 接口 3 — 支付
 
-**POST** `/open/api/v4/merchant/alchemy-pay`
+**POST** `/payment-hub/alchemy-pay`
 
 钱包授权完成后调用。请求形态对齐 **ramp-vue**（Apifox 493859922 body/成功示例不可信）。先看外层 `returnCode`，再看 `data` 是否含二次动作字段。
 
@@ -560,9 +560,9 @@ Fingerprint `visitorId` 仅在请求头 `fingerprint-id`，不在 body。
 
 ## 7. 接口 4 — 查询订单状态
 
-**GET** `/open/api/v4/merchant/order/detail?orderNo={orderNo}`
+**GET** `/payment-hub/order/detail`
 
-**仅**接口 3 进入二次动作后需要。SDK 默认约每 2s 轮询，最长约 5 分钟。Query 参数名为 `orderNo`（SDK 传入创建订单返回的订单号）。对照 Apifox **493859900** + H5 轮询。
+**仅**接口 3 进入二次动作后需要。SDK 默认约每 2s 轮询，最长约 5 分钟。无 query；订单由请求头 `payment-hub-token` 标识。对照 Apifox **493859900** + H5 轮询。
 
 ### 7.1 `orderState` 映射
 

@@ -1,18 +1,17 @@
 /**
  * 接口 4 — 查询订单状态
- * GET /open/api/v4/merchant/order/detail?orderNo=（仅本接口为 GET；接口 1–3 均为 POST）
+ * GET /payment-hub/order/detail（仅本接口为 GET；接口 1–3 均为 POST）
  * Apifox 493859900 + H5 轮询逻辑
  *
  * 何时需要：支付接口进入二次动作（webUrl / 3DS / shift4）之后。
  * 建议间隔 2s；停止条件见下方轮询说明。
+ * 无 query；订单由请求头 payment-hub-token 标识。
  */
 
 import type { ApiResponse } from './common'
 
-/** GET：orderNo 为 query 参数 */
-export interface QueryOrderRequest {
-  orderNo: string
-}
+/** GET：无 body / query；凭请求头 payment-hub-token */
+export type QueryOrderRequest = Record<string, never>
 
 /** On-ramp orderState → 文案（对齐 H5 ON_RAMP_ORDER_STATUS_MAP） */
 export const ON_RAMP_ORDER_STATUS_MAP = {
@@ -91,9 +90,7 @@ export type QueryOrderApiResponse = ApiResponse<QueryOrderResponse>
  * - 其它非 pending / 仅 s3dsComplete → onComplete
  */
 
-export const queryOrderRequestExample: QueryOrderRequest = {
-  orderNo: 'ord_xxx'
-}
+export const queryOrderRequestExample: QueryOrderRequest = {}
 
 export const queryOrderPendingExample: QueryOrderResponse = {
   orderNo: 'ord_xxx',

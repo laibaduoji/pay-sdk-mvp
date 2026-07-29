@@ -1,7 +1,7 @@
 /**
  * 接口 2 — Apple Pay 域名校验（仅 applePay）
  * POST {validateMerchantUrl}；未下发时使用当前环境内置地址
- * （`/open/api/v4/merchant/domain/verify`，见 SDK `src/endpoints.ts`）
+ * （`/payment-hub/domain/verify`，见 SDK `src/endpoints.ts`）
  *
  * 对齐 Apifox SDK 目录接口：请求 `orderNo` + `validationURL` 均为必填。
  * 客户端：returnCode==='0000' 时 completeMerchantValidation(response.data)
