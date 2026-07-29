@@ -243,17 +243,18 @@
         const p = (window.PaySdkDemoConfig && window.PaySdkDemoConfig.payment) || {}
         el('side').value = 'BUY'
         el('merchantOrderNo').value = newMerchantOrderNo()
-        el('amount').value = p.amount || '10.00'
+        el('amount').value = p.amount || '80.00'
         el('fiatCurrency').value = p.currency || 'USD'
         el('alpha2').value = p.countryCode || 'US'
-        el('cryptoCurrency').value = 'USDT'
+        el('cryptoCurrency').value = p.cryptoCurrency || 'USDC'
         el('orderType').value = '4'
         el('address').value = p.address || '0x1a6E411AcDe0fD218061B28f0D36e0Df43836563'
-        el('network').value = 'ETH'
+        el('network').value = p.network || 'BSC'
         el('userAccountId').value = ''
         el('redirectUrl').value = location.origin + '/success'
         el('callbackUrl').value = location.origin + '/callback'
-        el('clientIp').value = '127.0.0.1'
+        el('clientIp').value = ''
+        el('clientIp').placeholder = '获取公网 IP 中…'
         el('memo').value = ''
         el('withdrawType').value = ''
         syncPayWayCode()
@@ -284,6 +285,20 @@
         el('accessToken').value = accessToken
         el('email').value = email
         el('uid').value = uid
+      }
+
+      async function fillClientIp() {
+        const current = String(el('clientIp').value || '').trim()
+        if (current && current !== '127.0.0.1') return current
+        el('clientIp').placeholder = '获取公网 IP 中…'
+        const ip = await ui.fetchPublicIp()
+        if (ip) {
+          el('clientIp').value = ip
+          el('clientIp').placeholder = ''
+          return ip
+        }
+        el('clientIp').placeholder = '获取失败，请手动填写公网 IP'
+        return ''
       }
 
       function syncPayWayCode() {
@@ -381,6 +396,12 @@
         }
         persistCreds(creds)
         persistIdentity(identity)
+
+        const clientIp = await fillClientIp()
+        if (!clientIp) {
+          statusEl.textContent = '请填写真实 clientIp（公网 IP 获取失败）'
+          return
+        }
 
         if (sdk) {
           try {
@@ -528,6 +549,9 @@
         void mountSdk()
       })
       refreshPreview()
+      void fillClientIp().then(function () {
+        refreshPreview()
+      })
     </script>
   </body>
 </html>

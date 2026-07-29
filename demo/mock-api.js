@@ -12,7 +12,7 @@
   }
 
   const cfg = global.PaySdkDemoConfig || {
-    payment: { amount: '10.00', currency: 'USD', countryCode: 'US' },
+    payment: { amount: '80.00', currency: 'USD', countryCode: 'US' },
     googlePay: {
       merchantName: 'Alchemy Pay Ramp',
       merchantId: 'BCR2DN4TQTA5V4YV',

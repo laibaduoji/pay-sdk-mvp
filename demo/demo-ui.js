@@ -23,6 +23,33 @@ window.PaySdkDemoUI = {
     el.dataset.traceId = value || ''
   },
 
+  /**
+   * Fetch public IPv4 via ipify. Returns IP string or '' on failure/timeout.
+   * @param {{ timeoutMs?: number }} [opts]
+   */
+  async fetchPublicIp(opts) {
+    const timeoutMs = (opts && opts.timeoutMs) || 5000
+    const controller = typeof AbortController !== 'undefined' ? new AbortController() : null
+    const timer = controller
+      ? setTimeout(function () {
+          controller.abort()
+        }, timeoutMs)
+      : null
+    try {
+      const response = await fetch('https://api.ipify.org?format=json', {
+        signal: controller ? controller.signal : undefined
+      })
+      if (!response.ok) return ''
+      const data = await response.json()
+      const ip = data && typeof data.ip === 'string' ? data.ip.trim() : ''
+      return ip || ''
+    } catch (_) {
+      return ''
+    } finally {
+      if (timer != null) clearTimeout(timer)
+    }
+  },
+
   /** Resolve current traceId from dataset or visible text (ignore placeholder). */
   currentTraceId() {
     const { traceId: el } = this.els()

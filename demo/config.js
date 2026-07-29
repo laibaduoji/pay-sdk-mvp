@@ -4,9 +4,11 @@
  */
 window.PaySdkDemoConfig = {
   payment: {
-    amount: '10.00',
+    amount: '80.00',
     currency: 'USD',
     countryCode: 'US',
+    network: 'BSC',
+    cryptoCurrency: 'USDC',
     address: '0x1a6E411AcDe0fD218061B28f0D36e0Df43836563'
   },
 

@@ -135,16 +135,16 @@
           amount: p.amount,
           fiatCurrency: p.currency,
           alpha2: p.countryCode,
-          cryptoCurrency: 'USDT',
+          cryptoCurrency: p.cryptoCurrency || 'USDC',
           orderType: '4',
           address:
             (window.PaySdkDemoConfig.payment && window.PaySdkDemoConfig.payment.address) ||
             '0x1a6E411AcDe0fD218061B28f0D36e0Df43836563',
-          network: 'ETH',
+          network: p.network || 'BSC',
           payWayCode: payWayCode || '701',
           redirectUrl: location.origin + '/success',
           callbackUrl: location.origin + '/callback',
-          clientIp: '127.0.0.1'
+          clientIp: (window.__demoClientIp && String(window.__demoClientIp).trim()) || ''
         }
       }
 
@@ -153,13 +153,28 @@
         previewEl.textContent = JSON.stringify(mock.previewCreateOrder(demoOrder()), null, 2)
       }
 
-      function mountSdk() {
+      async function ensureClientIp() {
+        if (window.__demoClientIp) return window.__demoClientIp
+        statusEl.textContent = '获取公网 IP…'
+        const ip = await ui.fetchPublicIp()
+        if (ip) {
+          window.__demoClientIp = ip
+          statusEl.textContent = '未挂载'
+          return ip
+        }
+        statusEl.textContent = '获取公网 IP 失败（创建订单 clientIp 将为空）'
+        return ''
+      }
+
+      async function mountSdk() {
         if (sdk) {
           try {
             sdk.destroy()
           } catch (_) {}
           sdk = null
         }
+
+        await ensureClientIp()
 
         const opts = mock.setOptions(readOptions())
         refreshPreview()
@@ -222,7 +237,12 @@
       }
 
       form.addEventListener('change', refreshPreview)
-      document.getElementById('apply-btn').addEventListener('click', mountSdk)
+      document.getElementById('apply-btn').addEventListener('click', function () {
+        void mountSdk()
+      })
+      void ensureClientIp().then(function () {
+        refreshPreview()
+      })
       refreshPreview()
     </script>
   </body>
