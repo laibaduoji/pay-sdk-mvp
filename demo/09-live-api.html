@@ -32,8 +32,9 @@
     <p class="meta"><a href="./index.html">← Demos</a> · PARAMETERS</p>
     <h1>SDK 完整支付编排（真实 API）</h1>
     <p class="meta">
-      使用 SDK 内置 openapi 地址 + <code>appId</code> / <code>appSecret</code> 签名，不走
-      Mock。浏览器直连可能遇 CORS；密钥仅保存在本页 <code>sessionStorage</code>，请勿提交仓库。
+      使用 SDK 内置 openapi 地址 + <code>appId</code> / <code>appSecret</code> 签名，不走 Mock。TEST
+      凭据已预填（见 <code>config.js</code>）；浏览器直连可能遇 CORS。密钥变更会写入
+      <code>sessionStorage</code>。
     </p>
 
     <form id="controls" class="panel" onsubmit="return false">
@@ -207,12 +208,17 @@
         el('withdrawType').value = ''
         syncPayWayCode()
 
+        const cfgApi = (window.PaySdkDemoConfig && window.PaySdkDemoConfig.api) || {}
+        let appId = cfgApi.appId || ''
+        let appSecret = cfgApi.appSecret || ''
         try {
           const savedId = sessionStorage.getItem(SS_APP_ID)
           const savedSecret = sessionStorage.getItem(SS_APP_SECRET)
-          if (savedId) el('appId').value = savedId
-          if (savedSecret) el('appSecret').value = savedSecret
+          if (savedId) appId = savedId
+          if (savedSecret) appSecret = savedSecret
         } catch (_) {}
+        el('appId').value = appId
+        el('appSecret').value = appSecret
       }
 
       function syncPayWayCode() {

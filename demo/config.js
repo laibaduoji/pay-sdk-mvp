@@ -26,5 +26,11 @@ window.PaySdkDemoConfig = {
 
   applePay: {
     validateMerchantUrl: 'https://api-test.alchemytech.cc/pay/apple/domainName/verify'
+  },
+
+  /** TEST openapi 联调默认凭据（仅 demo；生产勿用） */
+  api: {
+    appId: 'ahzxh0klegv1fzol',
+    appSecret: 'py2bwighth62ajq6'
   }
 }
