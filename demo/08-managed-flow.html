@@ -190,7 +190,7 @@
           },
           onStatusChange(order) {
             statusEl.textContent =
-              'Payment status: ' + order.status + (order.s3dsUrl ? ' · s3dsUrl' : '')
+              'Payment status: ' + order.orderState + (order.s3dsUrl ? ' · s3dsUrl' : '')
           },
           onComplete(result) {
             outputEl.textContent = JSON.stringify(result, null, 2)

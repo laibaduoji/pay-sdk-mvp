@@ -20,8 +20,16 @@ import {
   normalizeAppleBillingAddress,
   normalizeAppleToken,
   normalizeGoogleBillingAddress,
+  buildAlchemyPayRequest,
   toError
 } from './normalize.js'
+import {
+  ORDER_STATE_FAIL,
+  ORDER_STATE_PENDING,
+  ORDER_STATE_SUCCESS,
+  isValidS3dsUrl,
+  orderStateLabel
+} from './orderState.js'
 import { collectRisk } from './risk/index.js'
 import { collectFingerprint } from './risk/fingerprint.js'
 
@@ -56,16 +64,28 @@ export type {
   BillingAddress,
   PayApiConfig,
   PayRequest,
+  PayCustomParam,
+  PayBusinessParams,
+  PayPoaParams,
   PayResponse,
   QueryOrderResponse,
+  OnRampOrderStatusLabel,
   OrderStatus,
   PaymentAction,
   PaymentActionMode
 } from './types.js'
 
-export { PayApiError, normalizeCreateOrderResponse } from './api.js'
+export { PayApiError, normalizeCreateOrderResponse, normalizeQueryOrderResponse } from './api.js'
+export { ON_RAMP_ORDER_STATUS_MAP } from './types.js'
+export {
+  ORDER_STATE_FAIL,
+  ORDER_STATE_PENDING,
+  ORDER_STATE_SUCCESS,
+  orderStateLabel
+} from './orderState.js'
 export { describePayResponse, describeS3ds } from './actions.js'
 export { getApiEndpoints, resolvePayApiConfig, resolveEnvironment } from './endpoints.js'
+export { buildAlchemyPayRequest } from './normalize.js'
 export {
   GOOGLE_PAY_TEST_DEFAULTS,
   GOOGLE_PAY_CALLBACK_INTENTS,
@@ -352,7 +372,7 @@ class PaySdk implements PaySdkInstance {
 
     if (walletResult.method === 'googlePay') {
       if (!walletResult.token) throw new Error('Google Pay token is missing')
-      return {
+      return buildAlchemyPayRequest({
         orderNo: this.order.orderNo,
         encryptedData: walletResult.token,
         billingAddress: normalizeGoogleBillingAddress(
@@ -360,16 +380,19 @@ class PaySdk implements PaySdkInstance {
           walletResult.email
         ),
         risk: walletResult.risk
-      }
+      })
     }
 
     if (!walletResult.token) throw new Error('Apple Pay token is missing')
-    return {
+    const encryptedData = walletResult.raw
+      ? JSON.stringify(walletResult.raw)
+      : JSON.stringify(normalizeAppleToken(walletResult.token))
+    return buildAlchemyPayRequest({
       orderNo: this.order.orderNo,
-      encryptedData: normalizeAppleToken(walletResult.token),
+      encryptedData,
       billingAddress: normalizeAppleBillingAddress(walletResult.billingContact),
       risk: walletResult.risk
-    }
+    })
   }
 
   private async pollOrder(walletResult: PayResult, paymentResponse: PayResponse): Promise<void> {
@@ -398,7 +421,7 @@ class PaySdk implements PaySdkInstance {
         consecutiveTransientErrors = 0
         this.config.onStatusChange?.(current)
 
-        if (current.s3dsUrl && current.s3dsUrl !== lastS3dsUrl) {
+        if (isValidS3dsUrl(current.s3dsUrl) && current.s3dsUrl !== lastS3dsUrl) {
           lastS3dsUrl = current.s3dsUrl
           const outcome = await this.dispatchAction(describeS3ds(current.s3dsUrl))
           if (outcome === 'navigated') {
@@ -407,17 +430,23 @@ class PaySdk implements PaySdkInstance {
           }
         }
 
-        if (current.status === 'failed') {
-          throw new Error(current.failureReason || 'Payment failed')
+        // 仅 orderState === PENDING 且未 s3dsComplete 时继续（有 s3dsUrl 但未导航也继续）
+        if (current.orderState === ORDER_STATE_PENDING && current.s3dsComplete !== true) {
+          continue
         }
-        if (current.status === 'succeeded') {
+
+        if (ORDER_STATE_FAIL.has(current.orderState)) {
+          throw new Error(
+            current.failureReason || `Payment failed (${orderStateLabel(current.orderState)})`
+          )
+        }
+        if (ORDER_STATE_SUCCESS.has(current.orderState)) {
           this.finish(walletResult, paymentResponse, current)
           return
         }
-        if (current.s3dsComplete === true) {
-          this.complete(walletResult, paymentResponse, current)
-          return
-        }
+        // 其它非 pending（TRANSFER 等）或仅 s3dsComplete
+        this.complete(walletResult, paymentResponse, current)
+        return
       } catch (error) {
         if (this.destroyed || generation !== this.pollGeneration) return
         if (isTransientPollError(error)) {

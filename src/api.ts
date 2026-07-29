@@ -89,6 +89,31 @@ export function normalizeCreateOrderResponse(data: CreateOrderWireData): CreateO
   }
 }
 
+/** 查单 wire：H5 用 orderStatus，Apifox 用 orderState */
+interface QueryOrderWireData extends Omit<QueryOrderResponse, 'orderState'> {
+  orderState?: number
+  orderStatus?: number
+}
+
+export function normalizeQueryOrderResponse(data: QueryOrderWireData): QueryOrderResponse {
+  const raw = data.orderState ?? data.orderStatus
+  const orderState = typeof raw === 'number' ? raw : Number(raw)
+  if (!Number.isFinite(orderState)) {
+    throw new PayApiError('Query order response is missing orderState')
+  }
+  const orderNo = data.orderNo
+  if (!orderNo) {
+    throw new PayApiError('Query order response is missing orderNo')
+  }
+  return {
+    ...data,
+    orderNo,
+    orderState,
+    s3dsUrl: typeof data.s3dsUrl === 'string' ? data.s3dsUrl : undefined,
+    s3dsComplete: data.s3dsComplete === true
+  }
+}
+
 export class PayApiClient {
   private readonly config: PayApiConfig
   private readonly fetcher: typeof fetch
@@ -126,10 +151,11 @@ export class PayApiClient {
     return this.request<PayResponse>(this.config.payUrl, 'POST', request)
   }
 
-  queryOrder(orderNo: string): Promise<QueryOrderResponse> {
+  async queryOrder(orderNo: string): Promise<QueryOrderResponse> {
     const base = this.config.queryOrderUrl.replace(/\/$/, '')
     const url = `${base}?orderNo=${encodeURIComponent(orderNo)}`
-    return this.request<QueryOrderResponse>(url, 'GET')
+    const data = await this.request<QueryOrderWireData>(url, 'GET')
+    return normalizeQueryOrderResponse(data)
   }
 
   private async resolveHeaders(

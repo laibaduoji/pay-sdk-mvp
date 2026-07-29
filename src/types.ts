@@ -190,11 +190,44 @@ export interface CreateOrderResponseApplePay {
 
 export type CreateOrderResponse = CreateOrderResponseGooglePay | CreateOrderResponseApplePay
 
+/** 支付 customParam：token + 扁平账单字段（对齐 ramp-vue） */
+export interface PayCustomParam {
+  encryptedData: string
+  addressLine1?: string
+  addressLine2?: string
+  city?: string
+  state?: string
+  zip?: string
+  country?: string
+  firstName?: string
+  lastName?: string
+}
+
+export interface PayBusinessParams {
+  /** Forter cookie / token */
+  cookie?: string
+  /** Checkout Risk device session id */
+  checkoutCookie?: string
+  dob?: string
+}
+
+export interface PayPoaParams {
+  address?: string
+  city?: string
+  state?: string
+  postcode?: string
+  country?: string
+}
+
+/** POST /alchemy-pay 请求体（对齐 ramp-vue postAlchemyPay） */
 export interface PayRequest {
   orderNo: string
-  encryptedData: string | Record<string, unknown>
-  billingAddress?: BillingAddress
-  risk?: PayRiskPayload
+  customParam: PayCustomParam
+  businessParams?: PayBusinessParams
+  /** WorldPay DDC sessionId */
+  sessionId?: string
+  /** 有账单时由账单映射；SDK 不单独采居住地址 */
+  poaParams?: PayPoaParams
 }
 
 export interface PayResponse {
@@ -206,12 +239,68 @@ export interface PayResponse {
   methodUrl?: string
 }
 
+/** On-ramp orderState → 文案（对齐 H5 ON_RAMP_ORDER_STATUS_MAP） */
+export const ON_RAMP_ORDER_STATUS_MAP = {
+  0: 'PAY_FAIL',
+  1: 'PENDING',
+  2: 'PAY_SUCCESS',
+  3: 'TRANSFER',
+  4: 'TRANSFER',
+  5: 'FINISHED',
+  6: 'CANCEL',
+  7: 'PAY_FAIL',
+  8: 'RISK_CONTROL',
+  9: 'REFUNDED',
+  10: 'REFUNDED',
+  11: 'PAY_FAIL'
+} as const
+
+export type OnRampOrderStatusLabel =
+  (typeof ON_RAMP_ORDER_STATUS_MAP)[keyof typeof ON_RAMP_ORDER_STATUS_MAP]
+
+export interface QueryOrderPaymentInfoExtend {
+  isWorldPay?: number
+  worldPayJwt?: string | null
+  s2sRiskCheck?: boolean
+}
+
+export interface QueryOrderKycInfoExtend {
+  webUrl?: string
+  isDoKyc?: boolean
+  currKycStatus?: number
+}
+
+/** GET order/detail 响应 data（Apifox 493859900 + H5 s3dsUrl） */
 export interface QueryOrderResponse {
   orderNo: string
-  status: OrderStatus
-  failureReason?: string
+  orderState: number
+  /** H5 轮询使用；Apifox schema 可能未列出 */
   s3dsUrl?: string
   s3dsComplete?: boolean
+  fiatCurrency?: string
+  fiatCurrencyAmount?: number
+  amount?: number
+  toUsdXR?: number | null
+  payWayCode?: string
+  channelCode?: string
+  redirectUrl?: string
+  appId?: string
+  usdToXR?: number | null
+  merchantOrderNo?: string | null
+  alpha2?: string
+  cardNo?: string | null
+  cvv?: string | null
+  usdAmount?: number
+  createdTime?: number
+  payTime?: number | null
+  updatedTime?: number
+  cryptoCurrency?: string
+  cryptoCurrencyQuantity?: string
+  paymentInfoExtend?: QueryOrderPaymentInfoExtend | null
+  kycInfoExtend?: QueryOrderKycInfoExtend | null
+  needPopup?: boolean
+  popupCode?: string
+  failureReason?: string
 }
 
 export interface PayApiConfig {

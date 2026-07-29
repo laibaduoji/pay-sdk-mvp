@@ -71,13 +71,13 @@ npm run format     # prettier write
       console.log(order.orderNo, order.method)
     },
     onStatusChange(order) {
-      console.log(order.status)
+      console.log(order.orderState)
     },
     onComplete(result) {
-      console.log('flow complete', result.order?.status)
+      console.log('flow complete', result.order?.orderState)
     },
     onSuccess(result) {
-      console.log(result.orderNo, result.order?.status)
+      console.log(result.orderNo, result.order?.orderState)
     },
     onError(error) {
       console.error(error)

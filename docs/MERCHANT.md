@@ -82,7 +82,7 @@
           appSecret: 'YOUR_APP_SECRET'
         },
         onSuccess(result) {
-          console.log('支付成功', result.orderNo, result.order && result.order.status)
+          console.log('支付成功', result.orderNo, result.order && result.order.orderState)
           // 跳转商户成功页
         },
         onError(error) {
@@ -311,7 +311,7 @@ SDK 内置打开行为：
 
 说明：
 
-- 编排成功时商户一般看 `orderNo`、`order.status`，不必再自己拿 token 调支付接口（SDK 已调）
+- 编排成功时商户一般看 `orderNo`、`order.orderState`，不必再自己拿 token 调支付接口（SDK 已调）
 - `onComplete` 在 `s3dsComplete === true` 但状态尚未终态时也可能触发，需结合 `order` 判断
 
 ### 错误与取消

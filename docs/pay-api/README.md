@@ -4,7 +4,7 @@
 
 | #   | 文件                                             | 方法     | 类型                                                   | 何时调用                                       |
 | --- | ------------------------------------------------ | -------- | ------------------------------------------------------ | ---------------------------------------------- |
-| —   | [`common.ts`](./common.ts)                       | —        | `ApiResponse` / `OrderStatus` / `BillingAddress`       | 共用                                           |
+| —   | [`common.ts`](./common.ts)                       | —        | `ApiResponse` / `BillingAddress`                       | 共用                                           |
 | 1   | [`create-order.ts`](./create-order.ts)           | **POST** | `CreateOrderRequest` → `CreateOrderResponse`           | 拿 `paymentScript` / `risk`，渲染钱包按钮      |
 | 2   | [`validate-merchant.ts`](./validate-merchant.ts) | **POST** | `ValidateMerchantRequest` → `ValidateMerchantResponse` | 仅 Apple Pay，`onvalidatemerchant`             |
 | 3   | [`pay.ts`](./pay.ts)                             | **POST** | `PayRequest` → `PayResponse`                           | 钱包授权后；风控宜在创建订单后预采、支付时复用 |
@@ -176,31 +176,38 @@ SDK 固定使用 `callbackIntents: ['PAYMENT_AUTHORIZATION']`，并注册
 
 **POST** `/open/api/v4/merchant/alchemy-pay`
 
+对齐 ramp-vue；Apifox 493859922 成功示例不可信。
+
 ### 请求
 
 ```ts
 {
   orderNo: string
-  encryptedData: string | object  // GP 加密串 / AP payment.token
-  billingAddress?: BillingAddress // 开启账单地址时
-  risk?: {
-    forter?: { token: string }
-    checkout?: { deviceSessionId: string }
-    worldPay?: { sessionId: string }
+  customParam: {
+    encryptedData: string  // GP token 串；AP JSON.stringify(payment)
+    addressLine1?, addressLine2?, city?, state?, zip?, country?,
+    firstName?, lastName?
+  }
+  businessParams?: {
+    cookie?: string          // Forter
+    checkoutCookie?: string  // Checkout
+    dob?: string             // 可选扩展
+  }
+  sessionId?: string         // WorldPay
+  poaParams?: {              // 有账单时由账单映射
+    address?, city?, state?, postcode?, country?
   }
 }
 ```
 
-`BillingAddress`：`addressLine1`、`addressLine2`、`city`、`state`、`zip`、`country`、`firstName`、`lastName` 必传；`phone`、`email` 可选。
-
-`risk` 仅上送创建订单里 `enabled === true` 的块。
+SDK 从钱包结果映射：`encryptedData` → `customParam`；账单扁平进 `customParam` 与 `poaParams`；`risk.forter/checkout/worldPay` → `businessParams` / `sessionId`。
 
 ### 响应 `data`
 
 | 字段                              | 说明            |
 | --------------------------------- | --------------- |
-| `webUrl`                          | 普通跳转        |
 | `MD` / `JWT` / `action`           | WorldPay 等 3DS |
+| `webUrl`                          | 普通跳转        |
 | `threeDSMethodData` / `methodUrl` | Shift4 方法页   |
 
 有二次动作字段则开页并轮询接口 4；都没有且 `returnCode=0000` 则直接成功。
@@ -215,13 +222,15 @@ SDK 固定使用 `callbackIntents: ['PAYMENT_AUTHORIZATION']`，并注册
 
 ### 响应 `data`
 
-| 字段            | 说明                                                      |
-| --------------- | --------------------------------------------------------- |
-| `orderNo`       | 订单号                                                    |
-| `status`        | `pending` \| `requires_action` \| `succeeded` \| `failed` |
-| `failureReason` | 失败原因（可选）                                          |
-| `s3dsUrl`       | 有则跳转继续 3DS 验证                                     |
-| `s3dsComplete`  | `true` 时停止轮询并通知商户跳结果页                       |
+| 字段            | 说明                                                           |
+| --------------- | -------------------------------------------------------------- |
+| `orderNo`       | 订单号                                                         |
+| `orderState`    | 数字状态（兼容 `orderStatus`）；见 `ON_RAMP_ORDER_STATUS_MAP`  |
+| `s3dsUrl`       | 有则 `onAction`；导航成功停轮询（H5 有，Apifox schema 可能缺） |
+| `s3dsComplete`  | `true` 时停止轮询                                              |
+| `failureReason` | 失败原因（可选）                                               |
+
+轮询：仅 `orderState === 1` 且未 `s3dsComplete` 时继续；`{0,6,7,8,9,10,11}` → 失败；`{2,5}` → 成功。
 
 见 [`query-order.ts`](./query-order.ts)。
 
@@ -231,4 +240,4 @@ SDK 固定使用 `callbackIntents: ['PAYMENT_AUTHORIZATION']`，并注册
 
 - `environment`：钱包 + 风控共用；Google Pay 创建 `PaymentsClient` 时使用，不在 `paymentScript` 内。
 - 含 `PAYMENT_AUTHORIZATION` 时须提供 `onPaymentAuthorized`，否则 sheet 会失败或卡住。
-- 与历史 payment-hub 字段映射由服务端完成；联调以本目录为准。
+- 与历史 payment-hub 字段映射由服务端完成；联调以本目录与 ramp-vue 为准。

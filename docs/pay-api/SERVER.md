@@ -118,7 +118,7 @@ sequenceDiagram
     SDK->>Page: 商户打开或 sdk.openAction
     loop 轮询
       SDK->>API: 4 GET 查询订单
-      API-->>SDK: status / s3dsUrl / s3dsComplete
+      API-->>SDK: orderState / s3dsUrl / s3dsComplete
     end
   end
 ```
@@ -325,7 +325,7 @@ TEST 环境缺省时 SDK 会补齐；PRODUCTION 请务必下发真实商户信�
 | `checkout` | `publicKey`、`scriptUrl`、`integrity` | 可用内置默认（按环境选沙盒/生产 key） |
 | `worldPay` | `jwt`、`bin`、`actionUrl`             | **不行**：至少需要动态 `jwt` 才能采集 |
 
-支付接口 body 中的其它风控采集结果见接口 3 的 `risk`。
+SDK 采集的风控结果映射到接口 3 的 `businessParams` / `sessionId`（见下）。
 
 ---
 
@@ -387,49 +387,53 @@ TEST 环境缺省时 SDK 会补齐；PRODUCTION 请务必下发真实商户信�
 
 **POST** `/open/api/v4/merchant/alchemy-pay`
 
-钱包授权完成后调用。先看外层 `returnCode`，再看 `data` 是否含二次动作字段。
+钱包授权完成后调用。请求形态对齐 **ramp-vue**（Apifox 493859922 body/成功示例不可信）。先看外层 `returnCode`，再看 `data` 是否含二次动作字段。
 
 ### 6.1 请求 `PayRequest`
 
-| 字段             | 类型             | 必填    | 说明                                                                                        |
-| ---------------- | ---------------- | ------- | ------------------------------------------------------------------------------------------- |
-| `orderNo`        | `string`         | 是      |                                                                                             |
-| `encryptedData`  | `string          | object` | 是                                                                                          | Google：加密 token 字符串；Apple：`payment.token` 对象或序列化串 |
-| `billingAddress` | `BillingAddress` | 否      | 创建订单要求账单地址时 SDK 会带上                                                           |
-| `risk`           | `PayRiskPayload` | 否      | 仅包含创建订单里 `enabled === true` 的块；**不含** Fingerprint（走请求头 `fingerprint-id`） |
+| 字段             | 类型                | 必填 | 说明                                                                  |
+| ---------------- | ------------------- | ---- | --------------------------------------------------------------------- |
+| `orderNo`        | `string`            | 是   | openapi 商户 SDK 显式带上（H5 常依赖 payment-hub-token，body 可不写） |
+| `customParam`    | `PayCustomParam`    | 是   | `encryptedData` + 扁平账单字段                                        |
+| `businessParams` | `PayBusinessParams` | 否   | Forter / Checkout / dob                                               |
+| `sessionId`      | `string`            | 否   | WorldPay DDC sessionId                                                |
+| `poaParams`      | `PayPoaParams`      | 否   | 有账单时由账单映射；无账单不传                                        |
 
-#### `BillingAddress`
+#### `customParam`
 
-| 字段           | 必填 |
-| -------------- | ---- |
-| `addressLine1` | 是   |
-| `addressLine2` | 是   |
-| `city`         | 是   |
-| `state`        | 是   |
-| `zip`          | 是   |
-| `country`      | 是   |
-| `firstName`    | 是   |
-| `lastName`     | 是   |
-| `phone`        | 否   |
-| `email`        | 否   |
+| 字段                   | 必填 | 说明                                               |
+| ---------------------- | ---- | -------------------------------------------------- |
+| `encryptedData`        | 是   | Google：token 串；Apple：`JSON.stringify(payment)` |
+| `addressLine1` 等地址  | 否   | 有账单时扁平展开（非嵌套 `billingAddress`）        |
+| `firstName`/`lastName` | 否   | 有账单时带上                                       |
 
-#### `PayRiskPayload`（采集结果，支付 body）
+#### `businessParams`
 
-| 字段                       | 说明                |
-| -------------------------- | ------------------- |
-| `forter.token`             | Forter              |
-| `checkout.deviceSessionId` | Checkout Risk.js    |
-| `worldPay.sessionId`       | WorldPay / Cardinal |
+| 字段             | 说明                                              |
+| ---------------- | ------------------------------------------------- |
+| `cookie`         | Forter（← SDK `risk.forter.token`）               |
+| `checkoutCookie` | Checkout（← SDK `risk.checkout.deviceSessionId`） |
+| `dob`            | 可选扩展；本阶段 SDK init 不采集                  |
 
 Fingerprint `visitorId` 仅在请求头 `fingerprint-id`，不在 body。
+
+#### `poaParams`（账单同居住地）
+
+| wire 字段  | 来自账单       |
+| ---------- | -------------- |
+| `address`  | `addressLine1` |
+| `city`     | `city`         |
+| `state`    | `state`        |
+| `postcode` | `zip`          |
+| `country`  | `country`      |
 
 #### 请求示例
 
 ```json
 {
   "orderNo": "ord_xxx",
-  "encryptedData": "...google-pay-encrypted-token...",
-  "billingAddress": {
+  "customParam": {
+    "encryptedData": "...google-pay-encrypted-token...",
     "addressLine1": "1 Main St",
     "addressLine2": "",
     "city": "San Francisco",
@@ -437,35 +441,41 @@ Fingerprint `visitorId` 仅在请求头 `fingerprint-id`，不在 body。
     "zip": "94105",
     "country": "US",
     "firstName": "Jane",
-    "lastName": "Doe",
-    "phone": "+1...",
-    "email": "jane@example.com"
+    "lastName": "Doe"
   },
-  "risk": {
-    "forter": { "token": "your-forter-token" },
-    "checkout": { "deviceSessionId": "dsid_..." },
-    "worldPay": { "sessionId": "your-worldpay-sessionId" }
+  "businessParams": {
+    "cookie": "your-forter-token",
+    "checkoutCookie": "dsid_..."
+  },
+  "sessionId": "your-worldpay-sessionId",
+  "poaParams": {
+    "address": "1 Main St",
+    "city": "San Francisco",
+    "state": "CA",
+    "postcode": "94105",
+    "country": "US"
   }
 }
 ```
 
 ### 6.2 响应 `data` — `PayResponse`
 
-二次动作字段**成组出现**；都没有且 `returnCode=0000` → 直接成功，**不调**接口 4。
+二次动作字段**成组出现**（对齐 `handleAlchemyPayResponse`）；都没有且 `returnCode=0000` → 直接成功，**不调**接口 4。  
+**忽略** Apifox 成功示例里的订单详情字段。
 
 | 字段组                                        | 说明            |
 | --------------------------------------------- | --------------- |
 | （无下列字段）                                | 直接成功        |
-| `webUrl`                                      | 普通跳转页      |
 | `MD` + `JWT` + `action`（三者都要）           | WorldPay 等 3DS |
+| `webUrl`                                      | 普通跳转页      |
 | `threeDSMethodData` + `methodUrl`（两者都要） | Shift4 等方法页 |
 
 | 条件                                   | 客户端行为                  | 是否轮询接口 4 |
 | -------------------------------------- | --------------------------- | -------------- |
 | `returnCode !== '0000'`                | 失败，展示 `returnMsg`      | 否             |
 | `data` 无二次动作字段                  | 成功结束                    | 否             |
-| 有 `webUrl`                            | `onAction` / 打开 webUrl    | 是             |
 | 有完整 `MD`+`JWT`+`action`             | `onAction` / 打开 3DS       | 是             |
+| 有 `webUrl`                            | `onAction` / 打开 webUrl    | 是             |
 | 有完整 `threeDSMethodData`+`methodUrl` | `onAction` / 打开 method 页 | 是             |
 
 #### 直接成功
@@ -535,29 +545,51 @@ Fingerprint `visitorId` 仅在请求头 `fingerprint-id`，不在 body。
 
 **GET** `/open/api/v4/merchant/order/detail?orderNo={orderNo}`
 
-**仅**接口 3 进入二次动作后需要。SDK 默认约每 2s 轮询，最长约 5 分钟。Query 参数名为 `orderNo`（SDK 传入创建订单返回的订单号）。
+**仅**接口 3 进入二次动作后需要。SDK 默认约每 2s 轮询，最长约 5 分钟。Query 参数名为 `orderNo`（SDK 传入创建订单返回的订单号）。对照 Apifox **493859900** + H5 轮询。
 
-### 7.1 响应 `data` — `QueryOrderResponse`
+### 7.1 `orderState` 映射
 
-| 字段            | 类型       | 必填              | 说明                       |
-| --------------- | ---------- | ----------------- | -------------------------- |
-| `orderNo`       | `string`   | 是                |                            |
-| `status`        | `'pending' | 'requires_action' | 'succeeded'                | 'failed'` | 是  |     |
-| `failureReason` | `string`   | 否                | 失败原因                   |
-| `s3dsUrl`       | `string`   | 否                | 有值：继续 3DS（可仍轮询） |
-| `s3dsComplete`  | `boolean`  | 否                | `true`：停止轮询并结束编排 |
+| orderState | 文案         |
+| ---------- | ------------ |
+| 0, 7, 11   | PAY_FAIL     |
+| 1          | PENDING      |
+| 2          | PAY_SUCCESS  |
+| 3, 4       | TRANSFER     |
+| 5          | FINISHED     |
+| 6          | CANCEL       |
+| 8          | RISK_CONTROL |
+| 9, 10      | REFUNDED     |
 
-### 7.2 轮询停止规则（客户端）
+Wire 字段名为 `orderState`；兼容读 H5 的 `orderStatus`。
+
+### 7.2 响应 `data` — `QueryOrderResponse`（要点）
+
+| 字段            | 类型      | 必填 | 说明                                     |
+| --------------- | --------- | ---- | ---------------------------------------- |
+| `orderNo`       | `string`  | 是   |                                          |
+| `orderState`    | `number`  | 是   | 见上表                                   |
+| `s3dsUrl`       | `string`  | 否   | H5 有；Apifox schema 可能缺，须支持      |
+| `s3dsComplete`  | `boolean` | 否   | `true`：停止轮询                         |
+| `failureReason` | `string`  | 否   | 失败原因                                 |
+| S2S 扩展        | object    | 否   | `paymentInfoExtend` / `kycInfoExtend` 等 |
+
+### 7.3 轮询停止规则（客户端，对齐 H5）
 
 在外层 `returnCode === '0000'` 时：
 
-1. 出现新的 `s3dsUrl` → 通知商户打开该 URL（轮询可继续）
-2. `status` 为 `succeeded` / `failed`，或 `s3dsComplete === true` → **停止轮询**
-3. 否则继续轮询
+1. 有效 `s3dsUrl` → `onAction`；**导航成功则停轮询**
+2. `orderState !== 1` 或 `s3dsComplete === true` → **停止轮询**
+3. 仅 `orderState === 1` 且未 complete 时继续
 
-### 7.3 示例
+停表后回调：
 
-**进行中**
+- `{0,6,7,8,9,10,11}` → `onError`
+- `{2,5}` → `onSuccess` + `onComplete`
+- 其它非 pending / 仅 `s3dsComplete` → `onComplete`
+
+### 7.4 示例
+
+**进行中（PENDING）**
 
 ```json
 {
@@ -567,7 +599,7 @@ Fingerprint `visitorId` 仅在请求头 `fingerprint-id`，不在 body。
   "extend": "",
   "data": {
     "orderNo": "ord_xxx",
-    "status": "pending",
+    "orderState": 1,
     "s3dsComplete": false
   },
   "traceId": "68b11d63f919cca7adbb4bbe57939df9"
@@ -584,7 +616,7 @@ Fingerprint `visitorId` 仅在请求头 `fingerprint-id`，不在 body。
   "extend": "",
   "data": {
     "orderNo": "ord_xxx",
-    "status": "requires_action",
+    "orderState": 1,
     "s3dsUrl": "https://acs.example/challenge",
     "s3dsComplete": false
   },
@@ -592,7 +624,7 @@ Fingerprint `visitorId` 仅在请求头 `fingerprint-id`，不在 body。
 }
 ```
 
-**成功**
+**成功（PAY_SUCCESS）**
 
 ```json
 {
@@ -602,14 +634,19 @@ Fingerprint `visitorId` 仅在请求头 `fingerprint-id`，不在 body。
   "extend": "",
   "data": {
     "orderNo": "ord_xxx",
-    "status": "succeeded",
-    "s3dsComplete": true
+    "orderState": 2,
+    "s3dsComplete": true,
+    "paymentInfoExtend": {
+      "isWorldPay": 0,
+      "worldPayJwt": null,
+      "s2sRiskCheck": false
+    }
   },
   "traceId": "68b11d63f919cca7adbb4bbe57939df9"
 }
 ```
 
-**失败**
+**失败（PAY_FAIL）**
 
 ```json
 {
@@ -619,7 +656,7 @@ Fingerprint `visitorId` 仅在请求头 `fingerprint-id`，不在 body。
   "extend": "",
   "data": {
     "orderNo": "ord_xxx",
-    "status": "failed",
+    "orderState": 0,
     "failureReason": "authentication_failed",
     "s3dsComplete": true
   },
@@ -627,7 +664,7 @@ Fingerprint `visitorId` 仅在请求头 `fingerprint-id`，不在 body。
 }
 ```
 
-> 注意：上例失败时外层仍可为 `returnCode=0000`（查询接口调用成功），业务失败看 `data.status === 'failed'`。
+> 注意：上例失败时外层仍可为 `returnCode=0000`（查询接口调用成功），业务失败看 `data.orderState`。
 
 ---
 
@@ -640,6 +677,7 @@ Fingerprint `visitorId` 仅在请求头 `fingerprint-id`，不在 body。
 - Google：`callbackIntents` 可下发也可不下发，SDK 固定为 `["PAYMENT_AUTHORIZATION"]`
 - Apple：`validateMerchantUrl` 可选；接口 2 的 `data` 为 Apple opaque session
 - `risk`：按需 `enabled`；WorldPay 开启时务必下发动态 `jwt`
+- 支付请求使用 `customParam` / `businessParams` / `sessionId` / `poaParams`，勿再要求扁平 `encryptedData`+`billingAddress`+`risk`
 - 支付响应二次动作字段成组完整（`MD+JWT+action` 或 `threeDSMethodData+methodUrl`），不要半套
-- 有二次动作时，查询接口能推进到 `succeeded` / `failed` 或 `s3dsComplete: true`
-- 与历史 payment-hub 字段映射由服务端完成；对 SDK 暴露面以本文为准
+- 查单以 `orderState` 为准，并下发 H5 使用的 `s3dsUrl` / `s3dsComplete`
+- 与历史 payment-hub 字段映射由服务端完成；对 SDK 暴露面以本文与 ramp-vue 为准

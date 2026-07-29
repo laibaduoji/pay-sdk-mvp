@@ -1,4 +1,12 @@
-import type { GooglePayResult, ApplePayResult, BillingAddress } from './types.js'
+import type {
+  GooglePayResult,
+  ApplePayResult,
+  BillingAddress,
+  PayRequest,
+  PayCustomParam,
+  PayBusinessParams,
+  PayRiskPayload
+} from './types.js'
 
 export function normalizeGoogleResult(
   paymentData: google.payments.api.PaymentData
@@ -92,6 +100,56 @@ export function normalizeAppleToken(
     paymentMethod: token.paymentMethod,
     transactionIdentifier: token.transactionIdentifier
   }
+}
+
+/**
+ * 组装 alchemy-pay 请求体（对齐 ramp-vue getGP/APAlchemyPayParams）。
+ * SDK 侧仍用 BillingAddress / PayRiskPayload 采集，再映射到 wire。
+ */
+export function buildAlchemyPayRequest(input: {
+  orderNo: string
+  encryptedData: string
+  billingAddress?: BillingAddress
+  risk?: PayRiskPayload
+}): PayRequest {
+  const customParam: PayCustomParam = { encryptedData: input.encryptedData }
+  const billing = input.billingAddress
+  if (billing) {
+    customParam.addressLine1 = billing.addressLine1
+    customParam.addressLine2 = billing.addressLine2
+    customParam.city = billing.city
+    customParam.state = billing.state
+    customParam.zip = billing.zip
+    customParam.country = billing.country
+    customParam.firstName = billing.firstName
+    customParam.lastName = billing.lastName
+  }
+
+  const businessParams: PayBusinessParams = {}
+  const risk = input.risk
+  if (risk?.forter?.token) businessParams.cookie = risk.forter.token
+  if (risk?.checkout?.deviceSessionId) businessParams.checkoutCookie = risk.checkout.deviceSessionId
+
+  const request: PayRequest = {
+    orderNo: input.orderNo,
+    customParam
+  }
+  if (Object.keys(businessParams).length > 0) {
+    request.businessParams = businessParams
+  }
+  if (risk?.worldPay?.sessionId) {
+    request.sessionId = risk.worldPay.sessionId
+  }
+  if (billing) {
+    request.poaParams = {
+      address: billing.addressLine1,
+      city: billing.city,
+      state: billing.state,
+      postcode: billing.zip,
+      country: billing.country
+    }
+  }
+  return request
 }
 
 export function isGoogleCancel(err: unknown): boolean {

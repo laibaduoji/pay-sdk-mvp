@@ -60,9 +60,9 @@ const sdk = PaySdk.init({
     // 商户自行开窗 / Native Bridge；或授权后调用 sdk.openAction(action)
   },
   onOrderCreated: (order) => console.log(order.orderNo),
-  onStatusChange: (order) => console.log(order.status),
-  onComplete: (result) => console.log('flow complete', result.order?.status),
-  onSuccess: (result) => console.log(result.orderNo, result.order?.status),
+  onStatusChange: (order) => console.log(order.orderState),
+  onComplete: (result) => console.log('flow complete', result.order?.orderState),
+  onSuccess: (result) => console.log(result.orderNo, result.order?.orderState),
   onError: (error) => console.error(error)
 })
 

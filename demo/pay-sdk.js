@@ -128,6 +128,45 @@ var PaySdk = function(exports) {
       transactionIdentifier: token.transactionIdentifier
     };
   }
+  function buildAlchemyPayRequest(input) {
+    var _a, _b, _c;
+    const customParam = { encryptedData: input.encryptedData };
+    const billing = input.billingAddress;
+    if (billing) {
+      customParam.addressLine1 = billing.addressLine1;
+      customParam.addressLine2 = billing.addressLine2;
+      customParam.city = billing.city;
+      customParam.state = billing.state;
+      customParam.zip = billing.zip;
+      customParam.country = billing.country;
+      customParam.firstName = billing.firstName;
+      customParam.lastName = billing.lastName;
+    }
+    const businessParams = {};
+    const risk = input.risk;
+    if ((_a = risk == null ? void 0 : risk.forter) == null ? void 0 : _a.token) businessParams.cookie = risk.forter.token;
+    if ((_b = risk == null ? void 0 : risk.checkout) == null ? void 0 : _b.deviceSessionId) businessParams.checkoutCookie = risk.checkout.deviceSessionId;
+    const request = {
+      orderNo: input.orderNo,
+      customParam
+    };
+    if (Object.keys(businessParams).length > 0) {
+      request.businessParams = businessParams;
+    }
+    if ((_c = risk == null ? void 0 : risk.worldPay) == null ? void 0 : _c.sessionId) {
+      request.sessionId = risk.worldPay.sessionId;
+    }
+    if (billing) {
+      request.poaParams = {
+        address: billing.addressLine1,
+        city: billing.city,
+        state: billing.state,
+        postcode: billing.zip,
+        country: billing.country
+      };
+    }
+    return request;
+  }
   function isGoogleCancel(err) {
     return (err == null ? void 0 : err.statusCode) === "CANCELED";
   }
@@ -950,6 +989,24 @@ apple-pay-button {
       risk: data.risk
     };
   }
+  function normalizeQueryOrderResponse(data) {
+    const raw = data.orderState ?? data.orderStatus;
+    const orderState = typeof raw === "number" ? raw : Number(raw);
+    if (!Number.isFinite(orderState)) {
+      throw new PayApiError("Query order response is missing orderState");
+    }
+    const orderNo = data.orderNo;
+    if (!orderNo) {
+      throw new PayApiError("Query order response is missing orderNo");
+    }
+    return {
+      ...data,
+      orderNo,
+      orderState,
+      s3dsUrl: typeof data.s3dsUrl === "string" ? data.s3dsUrl : void 0,
+      s3dsComplete: data.s3dsComplete === true
+    };
+  }
   class PayApiClient {
     constructor(config) {
       this.config = config;
@@ -975,10 +1032,11 @@ apple-pay-button {
     pay(request) {
       return this.request(this.config.payUrl, "POST", request);
     }
-    queryOrder(orderNo) {
+    async queryOrder(orderNo) {
       const base = this.config.queryOrderUrl.replace(/\/$/, "");
       const url = `${base}?orderNo=${encodeURIComponent(orderNo)}`;
-      return this.request(url, "GET");
+      const data = await this.request(url, "GET");
+      return normalizeQueryOrderResponse(data);
     }
     async resolveHeaders(url, method, bodyString) {
       const configured = typeof this.config.headers === "function" ? await this.config.headers() : this.config.headers;
@@ -1204,6 +1262,29 @@ apple-pay-button {
   }
   function resolveEnvironment(environment) {
     return environment === "TEST" ? "TEST" : "PRODUCTION";
+  }
+  const ON_RAMP_ORDER_STATUS_MAP = {
+    0: "PAY_FAIL",
+    1: "PENDING",
+    2: "PAY_SUCCESS",
+    3: "TRANSFER",
+    4: "TRANSFER",
+    5: "FINISHED",
+    6: "CANCEL",
+    7: "PAY_FAIL",
+    8: "RISK_CONTROL",
+    9: "REFUNDED",
+    10: "REFUNDED",
+    11: "PAY_FAIL"
+  };
+  const ORDER_STATE_FAIL = /* @__PURE__ */ new Set([0, 6, 7, 8, 9, 10, 11]);
+  const ORDER_STATE_SUCCESS = /* @__PURE__ */ new Set([2, 5]);
+  const ORDER_STATE_PENDING = 1;
+  function orderStateLabel(orderState) {
+    return ON_RAMP_ORDER_STATUS_MAP[orderState] || `UNKNOWN_${orderState}`;
+  }
+  function isValidS3dsUrl(url) {
+    return typeof url === "string" && url.trim().length > 0;
   }
   function e(e2, t2) {
     return (Array.isArray(e2) ? e2 : [e2]).map((e3) => function(e4, t3) {
@@ -1632,7 +1713,9 @@ apple-pay-button {
       return value == null || value === "";
     });
     if (missing.length) {
-      throw new Error(`order.${missing.join(", order.")} ${missing.length > 1 ? "are" : "is"} required`);
+      throw new Error(
+        `order.${missing.join(", order.")} ${missing.length > 1 ? "are" : "is"} required`
+      );
     }
   }
   function hasSecondaryAction(response) {
@@ -1841,7 +1924,7 @@ apple-pay-button {
       if (!this.order) throw new Error("Order is not ready");
       if (walletResult.method === "googlePay") {
         if (!walletResult.token) throw new Error("Google Pay token is missing");
-        return {
+        return buildAlchemyPayRequest({
           orderNo: this.order.orderNo,
           encryptedData: walletResult.token,
           billingAddress: normalizeGoogleBillingAddress(
@@ -1849,15 +1932,16 @@ apple-pay-button {
             walletResult.email
           ),
           risk: walletResult.risk
-        };
+        });
       }
       if (!walletResult.token) throw new Error("Apple Pay token is missing");
-      return {
+      const encryptedData = walletResult.raw ? JSON.stringify(walletResult.raw) : JSON.stringify(normalizeAppleToken(walletResult.token));
+      return buildAlchemyPayRequest({
         orderNo: this.order.orderNo,
-        encryptedData: normalizeAppleToken(walletResult.token),
+        encryptedData,
         billingAddress: normalizeAppleBillingAddress(walletResult.billingContact),
         risk: walletResult.risk
-      };
+      });
     }
     async pollOrder(walletResult, paymentResponse) {
       var _a, _b;
@@ -1882,7 +1966,7 @@ apple-pay-button {
           if (this.destroyed || generation !== this.pollGeneration) return;
           consecutiveTransientErrors = 0;
           (_b = (_a = this.config).onStatusChange) == null ? void 0 : _b.call(_a, current);
-          if (current.s3dsUrl && current.s3dsUrl !== lastS3dsUrl) {
+          if (isValidS3dsUrl(current.s3dsUrl) && current.s3dsUrl !== lastS3dsUrl) {
             lastS3dsUrl = current.s3dsUrl;
             const outcome = await this.dispatchAction(describeS3ds(current.s3dsUrl));
             if (outcome === "navigated") {
@@ -1890,17 +1974,20 @@ apple-pay-button {
               return;
             }
           }
-          if (current.status === "failed") {
-            throw new Error(current.failureReason || "Payment failed");
+          if (current.orderState === ORDER_STATE_PENDING && current.s3dsComplete !== true) {
+            continue;
           }
-          if (current.status === "succeeded") {
+          if (ORDER_STATE_FAIL.has(current.orderState)) {
+            throw new Error(
+              current.failureReason || `Payment failed (${orderStateLabel(current.orderState)})`
+            );
+          }
+          if (ORDER_STATE_SUCCESS.has(current.orderState)) {
             this.finish(walletResult, paymentResponse, current);
             return;
           }
-          if (current.s3dsComplete === true) {
-            this.complete(walletResult, paymentResponse, current);
-            return;
-          }
+          this.complete(walletResult, paymentResponse, current);
+          return;
         } catch (error) {
           if (this.destroyed || generation !== this.pollGeneration) return;
           if (isTransientPollError(error)) {
@@ -1987,13 +2074,20 @@ apple-pay-button {
   }
   exports.GOOGLE_PAY_CALLBACK_INTENTS = GOOGLE_PAY_CALLBACK_INTENTS;
   exports.GOOGLE_PAY_TEST_DEFAULTS = GOOGLE_PAY_TEST_DEFAULTS;
+  exports.ON_RAMP_ORDER_STATUS_MAP = ON_RAMP_ORDER_STATUS_MAP;
+  exports.ORDER_STATE_FAIL = ORDER_STATE_FAIL;
+  exports.ORDER_STATE_PENDING = ORDER_STATE_PENDING;
+  exports.ORDER_STATE_SUCCESS = ORDER_STATE_SUCCESS;
   exports.PayApiError = PayApiError;
   exports.applyGooglePayTestDefaults = applyGooglePayTestDefaults;
+  exports.buildAlchemyPayRequest = buildAlchemyPayRequest;
   exports.describePayResponse = describePayResponse;
   exports.describeS3ds = describeS3ds;
   exports.getApiEndpoints = getApiEndpoints;
   exports.init = init;
   exports.normalizeCreateOrderResponse = normalizeCreateOrderResponse;
+  exports.normalizeQueryOrderResponse = normalizeQueryOrderResponse;
+  exports.orderStateLabel = orderStateLabel;
   exports.resolveEnvironment = resolveEnvironment;
   exports.resolvePayApiConfig = resolvePayApiConfig;
   Object.defineProperty(exports, Symbol.toStringTag, { value: "Module" });

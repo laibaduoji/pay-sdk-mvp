@@ -2,32 +2,64 @@
  * 接口 3 — 支付
  * POST /open/api/v4/merchant/alchemy-pay
  *
+ * 请求形态对齐 ramp-vue（GP/AP）；Apifox 493859922 body/成功示例不可信。
+ *
  * 先看外层 returnCode==='0000'，再看 data 里是否有二次动作字段：
  * 1) 无 webUrl / MD+JWT+action / threeDSMethodData+methodUrl → 成功结束，不调接口 4
  * 2) 有上述字段 → 打开对应页面，轮询接口 4
  * 接口失败（returnCode!=='0000'）看 returnMsg，不调接口 4
  */
 
-import type { ApiResponse, BillingAddress } from './common'
+import type { ApiResponse } from './common'
 
-/** 支付上送的风控采集结果（仅创建订单里 enabled 的块；Fingerprint 走请求头 fingerprint-id） */
-export interface PayRiskPayload {
-  forter?: { token: string }
-  checkout?: { deviceSessionId: string }
-  worldPay?: { sessionId: string }
+export interface PayCustomParam {
+  /** Google：token 串；Apple：JSON.stringify(event.payment) */
+  encryptedData: string
+  addressLine1?: string
+  addressLine2?: string
+  city?: string
+  state?: string
+  zip?: string
+  country?: string
+  firstName?: string
+  lastName?: string
 }
 
+export interface PayBusinessParams {
+  /** Forter ← risk.forter.token */
+  cookie?: string
+  /** Checkout Risk ← risk.checkout.deviceSessionId */
+  checkoutCookie?: string
+  /** 可选扩展；本阶段 SDK init 不采集 */
+  dob?: string
+}
+
+export interface PayPoaParams {
+  address?: string
+  city?: string
+  state?: string
+  postcode?: string
+  country?: string
+}
+
+/** POST /alchemy-pay 请求体（对齐 ramp-vue） */
 export interface PayRequest {
   orderNo: string
-  /** Google Pay：加密 token 字符串；Apple Pay：payment.token 对象或序列化字符串 */
-  encryptedData: string | Record<string, unknown>
-  billingAddress?: BillingAddress
-  risk?: PayRiskPayload
+  customParam: PayCustomParam
+  businessParams?: PayBusinessParams
+  /** WorldPay DDC ← risk.worldPay.sessionId */
+  sessionId?: string
+  /**
+   * 有账单时由账单映射（账单同居住地）；无账单则不传。
+   * address←addressLine1, postcode←zip
+   */
+  poaParams?: PayPoaParams
 }
 
 /**
- * 支付成功时 data 载荷。
+ * 支付成功时 data 载荷（二次动作，对齐 digitalWalletMixin.handleAlchemyPayResponse）。
  * 字段有值则走对应二次动作；都无则直接成功。
+ * 忽略 Apifox 成功示例中的订单详情字段。
  */
 export interface PayResponse {
   /** WorldPay 等 3DS */
@@ -47,16 +79,16 @@ export type PayApiResponse = ApiResponse<PayResponse>
 /**
  * afterPay(res):
  *   if returnCode !== '0000' → onError(returnMsg)
- *   else if data.webUrl → open(webUrl); poll 接口 4
  *   else if data.MD && data.JWT && data.action → openThreeDSPage(...); poll 接口 4
+ *   else if data.webUrl → open(webUrl); poll 接口 4
  *   else if data.threeDSMethodData && data.methodUrl → openShift4Page(...); poll 接口 4
- *   else → onSuccess()
+ *   else → onSuccess() / finish（不调接口 4）
  */
 
 export const payRequestExample: PayRequest = {
   orderNo: 'ord_xxx',
-  encryptedData: '...google pay encrypted token...',
-  billingAddress: {
+  customParam: {
+    encryptedData: '...google pay encrypted token...',
     addressLine1: '1 Main St',
     addressLine2: '',
     city: 'San Francisco',
@@ -64,20 +96,27 @@ export const payRequestExample: PayRequest = {
     zip: '94105',
     country: 'US',
     firstName: 'Jane',
-    lastName: 'Doe',
-    phone: '+1...',
-    email: 'jane@example.com'
+    lastName: 'Doe'
   },
-  risk: {
-    forter: { token: 'your forter token' },
-    checkout: { deviceSessionId: 'dsid_...' },
-    worldPay: { sessionId: 'your worldPay sessionId' }
+  businessParams: {
+    cookie: 'your forter token',
+    checkoutCookie: 'dsid_...'
+  },
+  sessionId: 'your worldPay sessionId',
+  poaParams: {
+    address: '1 Main St',
+    city: 'San Francisco',
+    state: 'CA',
+    postcode: '94105',
+    country: 'US'
   }
 }
 
 export const payRequestMinimal: PayRequest = {
   orderNo: 'ord_xxx',
-  encryptedData: {/* Apple Pay payment.token */}
+  customParam: {
+    encryptedData: '{"token":{/* Apple Pay payment */}}'
+  }
 }
 
 /** 直接成功 → 不必调接口 4 */

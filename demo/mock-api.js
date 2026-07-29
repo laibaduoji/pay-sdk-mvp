@@ -193,6 +193,21 @@
     const state = orderNo ? orders[orderNo] : null
     const outcome = (state && state.options.payOutcome) || options.payOutcome
 
+    // Wire: customParam.encryptedData（兼容旧扁平 body 便于本地调试）
+    const encrypted =
+      (request && request.customParam && request.customParam.encryptedData) ||
+      (request && request.encryptedData)
+    if (!encrypted) {
+      return {
+        success: false,
+        returnCode: '1002',
+        returnMsg: 'missing customParam.encryptedData',
+        extend: '',
+        data: {},
+        traceId: 'demo-mock-trace'
+      }
+    }
+
     if (outcome === 'webUrl') {
       return envelope({ webUrl: 'https://psp.example/checkout/' + (orderNo || 'xxx') })
     }
@@ -221,7 +236,7 @@
     if (outcome === 'success') {
       return envelope({
         orderNo: orderNo,
-        status: 'succeeded',
+        orderState: 2,
         s3dsComplete: true
       })
     }
@@ -229,7 +244,7 @@
     if (state.ticks === 2 && outcome === 'webUrl') {
       return envelope({
         orderNo: orderNo,
-        status: 'requires_action',
+        orderState: 1,
         s3dsUrl: 'https://acs.example/s3ds/' + orderNo,
         s3dsComplete: false
       })
@@ -238,14 +253,14 @@
     if (state.ticks >= 3) {
       return envelope({
         orderNo: orderNo,
-        status: 'succeeded',
+        orderState: 2,
         s3dsComplete: true
       })
     }
 
     return envelope({
       orderNo: orderNo,
-      status: 'requires_action',
+      orderState: 1,
       s3dsComplete: false
     })
   }
