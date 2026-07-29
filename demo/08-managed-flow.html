@@ -64,6 +64,11 @@
     <pre id="preview">勾选后点「应用并挂载」查看…</pre>
 
     <p id="status">未挂载</p>
+    <div class="trace-row">
+      <span class="label">traceId</span>
+      <code id="trace-id">—</code>
+      <button type="button" id="trace-copy">复制</button>
+    </div>
     <div id="pay-container"></div>
     <h2 class="section-title">风控数据</h2>
     <pre id="risk">挂载后采集 Fingerprint（请求头 fingerprint-id）…</pre>
@@ -79,7 +84,8 @@
     <script>
       const mock = window.PaySdkDemoMock
       const ui = window.PaySdkDemoUI
-      const handlers = ui.handlers()
+      const sdkRef = { current: null }
+      const handlers = ui.handlers(sdkRef)
       const form = document.getElementById('controls')
       const previewEl = document.getElementById('preview')
       const riskEl = document.getElementById('risk')
@@ -89,6 +95,8 @@
 
       let sdk = null
       let lastRiskConfig = null
+
+      ui.bindTraceCopy()
 
       function readOptions() {
         const fd = new FormData(form)
@@ -188,6 +196,7 @@
             statusEl.textContent = 'Order ' + order.orderNo + ' created (' + order.method + ').'
             lastRiskConfig = order.risk || null
             renderRisk({ fingerprintId: null, risk: null })
+            ui.showTraceId(null, sdk)
           },
           onRiskCollected(info) {
             renderRisk(info)
@@ -195,15 +204,18 @@
           onStatusChange(order) {
             statusEl.textContent =
               'Payment status: ' + order.orderState + (order.s3dsUrl ? ' · s3dsUrl' : '')
+            ui.showTraceId(null, sdk)
           },
           onComplete(result) {
             outputEl.textContent = JSON.stringify(result, null, 2)
+            ui.showTraceId(null, sdk)
           },
           onSuccess: handlers.onSuccess,
           onError: handlers.onError,
           onCancel: handlers.onCancel
         })
 
+        sdkRef.current = sdk
         ui.run(sdk)
       }
 

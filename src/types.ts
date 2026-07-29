@@ -401,6 +401,8 @@ export interface PaySdkInstance {
   mount(): this
   /** 商户授权后可让 SDK（或内置实现）打开二次动作页面 */
   openAction(action: PaymentAction): void
+  /** 最近一次 openapi 响应的 traceId（成功或失败） */
+  getLastTraceId(): string | undefined
   destroy(): void
 }
 

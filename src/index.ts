@@ -275,7 +275,9 @@ class PaySdk implements PaySdkInstance {
       this.config.onOrderCreated?.(order)
 
       const environment = resolveEnvironment(this.config.environment || order.environment)
+      const prevTraceId = this.api.getLastTraceId()
       this.api = new PayApiClient(this.buildApiConfig(environment))
+      this.api.restoreLastTraceId(prevTraceId)
 
       this.runtimeConfig = runtimeConfigFromOrder(this.config, order, this.api, async (result) => {
         await this.processPayment(result)
@@ -325,6 +327,10 @@ class PaySdk implements PaySdkInstance {
 
   openAction(action: PaymentAction): void {
     this.actionView.open(action)
+  }
+
+  getLastTraceId(): string | undefined {
+    return this.api.getLastTraceId()
   }
 
   private getActionMode(): PaymentActionMode {

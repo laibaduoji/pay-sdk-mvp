@@ -1017,6 +1017,13 @@ apple-pay-button {
     getAccessToken() {
       return this.accessToken;
     }
+    getLastTraceId() {
+      return this.lastTraceId;
+    }
+    /** 重建 client 时保留最近一次 traceId */
+    restoreLastTraceId(traceId) {
+      if (traceId) this.lastTraceId = traceId;
+    }
     /**
      * 优先使用已有 / 传入的 accessToken；否则用 email 或 uid 调 getToken。
      */
@@ -1115,10 +1122,13 @@ apple-pay-button {
           { status: response.status }
         );
       }
+      if (envelope == null ? void 0 : envelope.traceId) {
+        this.lastTraceId = envelope.traceId;
+      }
       if (!response.ok || !envelope || envelope.returnCode !== SUCCESS_RETURN_CODE) {
         throw new PayApiError((envelope == null ? void 0 : envelope.returnMsg) || "Pay API request failed", {
           returnCode: envelope == null ? void 0 : envelope.returnCode,
-          traceId: envelope == null ? void 0 : envelope.traceId,
+          traceId: (envelope == null ? void 0 : envelope.traceId) || this.lastTraceId,
           status: response.status
         });
       }
@@ -1884,7 +1894,9 @@ apple-pay-button {
         this.order = order;
         (_b = (_a = this.config).onOrderCreated) == null ? void 0 : _b.call(_a, order);
         const environment = resolveEnvironment(this.config.environment || order.environment);
+        const prevTraceId = this.api.getLastTraceId();
         this.api = new PayApiClient(this.buildApiConfig(environment));
+        this.api.restoreLastTraceId(prevTraceId);
         this.runtimeConfig = runtimeConfigFromOrder(this.config, order, this.api, async (result) => {
           await this.processPayment(result);
         });
@@ -1932,6 +1944,9 @@ apple-pay-button {
     }
     openAction(action) {
       this.actionView.open(action);
+    }
+    getLastTraceId() {
+      return this.api.getLastTraceId();
     }
     getActionMode() {
       return this.config.actionMode || "callback";

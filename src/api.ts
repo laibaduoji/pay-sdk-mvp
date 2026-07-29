@@ -129,6 +129,7 @@ export class PayApiClient {
   private readonly config: PayApiConfig
   private readonly fetcher: typeof fetch
   private accessToken: string | undefined
+  private lastTraceId: string | undefined
 
   constructor(config: PayApiConfig) {
     this.config = config
@@ -138,6 +139,15 @@ export class PayApiClient {
 
   getAccessToken(): string | undefined {
     return this.accessToken
+  }
+
+  getLastTraceId(): string | undefined {
+    return this.lastTraceId
+  }
+
+  /** 重建 client 时保留最近一次 traceId */
+  restoreLastTraceId(traceId?: string): void {
+    if (traceId) this.lastTraceId = traceId
   }
 
   /**
@@ -270,10 +280,14 @@ export class PayApiClient {
       )
     }
 
+    if (envelope?.traceId) {
+      this.lastTraceId = envelope.traceId
+    }
+
     if (!response.ok || !envelope || envelope.returnCode !== SUCCESS_RETURN_CODE) {
       throw new PayApiError(envelope?.returnMsg || 'Pay API request failed', {
         returnCode: envelope?.returnCode,
-        traceId: envelope?.traceId,
+        traceId: envelope?.traceId || this.lastTraceId,
         status: response.status
       })
     }
