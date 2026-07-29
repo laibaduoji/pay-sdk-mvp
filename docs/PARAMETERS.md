@@ -163,4 +163,4 @@ Google Pay **TEST** 环境默认（创建订单未下发时 SDK 补齐，有值�
 | Mock 编排     | [`demo/08-managed-flow.html`](../demo/08-managed-flow.html) |
 | 真实 API 联调 | [`demo/09-live-api.html`](../demo/09-live-api.html)         |
 
-Demo 09 用 [`demo/signed-api.js`](../demo/signed-api.js) **签名创建订单**（仅 demo 持有 appSecret），再把响应交给 SDK。
+Demo 09 用 [`demo/signed-api.js`](../demo/signed-api.js) **签名创建订单**（仅 demo 持有 appSecret）：先取 `accessToken`（或 email/uid getToken），创建订单请求头带 `access-token`，再把响应（含 `token`）交给 SDK。

@@ -167,27 +167,93 @@
       : 'https://api-test.alchemytech.cc'
   }
 
+  function throwApiError(envelope, response, fallback) {
+    const err = new Error((envelope && envelope.returnMsg) || fallback)
+    err.returnCode = envelope && envelope.returnCode
+    err.traceId = envelope && envelope.traceId
+    err.envelope = envelope
+    err.status = response && response.status
+    throw err
+  }
+
   /**
-   * Demo: signed POST create-order. Returns envelope.data (create-order response).
+   * Demo: signed POST getToken（不要带 access-token）。
+   */
+  async function getToken(opts) {
+    const base = apiBase(opts.environment)
+    const url = opts.getTokenUrl || base + '/open/api/v4/merchant/getToken'
+    const body = {}
+    if (opts.email) body.email = opts.email
+    else if (opts.uid) body.uid = opts.uid
+    else throw new Error('getToken requires email or uid')
+
+    const result = await signedFetch({
+      url: url,
+      method: 'POST',
+      body: body,
+      appId: opts.appId,
+      appSecret: opts.appSecret
+    })
+    const envelope = result.envelope
+    if (!result.response.ok || !envelope || envelope.returnCode !== '0000') {
+      throwApiError(envelope, result.response, 'Get token failed')
+    }
+    const accessToken = envelope.data && envelope.data.accessToken
+    if (!accessToken || !String(accessToken).trim()) {
+      throw new Error('Get token response is missing accessToken')
+    }
+    return {
+      accessToken: String(accessToken).trim(),
+      data: envelope.data,
+      traceId: envelope.traceId,
+      envelope: envelope
+    }
+  }
+
+  /**
+   * Prefer provided accessToken; else getToken via email/uid.
+   */
+  async function ensureAccessToken(opts) {
+    const provided = opts.accessToken && String(opts.accessToken).trim()
+    if (provided) return { accessToken: provided, from: 'provided' }
+    const email = opts.email && String(opts.email).trim()
+    const uid = opts.uid && String(opts.uid).trim()
+    if (!email && !uid) {
+      throw new Error('accessToken or email/uid is required for create-order')
+    }
+    const result = await getToken({
+      environment: opts.environment,
+      appId: opts.appId,
+      appSecret: opts.appSecret,
+      email: email || undefined,
+      uid: uid || undefined,
+      getTokenUrl: opts.getTokenUrl
+    })
+    return { accessToken: result.accessToken, from: 'getToken', traceId: result.traceId }
+  }
+
+  /**
+   * Demo: signed POST create-order with access-token header.
+   * Returns envelope.data (create-order response).
    */
   async function createOrder(opts) {
     const base = apiBase(opts.environment)
     const url = opts.createOrderUrl || base + '/open/api/v4/merchant/order/create'
+    const accessToken = opts.accessToken && String(opts.accessToken).trim()
+    if (!accessToken) {
+      throw new Error('createOrder requires accessToken (request header access-token)')
+    }
     const result = await signedFetch({
       url: url,
       method: 'POST',
       body: opts.order,
       appId: opts.appId,
       appSecret: opts.appSecret,
-      headers: opts.headers
+      headers: Object.assign({}, opts.headers || {}, { 'access-token': accessToken })
     })
     const envelope = result.envelope
     if (!result.response.ok || !envelope || envelope.returnCode !== '0000') {
-      const err = new Error((envelope && envelope.returnMsg) || 'Create order failed')
-      err.returnCode = envelope && envelope.returnCode
-      err.traceId = envelope && envelope.traceId
-      err.envelope = envelope
-      throw err
+      throwApiError(envelope, result.response, 'Create order failed')
     }
     return { data: envelope.data, traceId: envelope.traceId, envelope: envelope }
   }
@@ -195,6 +261,8 @@
   global.PaySdkDemoSignedApi = {
     apiSign: apiSign,
     signedFetch: signedFetch,
+    getToken: getToken,
+    ensureAccessToken: ensureAccessToken,
     createOrder: createOrder,
     apiBase: apiBase
   }

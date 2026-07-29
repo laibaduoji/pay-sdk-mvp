@@ -32,9 +32,11 @@
     <p class="meta"><a href="./index.html">← Demos</a> · PARAMETERS</p>
     <h1>SDK 完整支付编排（真实 API）</h1>
     <p class="meta">
-      Demo 用 <code>appId</code> / <code>appSecret</code> 签名调用创建订单（TEST：
-      <code>https://api-test.alchemytech.cc</code>），把响应（含 <code>token</code>）交给 SDK。SDK
-      不签名、不调创建订单；后续接口带头 <code>payment-hub-token</code>。
+      Demo 用 <code>appId</code> / <code>appSecret</code> 签名创建订单（TEST：
+      <code>https://api-test.alchemytech.cc</code>），请求头另带
+      <code>access-token</code>（建议手填；否则 email/uid 先 getToken）。创建订单响应含
+      <code>token</code> 后交给 SDK；SDK 不签名、不调创建订单，后续接口带头
+      <code>payment-hub-token</code>。
     </p>
 
     <form id="controls" class="panel" onsubmit="return false">
@@ -47,6 +49,37 @@
         <label class="field">
           appSecret
           <input type="password" name="appSecret" autocomplete="off" placeholder="必填" />
+        </label>
+      </fieldset>
+
+      <fieldset>
+        <legend>登录态（创建订单 access-token；建议 accessToken，否则 email 或 uid）</legend>
+        <label class="field">
+          accessToken
+          <input
+            type="text"
+            name="accessToken"
+            autocomplete="off"
+            placeholder="建议：服务端 getToken"
+          />
+        </label>
+        <label class="field">
+          email
+          <input
+            type="email"
+            name="email"
+            autocomplete="off"
+            placeholder="无 token 时与 uid 二选一"
+          />
+        </label>
+        <label class="field">
+          uid
+          <input
+            type="text"
+            name="uid"
+            autocomplete="off"
+            placeholder="无 token 时与 email 二选一"
+          />
         </label>
       </fieldset>
 
@@ -173,6 +206,9 @@
     <script>
       const SS_APP_ID = 'paySdkDemo.appId'
       const SS_APP_SECRET = 'paySdkDemo.appSecret'
+      const SS_ACCESS_TOKEN = 'paySdkDemo.accessToken'
+      const SS_EMAIL = 'paySdkDemo.email'
+      const SS_UID = 'paySdkDemo.uid'
 
       const ui = window.PaySdkDemoUI
       const signedApi = window.PaySdkDemoSignedApi
@@ -233,6 +269,21 @@
         } catch (_) {}
         el('appId').value = appId
         el('appSecret').value = appSecret
+
+        let accessToken = ''
+        let email = 'demo@example.com'
+        let uid = ''
+        try {
+          const savedToken = sessionStorage.getItem(SS_ACCESS_TOKEN)
+          const savedEmail = sessionStorage.getItem(SS_EMAIL)
+          const savedUid = sessionStorage.getItem(SS_UID)
+          if (savedToken) accessToken = savedToken
+          if (savedEmail != null && savedEmail !== '') email = savedEmail
+          if (savedUid) uid = savedUid
+        } catch (_) {}
+        el('accessToken').value = accessToken
+        el('email').value = email
+        el('uid').value = uid
       }
 
       function syncPayWayCode() {
@@ -276,10 +327,26 @@
         }
       }
 
+      function readIdentity() {
+        return {
+          accessToken: String(el('accessToken').value || '').trim(),
+          email: String(el('email').value || '').trim(),
+          uid: String(el('uid').value || '').trim()
+        }
+      }
+
       function persistCreds(creds) {
         try {
           sessionStorage.setItem(SS_APP_ID, creds.appId)
           sessionStorage.setItem(SS_APP_SECRET, creds.appSecret)
+        } catch (_) {}
+      }
+
+      function persistIdentity(identity) {
+        try {
+          sessionStorage.setItem(SS_ACCESS_TOKEN, identity.accessToken || '')
+          sessionStorage.setItem(SS_EMAIL, identity.email || '')
+          sessionStorage.setItem(SS_UID, identity.uid || '')
         } catch (_) {}
       }
 
@@ -307,7 +374,13 @@
           statusEl.textContent = '请填写 appId 与 appSecret'
           return
         }
+        const identity = readIdentity()
+        if (!identity.accessToken && !identity.email && !identity.uid) {
+          statusEl.textContent = '请填写 accessToken，或 email / uid（创建订单需要 access-token）'
+          return
+        }
         persistCreds(creds)
+        persistIdentity(identity)
 
         if (sdk) {
           try {
@@ -329,11 +402,47 @@
         lastRiskConfig = null
         actionEl.textContent = '—'
         outputEl.textContent = '—'
-        orderResponseEl.textContent = '创建订单中…'
+        orderResponseEl.textContent = '—'
         riskEl.textContent = '挂载后采集中…'
         document.getElementById('pay-container').innerHTML = ''
-        statusEl.textContent = 'Demo 签名创建订单中…'
         ui.showTraceId(null, null)
+
+        let accessToken
+        try {
+          statusEl.textContent = identity.accessToken
+            ? '使用已填 accessToken…'
+            : 'Demo 签名 getToken 中…'
+          const ensured = await signedApi.ensureAccessToken({
+            environment: environment,
+            appId: creds.appId,
+            appSecret: creds.appSecret,
+            accessToken: identity.accessToken,
+            email: identity.email,
+            uid: identity.uid
+          })
+          accessToken = ensured.accessToken
+          if (ensured.from === 'getToken') {
+            el('accessToken').value = accessToken
+            persistIdentity(readIdentity())
+            if (ensured.traceId) {
+              document.getElementById('trace-id').textContent = ensured.traceId
+            }
+          }
+        } catch (err) {
+          statusEl.textContent = 'getToken 失败：' + (err.message || err)
+          orderResponseEl.textContent = JSON.stringify(
+            (err && err.envelope) || { message: String(err && err.message) },
+            null,
+            2
+          )
+          if (err && err.traceId) {
+            document.getElementById('trace-id').textContent = err.traceId
+          }
+          return
+        }
+
+        statusEl.textContent = 'Demo 签名创建订单中（带头 access-token）…'
+        orderResponseEl.textContent = '创建订单中…'
 
         let createResult
         try {
@@ -341,6 +450,7 @@
             environment: environment,
             appId: creds.appId,
             appSecret: creds.appSecret,
+            accessToken: accessToken,
             order: orderRequest
           })
         } catch (err) {
