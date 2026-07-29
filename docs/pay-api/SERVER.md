@@ -7,27 +7,25 @@
 
 ## 1. 接口一览
 
-| #   | 方法     | 路径                                  | 说明                                   |
-| --- | -------- | ------------------------------------- | -------------------------------------- |
-| 0   | **POST** | `/open/api/v4/merchant/getToken`      | 获取免登 accessToken（建议服务端调用） |
-| 1   | **POST** | `/open/api/v4/merchant/order/create`  | 创建订单，返回钱包 paymentScript/risk  |
-| 2   | **POST** | `/open/api/v4/merchant/domain/verify` | 仅 Apple Pay 域名校验                  |
-| 3   | **POST** | `/open/api/v4/merchant/alchemy-pay`   | 提交钱包 token + 风控                  |
-| 4   | **GET**  | `/open/api/v4/merchant/order/detail`  | 二次动作后轮询订单状态                 |
+| #   | 方法     | 路径                                  | 说明                                      |
+| --- | -------- | ------------------------------------- | ----------------------------------------- |
+| 0   | **POST** | `/open/api/v4/merchant/getToken`      | 获取免登 accessToken（建议服务端调用）    |
+| 1   | **POST** | `/open/api/v4/merchant/order/create`  | 创建订单，返回 paymentScript/risk/`token` |
+| 2   | **POST** | `/open/api/v4/merchant/domain/verify` | 仅 Apple Pay 域名校验                     |
+| 3   | **POST** | `/open/api/v4/merchant/alchemy-pay`   | 提交钱包 token + 风控                     |
+| 4   | **GET**  | `/open/api/v4/merchant/order/detail`  | 二次动作后轮询订单状态                    |
 
-接口 0 仅需签名头；接口 1–4 另需请求头 **`access-token`**（来自接口 0 的 `accessToken`）。接口 4 为 GET，query 参数 **`orderNo`**；其余均为 POST，`Content-Type: application/json`。
+**商户服务端**调用接口 1（签名）；将响应（含 `token`）交给浏览器 SDK。SDK 只调接口 2–4，请求头带 **`payment-hub-token: <token>`**，**不签名**。接口 4 为 GET，query 参数 **`orderNo`**；其余均为 POST，`Content-Type: application/json`。
 
 ### 公共请求头
 
-| Header           | 说明                                                                                |
-| ---------------- | ----------------------------------------------------------------------------------- |
-| `Content-Type`   | POST 时为 `application/json`                                                        |
-| `access-token`   | 业务接口（1–4）设计上可带；**TEMP：** 当前联调服务端暂不校验，SDK 已暂时不带头      |
-| `appid`          | 合作方标识；SDK 在配置了 `api.appId` + `api.appSecret` 时自动带上（头名 `appid`）   |
-| `timestamp`      | 十三位毫秒时间戳；与签名串一致                                                      |
-| `sign`           | HMAC-SHA256 + Base64；算法见 [API Sign](https://alchemypay.readme.io/docs/api-sign) |
-| `fingerprint-id` | SDK 在 `init` 时用内置默认采集的 Fingerprint `visitorId`；失败时可能不传            |
-| （其它自定义）   | 可由商户在 SDK `api.headers` 中追加                                                 |
+| Header                         | 说明                                                                     |
+| ------------------------------ | ------------------------------------------------------------------------ |
+| `Content-Type`                 | POST 时为 `application/json`                                             |
+| `payment-hub-token`            | 接口 2–4（SDK）：值为创建订单响应 `data.token`                           |
+| `appid` / `timestamp` / `sign` | 创建订单（接口 1）由商户服务端签名；SDK 运行时不带                       |
+| `fingerprint-id`               | SDK 在 `init` 时用内置默认采集的 Fingerprint `visitorId`；失败时可能不传 |
+| （其它自定义）                 | 可由商户在 SDK `api.headers` 中追加                                      |
 
 Fingerprint **不**出现在创建订单响应或支付 body 中，服务端一律从请求头读取。
 
@@ -183,6 +181,7 @@ SDK 在 `ready()` 时调用；用响应渲染 Google / Apple 按钮，并按 `ri
 | --------------------- | --------------------------- | ---- | ------------------------------------------------------------------ |
 | `orderNo`             | `string`                    | 是   | 订单号，后续接口必带                                               |
 | `paymentScript`       | `object`                    | 是   | Google / Apple 原生唤起参数                                        |
+| `token`               | `string`                    | 是   | 后续接口请求头 `payment-hub-token`                                 |
 | `method`              | `'googlePay' \| 'applePay'` | 否   | 服务端可不传；SDK 按 `paymentScript` 推断                          |
 | `environment`         | `'TEST' \| 'PRODUCTION'`    | 否   | 不传时 SDK 按 init 或默认 `PRODUCTION`；影响 Google Pay / Checkout |
 | `risk`                | `CreateOrderRisk`           | 否   | 风控开关与可覆盖配置                                               |
@@ -228,6 +227,7 @@ TEST 环境缺省时 SDK 会补齐；PRODUCTION 请务必下发真实商户信�
     "orderNo": "ord_xxx",
     "environment": "TEST",
     "method": "googlePay",
+    "token": "payment-hub-token-example",
     "paymentScript": {
       "apiVersion": 2,
       "apiVersionMinor": 0,
@@ -294,6 +294,7 @@ TEST 环境缺省时 SDK 会补齐；PRODUCTION 请务必下发真实商户信�
     "orderNo": "ord_xxx",
     "environment": "TEST",
     "method": "applePay",
+    "token": "payment-hub-token-example",
     "validateMerchantUrl": "https://api-test.alchemytech.cc/open/api/v4/merchant/domain/verify",
     "paymentScript": {
       "countryCode": "US",

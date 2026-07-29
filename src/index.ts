@@ -13,7 +13,7 @@ import { ready as detectReady } from './ready.js'
 import { renderButton, resolveContainer } from './button.js'
 import { applyGooglePayTestDefaults, payWithGoogle } from './googlePay.js'
 import { payWithApple } from './applePay.js'
-import { PayApiClient, PayApiError } from './api.js'
+import { normalizeCreateOrderResponse, PayApiClient, PayApiError } from './api.js'
 import { describePayResponse, describeS3ds, PaymentActionView } from './actions.js'
 import { resolveEnvironment, resolvePayApiConfig } from './endpoints.js'
 import {
@@ -101,39 +101,17 @@ function validateConfig(config: PaySdkConfig): void {
   }
   const order = config.order
   if (!order || typeof order !== 'object') {
-    throw new Error('config.order is required')
+    throw new Error('config.order is required (create-order response)')
   }
-  const required: Array<keyof typeof order> = [
-    'side',
-    'merchantOrderNo',
-    'amount',
-    'fiatCurrency',
-    'cryptoCurrency',
-    'orderType',
-    'network',
-    'payWayCode',
-    'redirectUrl',
-    'callbackUrl',
-    'clientIp'
-  ]
-  const missing = required.filter((key) => {
-    const value = order[key]
-    return value == null || value === ''
-  })
-  if (missing.length) {
-    throw new Error(
-      `order.${missing.join(', order.')} ${missing.length > 1 ? 'are' : 'is'} required`
-    )
+  if (!order.orderNo) {
+    throw new Error('order.orderNo is required')
   }
-  // TEMP: server currently does not require access-token; keep for later restore
-  // const hasToken = !!(config.accessToken && String(config.accessToken).trim())
-  // const hasEmail = !!(config.email && String(config.email).trim())
-  // const hasUid = !!(config.uid && String(config.uid).trim())
-  // if (!hasToken && !hasEmail && !hasUid) {
-  //   throw new Error(
-  //     'accessToken or email/uid is required (prefer accessToken from your server to avoid getToken delay)'
-  //   )
-  // }
+  if (!order.paymentScript || typeof order.paymentScript !== 'object') {
+    throw new Error('order.paymentScript is required')
+  }
+  if (!order.token || typeof order.token !== 'string' || !order.token.trim()) {
+    throw new Error('order.token is required')
+  }
 }
 
 function hasSecondaryAction(response: PayResponse): boolean {
@@ -186,7 +164,7 @@ function runtimeConfigFromOrder(
       payment: {
         amount: paymentScript.transactionInfo.totalPrice,
         currency: paymentScript.transactionInfo.currencyCode,
-        countryCode: paymentScript.transactionInfo.countryCode || config.order.alpha2 || ''
+        countryCode: paymentScript.transactionInfo.countryCode || ''
       },
       billingAddressRequired: parameters.billingAddressRequired === true,
       googlePay: {
@@ -251,7 +229,7 @@ class PaySdk implements PaySdkInstance {
   private buildApiConfig(environment: ReturnType<typeof resolveEnvironment>) {
     return resolvePayApiConfig(environment, {
       ...this.config.api,
-      accessToken: this.api?.getAccessToken() || this.config.accessToken,
+      paymentHubToken: this.api?.getPaymentHubToken() || this.config.order?.token,
       getFingerprintId: () => this.fingerprintIdPromise
     })
   }
@@ -265,14 +243,8 @@ class PaySdk implements PaySdkInstance {
 
   private async prepare(): Promise<true> {
     if (!this.runtimeConfig) {
-      // TEMP: server currently does not require access-token; keep for later restore
-      // await this.api.ensureAccessToken({
-      //   accessToken: this.config.accessToken,
-      //   email: this.config.email,
-      //   uid: this.config.uid
-      // })
-
-      const order = await this.api.createOrder(this.config.order)
+      // Merchant (or demo) already created the order; SDK does not call createOrder.
+      const order = normalizeCreateOrderResponse(this.config.order)
       this.order = order
       this.config.onOrderCreated?.(order)
 
@@ -280,6 +252,7 @@ class PaySdk implements PaySdkInstance {
       const prevTraceId = this.api.getLastTraceId()
       this.api = new PayApiClient(this.buildApiConfig(environment))
       this.api.restoreLastTraceId(prevTraceId)
+      this.api.setPaymentHubToken(order.token)
 
       this.runtimeConfig = runtimeConfigFromOrder(this.config, order, this.api, async (result) => {
         await this.processPayment(result)

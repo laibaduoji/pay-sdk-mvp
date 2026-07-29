@@ -136,6 +136,8 @@ export interface CreateOrderResponseGooglePay {
   /** 不传时客户端按 PRODUCTION */
   environment?: Environment
   paymentScript: GooglePayParams
+  /** 后续 verify / pay / detail 请求头 `payment-hub-token` */
+  token: string
   risk?: CreateOrderRisk
 }
 
@@ -144,6 +146,8 @@ export interface CreateOrderResponseApplePay {
   method: 'applePay'
   environment?: Environment
   paymentScript: ApplePayParams
+  /** 后续 verify / pay / detail 请求头 `payment-hub-token` */
+  token: string
   /** 可选覆盖；未下发时 SDK 使用当前环境的内置接口 2 地址 */
   validateMerchantUrl?: string
   risk?: CreateOrderRisk
@@ -328,6 +332,7 @@ export const createOrderResponseGooglePayDirect: CreateOrderResponseGooglePay = 
   environment: 'TEST',
   method: 'googlePay',
   paymentScript: googlePayParamsDirect,
+  token: 'payment-hub-token-example',
   risk: riskCollectAll
 }
 
@@ -336,6 +341,7 @@ export const createOrderResponseGooglePayGateway: CreateOrderResponseGooglePay =
   environment: 'TEST',
   method: 'googlePay',
   paymentScript: googlePayParamsGateway,
+  token: 'payment-hub-token-example',
   risk: riskCollectAll
 }
 
@@ -344,6 +350,7 @@ export const createOrderResponseApplePay: CreateOrderResponseApplePay = {
   environment: 'TEST',
   method: 'applePay',
   paymentScript: applePayParams,
+  token: 'payment-hub-token-example',
   validateMerchantUrl: 'https://api-test.alchemytech.cc/open/api/v4/merchant/domain/verify',
   risk: riskCollectAll
 }
@@ -352,6 +359,7 @@ export const createOrderResponseMinimalNoRisk: CreateOrderResponseGooglePay = {
   orderNo: 'ord_xxx',
   method: 'googlePay',
   paymentScript: googlePayParamsDirectMinimal,
+  token: 'payment-hub-token-example',
   risk: riskCollectNone
 }
 

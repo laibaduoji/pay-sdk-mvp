@@ -2,18 +2,17 @@
 
 前后端联调契约。类型与报文示例见本目录 TypeScript 文件。
 
-| #   | 文件                                             | 方法     | 类型                                                   | 何时调用                                       |
-| --- | ------------------------------------------------ | -------- | ------------------------------------------------------ | ---------------------------------------------- |
-| —   | [`common.ts`](./common.ts)                       | —        | `ApiResponse` / `BillingAddress`                       | 共用                                           |
-| 0   | [`get-token.ts`](./get-token.ts)                 | **POST** | `GetTokenRequest` → `GetTokenResponse`                 | 换 `accessToken`；**建议商户服务端调用**       |
-| 1   | [`create-order.ts`](./create-order.ts)           | **POST** | `CreateOrderRequest` → `CreateOrderResponse`           | 拿 `paymentScript` / `risk`，渲染钱包按钮      |
-| 2   | [`validate-merchant.ts`](./validate-merchant.ts) | **POST** | `ValidateMerchantRequest` → `ValidateMerchantResponse` | 仅 Apple Pay，`onvalidatemerchant`             |
-| 3   | [`pay.ts`](./pay.ts)                             | **POST** | `PayRequest` → `PayResponse`                           | 钱包授权后；风控宜在创建订单后预采、支付时复用 |
-| 4   | [`query-order.ts`](./query-order.ts)             | **GET**  | `QueryOrderRequest` → `QueryOrderResponse`             | **仅**接口 3 未直接成功时                      |
+| #   | 文件                                             | 方法     | 类型                                                   | 何时调用                                                  |
+| --- | ------------------------------------------------ | -------- | ------------------------------------------------------ | --------------------------------------------------------- |
+| —   | [`common.ts`](./common.ts)                       | —        | `ApiResponse` / `BillingAddress`                       | 共用                                                      |
+| 0   | [`get-token.ts`](./get-token.ts)                 | **POST** | `GetTokenRequest` → `GetTokenResponse`                 | 换 `accessToken`；**建议商户服务端调用**                  |
+| 1   | [`create-order.ts`](./create-order.ts)           | **POST** | `CreateOrderRequest` → `CreateOrderResponse`           | **商户服务端**调用；拿 `paymentScript` / `risk` / `token` |
+| 2   | [`validate-merchant.ts`](./validate-merchant.ts) | **POST** | `ValidateMerchantRequest` → `ValidateMerchantResponse` | SDK：仅 Apple Pay，`onvalidatemerchant`                   |
+| 3   | [`pay.ts`](./pay.ts)                             | **POST** | `PayRequest` → `PayResponse`                           | SDK：钱包授权后                                           |
+| 4   | [`query-order.ts`](./query-order.ts)             | **GET**  | `QueryOrderRequest` → `QueryOrderResponse`             | SDK：**仅**接口 3 未直接成功时                            |
 
-> 接口 1–4 请求头需 `access-token`（来自接口 0）。仅接口 4 为 GET（`GET /open/api/v4/merchant/order/detail?orderNo=`）；其余均为 POST。  
-> **建议**商户服务端 getToken 后把 `accessToken` 传给 SDK；否则 SDK 用 `email`/`uid` 代调，会拖慢出按钮。  
-> **TEMP：** 当前联调服务端暂不校验 `access-token`；SDK 已暂时跳过相关逻辑（代码保留）。  
+> 创建订单（接口 1）由商户服务端签名调用；响应含 `token`，传入 `PaySdk.init({ order })`。  
+> SDK 调用接口 2–4 时请求头带 **`payment-hub-token: <token>`**，不签名。仅接口 4 为 GET。  
 > 路径见 SDK `src/endpoints.ts`。入口：`import … from './pay-api'`（[`index.ts`](./index.ts)）。
 
 ---

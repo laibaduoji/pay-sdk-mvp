@@ -175,6 +175,8 @@ export interface CreateOrderResponseGooglePay {
   method: 'googlePay'
   environment?: Environment
   paymentScript: GooglePayParams
+  /** 创建订单下发；后续 verify / pay / detail 请求头 `payment-hub-token` */
+  token: string
   risk?: CreateOrderRisk
 }
 
@@ -183,6 +185,8 @@ export interface CreateOrderResponseApplePay {
   method: 'applePay'
   environment?: Environment
   paymentScript: ApplePayParams
+  /** 创建订单下发；后续 verify / pay / detail 请求头 `payment-hub-token` */
+  token: string
   /** 可选覆盖；未下发时使用当前环境在 endpoints.ts 中的内置地址。 */
   validateMerchantUrl?: string
   risk?: CreateOrderRisk
@@ -313,16 +317,24 @@ export interface PayApiConfig {
    * SDK 自动追加 `?orderNo=`（值为创建订单返回的 orderNo）。
    */
   queryOrderUrl: string
-  /** Get Token 地址；默认按环境内置。 */
+  /** Get Token 地址；默认按环境内置（legacy / demo 用）。 */
   getTokenUrl: string
   /**
-   * 免登 accessToken；有值时写入请求头 `access-token`。
-   * 建议商户服务端 getToken 后传入，避免 SDK 再调 getToken 拖慢出按钮。
+   * 创建订单返回的 `token`；写入请求头 `payment-hub-token`。
+   * 通常由 SDK 从 `PaySdkConfig.order.token` 注入，商户无需手传。
+   */
+  paymentHubToken?: string
+  /**
+   * @deprecated SDK 运行时不再使用。legacy：免登 accessToken → `access-token`。
    */
   accessToken?: string
-  /** AlchemyPay 合作方 appId；与 appSecret 同时存在时自动签名（请求头 `appid`）。 */
+  /**
+   * @deprecated SDK 运行时不再签名。legacy / demo 创建订单用。
+   */
   appId?: string
-  /** AlchemyPay appSecret；仅用于 HMAC，勿在文档外泄露。 */
+  /**
+   * @deprecated SDK 运行时不再签名。legacy / demo 创建订单用。
+   */
   appSecret?: string
   headers?:
     Record<string, string> | (() => Record<string, string> | Promise<Record<string, string>>)
@@ -431,24 +443,12 @@ interface PaySdkBaseConfig extends PaySdkCallbacks {
 }
 
 /**
- * `PaySdk.init` 配置：创建订单 → 钱包授权 → 支付 → 查询。
- * 钱包参数与 risk 均来自创建订单响应，不再支持仅钱包初始化。
+ * `PaySdk.init` 配置：商户已创建订单 → 钱包授权 → 支付 → 查询。
+ * `order` 为创建订单响应（含 `token` / `paymentScript` / `risk`）；SDK 不再调创建订单、不签名。
  */
 export interface PaySdkConfig extends PaySdkBaseConfig {
-  order: CreateOrderRequest
-  /**
-   * 建议：商户服务端 [Get Token](https://alchemypay.readme.io/docs/get-token) 后传入。
-   * 有值时 SDK 不再请求 getToken，可更快渲染支付按钮。
-   */
-  accessToken?: string
-  /**
-   * 未传 `accessToken` 时，与 `uid` 二选一：由 SDK 代调 getToken（会多一次网络往返）。
-   */
-  email?: string
-  /**
-   * 未传 `accessToken` 时，与 `email` 二选一：商户侧用户 UUID。
-   */
-  uid?: string
+  /** 商户侧创建订单响应（须含 `token`） */
+  order: CreateOrderResponse
   /**
    * SDK 运行环境，默认 `PRODUCTION`。
    * 决定内置 API 地址、Google Pay 环境、Checkout Risk 沙盒/生产等。
@@ -457,6 +457,7 @@ export interface PaySdkConfig extends PaySdkBaseConfig {
   /**
    * 可选。默认按 `environment` 使用内置接口地址（见 `src/endpoints.ts`）。
    * 可只传 `headers` / 轮询配置，或覆盖个别 URL（如本地代理）。
+   * SDK 运行时不使用 `appId` / `appSecret` 签名。
    */
   api?: Partial<PayApiConfig>
   /**

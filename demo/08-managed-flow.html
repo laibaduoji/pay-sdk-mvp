@@ -10,8 +10,9 @@
     <p class="meta"><a href="./index.html">← Demos</a> · PARAMETERS</p>
     <h1>SDK 完整支付编排（Mock）</h1>
     <p class="meta">
-      勾选下方选项后点「应用并挂载」：Mock 会按选项返回创建订单 / 支付 / 查询数据（
-      <code>api.fetch</code>）。真实钱包仍依赖浏览器环境；二次动作默认
+      勾选下方选项后点「应用并挂载」：Demo 先用 Mock
+      <strong>创建订单响应</strong>（含 <code>token</code>）再 <code>PaySdk.init</code>；SDK
+      只走支付 / 查询 / 域名校验（ <code>api.fetch</code>）。真实钱包仍依赖浏览器环境；二次动作默认
       <code>callback</code>，可确认后 <code>sdk.openAction</code>。
     </p>
 
@@ -169,15 +170,15 @@
         document.getElementById('pay-container').innerHTML = ''
 
         const payWayCode = opts.method === 'applePay' ? '501' : '701'
+        const orderResponse = mock.takeCreateOrder(demoOrder(payWayCode))
+        previewEl.textContent = JSON.stringify(orderResponse, null, 2)
+
         sdk = PaySdk.init({
           container: '#pay-container',
           environment: opts.environment,
           actionMode: opts.actionMode,
-          // TEMP: server currently does not require access-token; keep for later restore
-          // accessToken: 'demo-mock-access-token',
-          order: demoOrder(payWayCode),
+          order: orderResponse,
           api: {
-            createOrderUrl: '/v1/pay/orders',
             payUrl: '/v1/pay/payments',
             queryOrderUrl: '/v1/pay/orders',
             fetch: mock.fetch.bind(mock),
@@ -193,7 +194,8 @@
             }
           },
           onOrderCreated(order) {
-            statusEl.textContent = 'Order ' + order.orderNo + ' created (' + order.method + ').'
+            statusEl.textContent =
+              'Order ' + order.orderNo + ' ready (' + order.method + ', token set).'
             lastRiskConfig = order.risk || null
             renderRisk({ fingerprintId: null, risk: null })
             ui.showTraceId(null, sdk)

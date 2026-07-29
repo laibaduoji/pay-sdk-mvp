@@ -2,8 +2,8 @@
 
 `PaySdk.init(config)` 的完整参数说明。图例：**必传** = 必须提供，否则 `init` 抛错；可选 = 不传则使用默认值。
 
-SDK **仅支持完整支付编排**：创建订单 → 钱包授权 → 支付 →（需要时）查询。钱包类型、金额、
-`paymentScript`、`risk` 均由创建订单响应决定，不再支持仅钱包初始化。
+SDK 编排：**商户已创建订单** → 钱包授权 → 支付 →（需要时）查询。  
+`order` 为创建订单**响应**（含 `token` / `paymentScript` / `risk`）。SDK **不**调创建订单、**不**签名；后续接口带头 `payment-hub-token`。
 
 ---
 
@@ -12,12 +12,10 @@ SDK **仅支持完整支付编排**：创建订单 → 钱包授权 → 支付 �
 | 参数             | 类型                     |  必传  | 默认值         | 说明                                                                                                         |
 | ---------------- | ------------------------ | :----: | -------------- | ------------------------------------------------------------------------------------------------------------ |
 | `container`      | `string \| HTMLElement`  | **是** | —              | 按钮渲染容器                                                                                                 |
-| `accessToken`    | `string`                 |  建议  | —              | **建议传入**：服务端 [Get Token](https://alchemypay.readme.io/docs/get-token) 结果；有则跳过 SDK 内 getToken |
-| `email` / `uid`  | `string`                 |  条件  | —              | 未传 `accessToken` 时二选一必填；SDK 代调 getToken（**会拖慢出按钮**）                                       |
-| `order`          | `CreateOrderRequest`     | **是** | —              | Apifox S2S 字段（`side` / `merchantOrderNo` / `amount` / `fiatCurrency` / …）；SDK 调接口 1                  |
+| `order`          | `CreateOrderResponse`    | **是** | —              | 商户侧创建订单响应；须含 `orderNo` / `paymentScript` / `token`                                               |
 | `environment`    | `'TEST' \| 'PRODUCTION'` |   否   | `'PRODUCTION'` | 决定内置 API、Google Pay、Checkout Risk                                                                      |
-| `api`            | `Partial<PayApiConfig>`  |   否   | 按环境内置     | 默认用 `src/endpoints.ts`；可只传 headers / 覆盖 URL                                                         |
-| `onOrderCreated` | `(order) => void`        |   否   | —              | 接口 1 成功后回调                                                                                            |
+| `api`            | `Partial<PayApiConfig>`  |   否   | 按环境内置     | 默认用 `src/endpoints.ts`；可只传 headers / 轮询 / 覆盖 URL；**无需** appId/appSecret                        |
+| `onOrderCreated` | `(order) => void`        |   否   | —              | `ready()` 规范化订单后回调（订单已由商户创建）                                                               |
 | `onStatusChange` | `(order) => void`        |   否   | —              | 接口 4 每次轮询成功后回调                                                                                    |
 | `onAction`       | `(action) => void`       |   否   | —              | 二次动作回调；含 `MD`/`JWT`/`action`/`webUrl` 等完整字段                                                     |
 | `actionMode`     | `'callback' \| 'auto'`   |   否   | `'callback'`   | 默认只回调；`auto` 才尝试打开                                                                                |
@@ -30,41 +28,21 @@ SDK **仅支持完整支付编排**：创建订单 → 钱包授权 → 支付 �
 ### 1.1 示例
 
 ```js
+// 商户服务端已创建订单，拿到 data（含 token）
+const order = createOrderResponseFromYourServer
+
 const sdk = PaySdk.init({
   container: '#pay-container',
-  // 不传则默认 PRODUCTION；TEST 时使用测试 API / Google Pay TEST / Checkout 沙盒
   environment: 'TEST',
-  // 建议：服务端 getToken 后传入，避免 SDK 再请求 getToken（拖慢出按钮）
-  accessToken: 'YOUR_ACCESS_TOKEN',
-  // email: 'user@example.com', // 未传 accessToken 时与 uid 二选一
-  order: {
-    side: 'BUY',
-    merchantOrderNo: 'm_ord_xxx',
-    amount: '10.00',
-    fiatCurrency: 'USD',
-    alpha2: 'US',
-    cryptoCurrency: 'USDT',
-    orderType: '4',
-    address: '0xabc...',
-    network: 'ETH',
-    payWayCode: '701',
-    redirectUrl: 'https://merchant.example/success',
-    callbackUrl: 'https://merchant.example/callback',
-    clientIp: '1.2.3.4'
-  },
-  // api 可选：默认按 environment 取内置地址（src/endpoints.ts）
+  order: order,
   api: {
-    appId: 'YOUR_APP_ID',
-    appSecret: 'YOUR_APP_SECRET',
     pollIntervalMs: 2000,
     pollTimeoutMs: 300000
   },
-  // 默认 actionMode: 'callback' — 只通过 onAction 吐给商户，适合 App WebView
   onAction(action) {
     console.log(action)
-    // 商户自行开窗 / Native Bridge；或授权后调用 sdk.openAction(action)
   },
-  onOrderCreated: (order) => console.log(order.orderNo),
+  onOrderCreated: (order) => console.log(order.orderNo, order.token),
   onStatusChange: (order) => console.log(order.orderState),
   onComplete: (result) => console.log('flow complete', result.order?.orderState),
   onSuccess: (result) => console.log(result.orderNo, result.order?.orderState),
@@ -81,13 +59,10 @@ sdk.ready().then(() => sdk.mount())
 | `TEST`               | `https://api-test.alchemytech.cc` |
 | `PRODUCTION`（默认） | `https://openapi.alchemypay.org`  |
 
-路径：`/open/api/v4/merchant/getToken`、`/open/api/v4/merchant/order/create`、`/open/api/v4/merchant/domain/verify`、
-`/open/api/v4/merchant/alchemy-pay`、`/open/api/v4/merchant/order/detail?orderNo=`。
-配置 `api.appId` + `api.appSecret` 后，SDK 按 [API Sign](https://alchemypay.readme.io/docs/api-sign) 自动签名；业务接口自动带 `access-token`。
-**建议**商户服务端 getToken 后传入 `accessToken`，否则须传 `email`/`uid`（SDK 代调 getToken，出按钮更慢）。
+路径：`/open/api/v4/merchant/domain/verify`、`/open/api/v4/merchant/alchemy-pay`、
+`/open/api/v4/merchant/order/detail?orderNo=`。  
+SDK 自动带 `payment-hub-token: <order.token>`。创建订单路径仍内置，供 demo / 商户服务端参考，**SDK 编排不调用**。
 
-> **TEMP（当前联调）：** 服务端暂不校验 `access-token`；SDK 已暂时跳过 getToken / 带头（代码保留）。可不传 `accessToken` / `email` / `uid`。
-> 本地代理时可在 `api` 里覆盖 URL。
 > 创建订单若返回 `validateMerchantUrl`，优先使用响应值；未返回则使用环境内置地址。
 
 Google Pay **TEST** 环境默认（创建订单未下发时 SDK 补齐，有值则保留）：
@@ -99,11 +74,10 @@ Google Pay **TEST** 环境默认（创建订单未下发时 SDK 补齐，有值�
 | `gateway`           | `unlimint`             |
 | `gatewayMerchantId` | `googletest`           |
 
-`ready()` 先确保 accessToken（或 getToken），再创建订单，再按响应加载钱包并检查可用性；`mount()` 也可直接调用，会自动完成这一步。
-五个 API 统一响应须满足 `returnCode === '0000'`。轮询默认每 2 秒一次，最长 5 分钟，瞬时网络错误最多连续重试 4 次。
+`ready()` 使用传入的创建订单响应加载钱包并检查可用性；`mount()` 也可直接调用。  
+业务接口统一响应须满足 `returnCode === '0000'`。轮询默认每 2 秒一次，最长 5 分钟。
 
-创建订单成功后，按响应 `risk.*.enabled` **立即预采集**风控；支付时已完成则直接用，进行中则
-`await`。
+创建订单响应中的 `risk.*.enabled` 会在 `ready()` 时**立即预采集**；支付时复用。
 
 二次动作（WebView 友好）：
 
@@ -116,26 +90,19 @@ Google Pay **TEST** 环境默认（创建订单未下发时 SDK 补齐，有值�
 
 ---
 
-## 2. `order`
+## 2. `order`（创建订单响应）
 
-| 参数              | 类型     |  必传  | 说明                                      |
-| ----------------- | -------- | :----: | ----------------------------------------- |
-| `side`            | `string` | **是** | `BUY` / `SELL`                            |
-| `merchantOrderNo` | `string` | **是** | 商户订单号                                |
-| `amount`          | `string` | **是** | 金额，如 `'10.00'`                        |
-| `fiatCurrency`    | `string` | **是** | 法币，如 `'USD'`                          |
-| `alpha2`          | `string` |   否   | 国家码；offramp 必填                      |
-| `cryptoCurrency`  | `string` | **是** | 如 `'USDT'`                               |
-| `orderType`       | `string` | **是** | onramp `'4'` / offramp `'6'`              |
-| `address`         | `string` |   否   | onramp 收款地址                           |
-| `network`         | `string` | **是** | 如 `'ETH'`                                |
-| `payWayCode`      | `string` | **是** | `501` Apple / `701` Google / `10001` card |
-| `redirectUrl`     | `string` | **是** | 成功跳转                                  |
-| `callbackUrl`     | `string` | **是** | 回调地址                                  |
-| `clientIp`        | `string` | **是** | 用户 IPV4                                 |
+| 参数                  | 类型                        |  必传  | 说明                                |
+| --------------------- | --------------------------- | :----: | ----------------------------------- |
+| `orderNo`             | `string`                    | **是** | 平台订单号                          |
+| `paymentScript`       | `object`                    | **是** | Google / Apple 原生参数             |
+| `token`               | `string`                    | **是** | 写入后续请求头 `payment-hub-token`  |
+| `method`              | `'googlePay' \| 'applePay'` |   否   | 可省略；SDK 按 `paymentScript` 推断 |
+| `environment`         | `'TEST' \| 'PRODUCTION'`    |   否   | 可覆盖 init `environment`           |
+| `risk`                | `object`                    |   否   | Forter / Checkout / WorldPay        |
+| `validateMerchantUrl` | `string`                    |   否   | 仅 Apple；覆盖内置域名校验地址      |
 
-可选：`userAccountId`、`memo`、`extendParams`、`withdrawType`。  
-创建订单响应中的钱包 `paymentScript` 由后端决定。契约见 [`docs/pay-api/`](./pay-api/)。
+创建订单**请求**字段（`side` / `amount` / …）由商户服务端调用 openapi，不传入 SDK。契约见 [`docs/pay-api/`](./pay-api/)。
 
 ---
 
@@ -191,16 +158,9 @@ Google Pay **TEST** 环境默认（创建订单未下发时 SDK 补齐，有值�
 
 ## 5. Demo
 
-| 示例          | 文件                                                 |
-| ------------- | ---------------------------------------------------- |
-| Mock 完整编排 | [08-managed-flow.html](../demo/08-managed-flow.html) |
+| 示例          | 文件                                                        |
+| ------------- | ----------------------------------------------------------- |
+| Mock 编排     | [`demo/08-managed-flow.html`](../demo/08-managed-flow.html) |
+| 真实 API 联调 | [`demo/09-live-api.html`](../demo/09-live-api.html)         |
 
-勾选环境 / 风控 / 账单地址 / 支付结果后，由 [`demo/mock-api.js`](../demo/mock-api.js)
-返回对应创建订单与支付数据（`api.fetch`），无需真实后端。
-
-创建订单后预采风控；二次动作默认 `callback`，可确认后 `sdk.openAction(action)`。
-若设 `actionMode: 'auto'` 或调用 `sdk.openAction`，SDK 内置行为为：
-
-- `MD + JWT + action`：390×400 WorldPay challenge iframe，并轮询
-- `threeDSMethodData + methodUrl`：隐藏 Shift4 method iframe，并轮询
-- `webUrl` / `s3dsUrl`：`location.assign`（整页跳转后轮询自然结束）
+Demo 09 用 [`demo/signed-api.js`](../demo/signed-api.js) **签名创建订单**（仅 demo 持有 appSecret），再把响应交给 SDK。

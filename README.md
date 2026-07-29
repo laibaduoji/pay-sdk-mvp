@@ -1,12 +1,12 @@
 # Pay SDK MVP
 
 An embeddable browser JS SDK that runs a full **Google Pay / Apple Pay** payment
-flow for merchants: create order → wallet authorize → pay → poll status. Works when
-loaded via `<script>` in a browser or an app WebView.
+flow for merchants: wallet authorize → pay → poll status (create-order is done by
+the merchant server). Works when loaded via `<script>` in a browser or an app WebView.
 
 Written in **TypeScript**; bundled to a single IIFE file with Vite.
 
-完整参数说明见 [docs/PARAMETERS.md](docs/PARAMETERS.md)。四接口契约见
+完整参数说明见 [docs/PARAMETERS.md](docs/PARAMETERS.md)。接口契约见
 [docs/pay-api/](docs/pay-api/)。
 
 ## Build
@@ -21,13 +21,14 @@ npm run format     # prettier write
 
 ## Demos
 
-| 文件                                                   | 说明                                      |
-| ------------------------------------------------------ | ----------------------------------------- |
-| [demo/index.html](demo/index.html)                     | 目录页                                    |
-| [demo/08-managed-flow.html](demo/08-managed-flow.html) | 完整编排 Mock（勾选环境 / 风控 / 账单等） |
-| [demo/09-live-api.html](demo/09-live-api.html)         | 真实 openapi（可编辑创建订单 + 凭据）     |
+| 文件                                                   | 说明                                                      |
+| ------------------------------------------------------ | --------------------------------------------------------- |
+| [demo/index.html](demo/index.html)                     | 目录页                                                    |
+| [demo/08-managed-flow.html](demo/08-managed-flow.html) | 完整编排 Mock（Mock 生成创建订单响应含 token → init SDK） |
+| [demo/09-live-api.html](demo/09-live-api.html)         | 真实 openapi（demo 签名创建订单 → 响应交给 SDK）          |
 
-共享 Mock 参数见 [`demo/config.js`](demo/config.js)、[`demo/mock-api.js`](demo/mock-api.js)。
+共享 Mock / 凭据见 [`demo/config.js`](demo/config.js)、[`demo/mock-api.js`](demo/mock-api.js)、
+[`demo/signed-api.js`](demo/signed-api.js)（仅 demo 签名）。
 
 ## Usage
 
@@ -35,40 +36,24 @@ npm run format     # prettier write
 <div id="pay-container"></div>
 <script src="./dist/pay-sdk.js"></script>
 <script>
+  // Merchant server already created the order (signed). Pass response data here.
+  const order = {
+    orderNo: 'ord_xxx',
+    method: 'googlePay',
+    token: 'payment-hub-token-from-create-order',
+    paymentScript: {/* Google PaymentDataRequest from create-order */},
+    risk: {/* optional */}
+  }
+
   const sdk = PaySdk.init({
     container: '#pay-container',
-    // omit or 'PRODUCTION' for live; 'TEST' → test API + Google Pay TEST + Checkout sandbox
     environment: 'TEST',
-    // Prefer server-side getToken, then pass accessToken (faster button render)
-    accessToken: 'YOUR_ACCESS_TOKEN',
-    // email: 'user@example.com', // required if accessToken omitted (SDK calls getToken)
-    order: {
-      side: 'BUY',
-      merchantOrderNo: 'm_ord_xxx',
-      amount: '10.00',
-      fiatCurrency: 'USD',
-      alpha2: 'US',
-      cryptoCurrency: 'USDT',
-      orderType: '4',
-      address: '0xabc...',
-      network: 'ETH',
-      payWayCode: '701',
-      redirectUrl: 'https://merchant.example/success',
-      callbackUrl: 'https://merchant.example/callback',
-      clientIp: '1.2.3.4'
-    },
-    // optional — defaults from src/endpoints.ts by environment
+    order: order,
     api: {
-      appId: 'YOUR_APP_ID',
-      appSecret: 'YOUR_APP_SECRET',
       pollIntervalMs: 2000,
       pollTimeoutMs: 300000
     },
-    // actionMode: 'callback', // default — only notify merchant
-    // openAction: async (action) => window.NativeBridge?.open(action),
     onAction(action) {
-      // Full fields: MD / JWT / action, webUrl, methodUrl, s3dsUrl, …
-      // Merchant opens UI, or after Bridge permission: sdk.openAction(action)
       console.log(action)
     },
     onOrderCreated(order) {
@@ -94,11 +79,12 @@ npm run format     # prettier write
 
 Built-in API hosts live in [`src/endpoints.ts`](src/endpoints.ts)
 (`TEST` → `api-test.alchemytech.cc`, `PRODUCTION` → `openapi.alchemypay.org`).
-Pass `api.appId` + `api.appSecret` to enable [API Sign](https://alchemypay.readme.io/docs/api-sign)
-(`appid` / `timestamp` / `sign` headers). Business APIs also need `access-token`:
-**prefer** passing `accessToken` from your server ([Get Token](https://alchemypay.readme.io/docs/get-token));
-otherwise pass `email` or `uid` and the SDK will call getToken before create-order (extra latency before the pay button).
-**TEMP:** current test/server setup does not require `access-token`; the SDK temporarily skips getToken / header injection (code kept for restore).
+
+**Create-order** is performed by the merchant server (API Sign). Pass the response
+(including `token`) to `PaySdk.init({ order })`. The SDK does **not** sign and does
+**not** call create-order; verify / pay / detail requests send header
+`payment-hub-token: <token>`.
+
 Pass `environment` on `init`; omit `api` URLs unless you need a proxy override.
 Init `environment` also drives Google Pay and Checkout Risk (sandbox vs prod).
 In Google Pay **TEST**, SDK fills defaults when create-order omits them:
@@ -108,7 +94,7 @@ Apple Pay merchant validation URL is built in; if create-order returns
 `validateMerchantUrl`, that value takes precedence.
 
 The create-order response selects Google Pay or Apple Pay and supplies wallet
-`paymentScript` and `risk`. Risk collection starts **immediately after create-order** for
+`paymentScript`, `risk`, and `token`. Risk collection starts in `ready()` for
 `enabled` vendors; the pay request awaits or reuses that result.
 
 Secondary actions (`webUrl` / 3DS / method / `s3dsUrl`) default to **callback-only**
@@ -120,7 +106,7 @@ frames / navigate.
 | Method                   | Description                                                                                                     |
 | ------------------------ | --------------------------------------------------------------------------------------------------------------- |
 | `PaySdk.init(config)`    | Validates `order` (+ optional `environment` / `api`) and returns an SDK instance.                               |
-| `sdk.ready()`            | Creates the order, starts risk prefetch, loads the selected wallet, checks availability.                        |
+| `sdk.ready()`            | Uses the passed create-order response, starts risk prefetch, loads the selected wallet, checks availability.    |
 | `sdk.mount()`            | Renders the wallet button. May be called before `ready()`; preparation then runs automatically.                 |
 | `sdk.openAction(action)` | Opens a secondary action (challenge iframe / method iframe / navigate). Use after merchant / Bridge permission. |
 | `sdk.destroy()`          | Clears the button, payment-action iframe and active order polling timer.                                        |
@@ -139,35 +125,14 @@ frames / navigate.
 // Apple Pay
 {
   method: 'applePay',
-  token: event.payment.token,
+  token: payment.token,
   billingContact, shippingContact, raw,
   risk, orderNo, paymentResponse, order
 }
 ```
 
-## Apple Pay domain validation
+## Docs
 
-Apple requires that the merchant session be created **on your server**. The SDK
-handles the client half:
-
-1. On button tap the SDK creates an `ApplePaySession` and calls `begin()`.
-2. In `onvalidatemerchant`, the SDK `POST`s to the validate-merchant URL with
-   required `{ orderNo, validationURL }` (and signed headers when configured).
-3. Your server returns `{ returnCode: '0000', data: merchantSession }`.
-4. The SDK extracts `data` and calls `completeMerchantValidation(merchantSession)`.
-
-Your server / Apple Developer setup (not included in this repo):
-
-- Create a Merchant ID and upload a Merchant Identity Certificate.
-- Register and verify every domain that shows the Apple Pay button.
-- Implement the validate-merchant endpoint that talks to Apple's servers.
-
-## Notes
-
-- Official wallet scripts are loaded at runtime from their CDNs, not bundled:
-  Google `https://pay.google.com/gp/p/js/pay.js`,
-  Apple `https://applepay.cdn-apple.com/jsapi/1.latest/apple-pay-sdk.js`.
-- Type definitions ship in `dist/types/` (config types are exported from the entry).
-- Google Pay uses fixed `callbackIntents: ['PAYMENT_AUTHORIZATION']` with
-  `onPaymentAuthorized` (pay API runs while the sheet is open). Shipping /
-  dynamic price updates / multi-wallet display are not implemented.
+- [docs/MERCHANT.md](docs/MERCHANT.md) — merchant integration
+- [docs/PARAMETERS.md](docs/PARAMETERS.md) — init parameters
+- [docs/pay-api/](docs/pay-api/) — API contracts

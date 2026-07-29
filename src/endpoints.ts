@@ -33,7 +33,7 @@ export function getApiEndpoints(environment: Environment = 'PRODUCTION'): PayApi
 }
 
 /**
- * 合并内置地址与商户覆盖项（headers / poll / 自定义 URL / 签名凭证）。
+ * 合并内置地址与商户覆盖项（headers / poll / 自定义 URL / paymentHubToken）。
  * 未传的 URL 使用对应环境的内置地址。
  */
 export function resolvePayApiConfig(
@@ -47,6 +47,8 @@ export function resolvePayApiConfig(
     validateMerchantUrl: overrides?.validateMerchantUrl || defaults.validateMerchantUrl,
     payUrl: overrides?.payUrl || defaults.payUrl,
     queryOrderUrl: overrides?.queryOrderUrl || defaults.queryOrderUrl,
+    paymentHubToken: overrides?.paymentHubToken,
+    // legacy（SDK 运行时不再签名 / 不再带 access-token）
     accessToken: overrides?.accessToken,
     appId: overrides?.appId,
     appSecret: overrides?.appSecret,

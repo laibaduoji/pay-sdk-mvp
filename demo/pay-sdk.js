@@ -826,119 +826,6 @@ apple-pay-button {
     };
     session.begin();
   }
-  function bytesToBase64(bytes) {
-    const view = new Uint8Array(bytes);
-    let binary = "";
-    for (let i2 = 0; i2 < view.length; i2++) {
-      binary += String.fromCharCode(view[i2]);
-    }
-    return btoa(binary);
-  }
-  async function hmacSha256Base64(content, secretkey) {
-    const enc = new TextEncoder();
-    const key = await crypto.subtle.importKey(
-      "raw",
-      enc.encode(secretkey),
-      { name: "HMAC", hash: "SHA-256" },
-      false,
-      ["sign"]
-    );
-    const signature = await crypto.subtle.sign("HMAC", key, enc.encode(content));
-    return bytesToBase64(signature);
-  }
-  function getPath(requestUrl) {
-    const uri = new URL(requestUrl);
-    const path = uri.pathname;
-    const params = Array.from(uri.searchParams.entries());
-    if (params.length === 0) {
-      return path;
-    }
-    const sortedParams = [...params].sort(([aKey], [bKey]) => aKey.localeCompare(bKey));
-    const queryString = sortedParams.map(([key, value]) => `${key}=${value}`).join("&");
-    return `${path}?${queryString}`;
-  }
-  function removeEmptyKeys(map) {
-    const retMap = {};
-    for (const [key, value] of Object.entries(map)) {
-      if (value !== null && value !== "") {
-        retMap[key] = value;
-      }
-    }
-    return retMap;
-  }
-  function sortList(list) {
-    const objectList = [];
-    const intList = [];
-    const floatList = [];
-    const stringList = [];
-    const jsonArray = [];
-    for (const item of list) {
-      if (typeof item === "object" && item !== null) {
-        jsonArray.push(item);
-      } else if (typeof item === "number" && Number.isInteger(item)) {
-        intList.push(item);
-      } else if (typeof item === "number") {
-        floatList.push(item);
-      } else if (typeof item === "string") {
-        stringList.push(item);
-      } else {
-        intList.push(item);
-      }
-    }
-    intList.sort((a2, b2) => a2 - b2);
-    floatList.sort((a2, b2) => a2 - b2);
-    stringList.sort();
-    objectList.push(...intList, ...floatList, ...stringList, ...jsonArray);
-    list.length = 0;
-    list.push(...objectList);
-    const retList = [];
-    for (const item of list) {
-      if (typeof item === "object" && item !== null) {
-        retList.push(sortObject(item));
-      } else {
-        retList.push(item);
-      }
-    }
-    return retList;
-  }
-  function sortMap(map) {
-    const sortedMap = new Map(
-      Object.entries(removeEmptyKeys(map)).sort(([aKey], [bKey]) => aKey.localeCompare(bKey))
-    );
-    for (const [key, value] of sortedMap.entries()) {
-      if (typeof value === "object" && value !== null) {
-        sortedMap.set(key, sortObject(value));
-      }
-    }
-    return Object.fromEntries(sortedMap.entries());
-  }
-  function sortObject(obj) {
-    if (typeof obj === "object" && obj !== null) {
-      if (Array.isArray(obj)) {
-        return sortList(obj);
-      }
-      return sortMap(obj);
-    }
-    return obj;
-  }
-  function getJsonBody(body) {
-    let map;
-    try {
-      map = JSON.parse(body);
-    } catch {
-      map = {};
-    }
-    if (!map || typeof map !== "object" || Array.isArray(map) || Object.keys(map).length === 0) {
-      return "";
-    }
-    map = removeEmptyKeys(map);
-    map = sortObject(map);
-    return JSON.stringify(map);
-  }
-  async function apiSign(timestamp, method, requestUrl, body, secretkey) {
-    const content = timestamp + method.toUpperCase() + getPath(requestUrl) + getJsonBody(body);
-    return hmacSha256Base64(content, secretkey);
-  }
   const SUCCESS_RETURN_CODE = "0000";
   class PayApiError extends Error {
     constructor(message, details = {}) {
@@ -962,6 +849,10 @@ apple-pay-button {
     if (!data.paymentScript || typeof data.paymentScript !== "object") {
       throw new PayApiError("Create order response is missing paymentScript");
     }
+    const token = typeof data.token === "string" ? data.token.trim() : "";
+    if (!token) {
+      throw new PayApiError("Create order response is missing token");
+    }
     let method = data.method;
     if (!method) {
       if (isGooglePayScript(data.paymentScript)) method = "googlePay";
@@ -977,15 +868,18 @@ apple-pay-button {
         method: "googlePay",
         environment,
         paymentScript: script,
+        token,
         risk: data.risk
       };
     }
+    const appleWire = data;
     return {
       orderNo: data.orderNo,
       method: "applePay",
       environment: data.environment,
       paymentScript: data.paymentScript,
-      validateMerchantUrl: data.validateMerchantUrl,
+      token,
+      validateMerchantUrl: appleWire.validateMerchantUrl,
       risk: data.risk
     };
   }
@@ -1012,10 +906,13 @@ apple-pay-button {
       var _a;
       this.config = config;
       this.fetcher = config.fetch || window.fetch.bind(window);
-      this.accessToken = ((_a = config.accessToken) == null ? void 0 : _a.trim()) || void 0;
+      this.paymentHubToken = ((_a = config.paymentHubToken) == null ? void 0 : _a.trim()) || void 0;
     }
-    getAccessToken() {
-      return this.accessToken;
+    getPaymentHubToken() {
+      return this.paymentHubToken;
+    }
+    setPaymentHubToken(token) {
+      this.paymentHubToken = (token == null ? void 0 : token.trim()) || void 0;
     }
     getLastTraceId() {
       return this.lastTraceId;
@@ -1025,16 +922,14 @@ apple-pay-button {
       if (traceId) this.lastTraceId = traceId;
     }
     /**
-     * 优先使用已有 / 传入的 accessToken；否则用 email 或 uid 调 getToken。
+     * @deprecated SDK 编排不再调用。legacy：优先 accessToken，否则 getToken。
      */
     async ensureAccessToken(identity) {
       var _a, _b, _c, _d;
       const provided = (_a = identity.accessToken) == null ? void 0 : _a.trim();
       if (provided) {
-        this.accessToken = provided;
         return provided;
       }
-      if (this.accessToken) return this.accessToken;
       const email = (_b = identity.email) == null ? void 0 : _b.trim();
       const uid = (_c = identity.uid) == null ? void 0 : _c.trim();
       if (!email && !uid) {
@@ -1048,12 +943,13 @@ apple-pay-button {
       if (!token) {
         throw new PayApiError("Get token response is missing accessToken");
       }
-      this.accessToken = token;
       return token;
     }
+    /** @deprecated SDK 编排不再调用。legacy / demo。 */
     getToken(request) {
       return this.request(this.config.getTokenUrl, "POST", request);
     }
+    /** @deprecated SDK 编排不再调用；创建订单由商户/demo 完成。 */
     async createOrder(request) {
       const data = await this.request(
         this.config.createOrderUrl,
@@ -1080,16 +976,11 @@ apple-pay-button {
       const data = await this.request(url, "GET");
       return normalizeQueryOrderResponse(data);
     }
-    async resolveHeaders(url, method, bodyString) {
+    async resolveHeaders(_url, _method, bodyString) {
       const configured = typeof this.config.headers === "function" ? await this.config.headers() : this.config.headers;
       const headers = bodyString !== "" ? { "Content-Type": "application/json", ...configured } : { ...configured };
-      const { appId, appSecret } = this.config;
-      if (appId && appSecret) {
-        const timestamp = String(Date.now());
-        const sign = await apiSign(timestamp, method, url, bodyString, appSecret);
-        headers.appid = appId;
-        headers.timestamp = timestamp;
-        headers.sign = sign;
+      if (this.paymentHubToken) {
+        headers["payment-hub-token"] = this.paymentHubToken;
       }
       if (this.config.getFingerprintId) {
         const fingerprintId = await this.config.getFingerprintId();
@@ -1299,6 +1190,8 @@ apple-pay-button {
       validateMerchantUrl: (overrides == null ? void 0 : overrides.validateMerchantUrl) || defaults.validateMerchantUrl,
       payUrl: (overrides == null ? void 0 : overrides.payUrl) || defaults.payUrl,
       queryOrderUrl: (overrides == null ? void 0 : overrides.queryOrderUrl) || defaults.queryOrderUrl,
+      paymentHubToken: overrides == null ? void 0 : overrides.paymentHubToken,
+      // legacy（SDK 运行时不再签名 / 不再带 access-token）
       accessToken: overrides == null ? void 0 : overrides.accessToken,
       appId: overrides == null ? void 0 : overrides.appId,
       appSecret: overrides == null ? void 0 : overrides.appSecret,
@@ -1742,29 +1635,16 @@ apple-pay-button {
     }
     const order = config.order;
     if (!order || typeof order !== "object") {
-      throw new Error("config.order is required");
+      throw new Error("config.order is required (create-order response)");
     }
-    const required = [
-      "side",
-      "merchantOrderNo",
-      "amount",
-      "fiatCurrency",
-      "cryptoCurrency",
-      "orderType",
-      "network",
-      "payWayCode",
-      "redirectUrl",
-      "callbackUrl",
-      "clientIp"
-    ];
-    const missing = required.filter((key) => {
-      const value = order[key];
-      return value == null || value === "";
-    });
-    if (missing.length) {
-      throw new Error(
-        `order.${missing.join(", order.")} ${missing.length > 1 ? "are" : "is"} required`
-      );
+    if (!order.orderNo) {
+      throw new Error("order.orderNo is required");
+    }
+    if (!order.paymentScript || typeof order.paymentScript !== "object") {
+      throw new Error("order.paymentScript is required");
+    }
+    if (!order.token || typeof order.token !== "string" || !order.token.trim()) {
+      throw new Error("order.token is required");
     }
   }
   function hasSecondaryAction(response) {
@@ -1802,7 +1682,7 @@ apple-pay-button {
         payment: {
           amount: paymentScript2.transactionInfo.totalPrice,
           currency: paymentScript2.transactionInfo.currencyCode,
-          countryCode: paymentScript2.transactionInfo.countryCode || config.order.alpha2 || ""
+          countryCode: paymentScript2.transactionInfo.countryCode || ""
         },
         billingAddressRequired: parameters.billingAddressRequired === true,
         googlePay: {
@@ -1857,10 +1737,10 @@ apple-pay-button {
       this.api = new PayApiClient(this.buildApiConfig(resolveEnvironment(config.environment)));
     }
     buildApiConfig(environment) {
-      var _a;
+      var _a, _b;
       return resolvePayApiConfig(environment, {
         ...this.config.api,
-        accessToken: ((_a = this.api) == null ? void 0 : _a.getAccessToken()) || this.config.accessToken,
+        paymentHubToken: ((_a = this.api) == null ? void 0 : _a.getPaymentHubToken()) || ((_b = this.config.order) == null ? void 0 : _b.token),
         getFingerprintId: () => this.fingerprintIdPromise
       });
     }
@@ -1873,13 +1753,14 @@ apple-pay-button {
     async prepare() {
       var _a, _b;
       if (!this.runtimeConfig) {
-        const order = await this.api.createOrder(this.config.order);
+        const order = normalizeCreateOrderResponse(this.config.order);
         this.order = order;
         (_b = (_a = this.config).onOrderCreated) == null ? void 0 : _b.call(_a, order);
         const environment = resolveEnvironment(this.config.environment || order.environment);
         const prevTraceId = this.api.getLastTraceId();
         this.api = new PayApiClient(this.buildApiConfig(environment));
         this.api.restoreLastTraceId(prevTraceId);
+        this.api.setPaymentHubToken(order.token);
         this.runtimeConfig = runtimeConfigFromOrder(this.config, order, this.api, async (result) => {
           await this.processPayment(result);
         });

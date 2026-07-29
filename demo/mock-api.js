@@ -142,11 +142,13 @@
 
   function buildCreateOrderData(request, orderNo) {
     const environment = options.environment === 'PRODUCTION' ? 'PRODUCTION' : 'TEST'
+    const no = orderNo || 'ord_preview'
     /** @type {Record<string, unknown>} */
     const data = {
-      orderNo: orderNo || 'ord_preview',
+      orderNo: no,
       environment: environment,
       method: options.method === 'applePay' ? 'applePay' : 'googlePay',
+      token: 'demo-payment-hub-token-' + no,
       risk: buildRisk()
     }
 
@@ -169,6 +171,14 @@
     const data = buildCreateOrderData(request, orderNo)
     orders[orderNo] = { ticks: 0, options: { ...options } }
     return envelope(data)
+  }
+
+  /** Demo helper: build + register create-order data for PaySdk.init({ order }) */
+  function takeCreateOrder(request) {
+    const orderNo = 'ord_demo_' + Date.now().toString(36)
+    const data = buildCreateOrderData(request, orderNo)
+    orders[orderNo] = { ticks: 0, options: { ...options } }
+    return data
   }
 
   function validateMerchant() {
@@ -353,6 +363,7 @@
     previewCreateOrder(request) {
       return buildCreateOrderData(request || cfg.payment, 'ord_preview')
     },
+    takeCreateOrder: takeCreateOrder,
     fetch: mockFetch
   }
 })(window)

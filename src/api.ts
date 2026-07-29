@@ -3,6 +3,7 @@ import type {
   ApplePayParams,
   CreateOrderRequest,
   CreateOrderResponse,
+  CreateOrderResponseApplePay,
   CreateOrderRisk,
   Environment,
   GooglePayParams,
@@ -12,7 +13,8 @@ import type {
   PayResponse,
   QueryOrderResponse
 } from './types.js'
-import { apiSign } from './sign.js'
+// legacy: SDK runtime no longer signs; demo may still use apiSign via demo/signed-api.js
+// import { apiSign } from './sign.js'
 
 const SUCCESS_RETURN_CODE = '0000'
 
@@ -48,6 +50,7 @@ export class PayApiError extends Error {
 interface CreateOrderWireData {
   orderNo: string
   paymentScript: GooglePayParams | ApplePayParams
+  token: string
   risk?: CreateOrderRisk
   method?: PayMethod
   environment?: Environment
@@ -62,12 +65,18 @@ function isApplePayScript(script: GooglePayParams | ApplePayParams): script is A
   return Array.isArray((script as ApplePayParams).merchantCapabilities) || 'total' in script
 }
 
-export function normalizeCreateOrderResponse(data: CreateOrderWireData): CreateOrderResponse {
+export function normalizeCreateOrderResponse(
+  data: CreateOrderWireData | CreateOrderResponse
+): CreateOrderResponse {
   if (!data?.orderNo) {
     throw new PayApiError('Create order response is missing orderNo')
   }
   if (!data.paymentScript || typeof data.paymentScript !== 'object') {
     throw new PayApiError('Create order response is missing paymentScript')
+  }
+  const token = typeof data.token === 'string' ? data.token.trim() : ''
+  if (!token) {
+    throw new PayApiError('Create order response is missing token')
   }
 
   let method = data.method
@@ -86,16 +95,19 @@ export function normalizeCreateOrderResponse(data: CreateOrderWireData): CreateO
       method: 'googlePay',
       environment,
       paymentScript: script,
+      token,
       risk: data.risk
     }
   }
 
+  const appleWire = data as CreateOrderWireData & CreateOrderResponseApplePay
   return {
     orderNo: data.orderNo,
     method: 'applePay',
     environment: data.environment,
     paymentScript: data.paymentScript as ApplePayParams,
-    validateMerchantUrl: data.validateMerchantUrl,
+    token,
+    validateMerchantUrl: appleWire.validateMerchantUrl,
     risk: data.risk
   }
 }
@@ -128,17 +140,21 @@ export function normalizeQueryOrderResponse(data: QueryOrderWireData): QueryOrde
 export class PayApiClient {
   private readonly config: PayApiConfig
   private readonly fetcher: typeof fetch
-  private accessToken: string | undefined
+  private paymentHubToken: string | undefined
   private lastTraceId: string | undefined
 
   constructor(config: PayApiConfig) {
     this.config = config
     this.fetcher = config.fetch || window.fetch.bind(window)
-    this.accessToken = config.accessToken?.trim() || undefined
+    this.paymentHubToken = config.paymentHubToken?.trim() || undefined
   }
 
-  getAccessToken(): string | undefined {
-    return this.accessToken
+  getPaymentHubToken(): string | undefined {
+    return this.paymentHubToken
+  }
+
+  setPaymentHubToken(token?: string): void {
+    this.paymentHubToken = token?.trim() || undefined
   }
 
   getLastTraceId(): string | undefined {
@@ -151,7 +167,7 @@ export class PayApiClient {
   }
 
   /**
-   * 优先使用已有 / 传入的 accessToken；否则用 email 或 uid 调 getToken。
+   * @deprecated SDK 编排不再调用。legacy：优先 accessToken，否则 getToken。
    */
   async ensureAccessToken(identity: {
     accessToken?: string
@@ -160,10 +176,8 @@ export class PayApiClient {
   }): Promise<string> {
     const provided = identity.accessToken?.trim()
     if (provided) {
-      this.accessToken = provided
       return provided
     }
-    if (this.accessToken) return this.accessToken
 
     const email = identity.email?.trim()
     const uid = identity.uid?.trim()
@@ -179,14 +193,15 @@ export class PayApiClient {
     if (!token) {
       throw new PayApiError('Get token response is missing accessToken')
     }
-    this.accessToken = token
     return token
   }
 
+  /** @deprecated SDK 编排不再调用。legacy / demo。 */
   getToken(request: GetTokenRequest): Promise<GetTokenResponse> {
     return this.request<GetTokenResponse>(this.config.getTokenUrl, 'POST', request)
   }
 
+  /** @deprecated SDK 编排不再调用；创建订单由商户/demo 完成。 */
   async createOrder(request: CreateOrderRequest): Promise<CreateOrderResponse> {
     const data = await this.request<CreateOrderWireData>(
       this.config.createOrderUrl,
@@ -223,8 +238,8 @@ export class PayApiClient {
   }
 
   private async resolveHeaders(
-    url: string,
-    method: 'GET' | 'POST',
+    _url: string,
+    _method: 'GET' | 'POST',
     bodyString: string
   ): Promise<Record<string, string>> {
     const configured =
@@ -232,17 +247,21 @@ export class PayApiClient {
     const headers: Record<string, string> =
       bodyString !== '' ? { 'Content-Type': 'application/json', ...configured } : { ...configured }
 
-    const { appId, appSecret } = this.config
-    if (appId && appSecret) {
-      const timestamp = String(Date.now())
-      const sign = await apiSign(timestamp, method, url, bodyString, appSecret)
-      headers.appid = appId
-      headers.timestamp = timestamp
-      headers.sign = sign
+    // SDK runtime: no API Sign. Demo signs create-order itself.
+    // const { appId, appSecret } = this.config
+    // if (appId && appSecret) {
+    //   const timestamp = String(Date.now())
+    //   const sign = await apiSign(timestamp, _method, _url, bodyString, appSecret)
+    //   headers.appid = appId
+    //   headers.timestamp = timestamp
+    //   headers.sign = sign
+    // }
+
+    if (this.paymentHubToken) {
+      headers['payment-hub-token'] = this.paymentHubToken
     }
 
-    // TEMP: server currently does not require access-token; keep for later restore
-    // // getToken 本身不需要 access-token；其它业务接口需要
+    // legacy: access-token from getToken
     // const isGetToken = url.replace(/\/$/, '') === this.config.getTokenUrl.replace(/\/$/, '')
     // if (this.accessToken && !isGetToken) {
     //   headers['access-token'] = this.accessToken

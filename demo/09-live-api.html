@@ -32,14 +32,14 @@
     <p class="meta"><a href="./index.html">← Demos</a> · PARAMETERS</p>
     <h1>SDK 完整支付编排（真实 API）</h1>
     <p class="meta">
-      使用 SDK 内置 openapi 地址 + <code>appId</code> / <code>appSecret</code> 签名，不走 Mock。
-      TEST 根域名：<code>https://api-test.alchemytech.cc</code>。当前服务端暂不校验
-      <code>access-token</code>（SDK 已暂时跳过 getToken / 带头）；登录态表单可留空联调。
+      Demo 用 <code>appId</code> / <code>appSecret</code> 签名调用创建订单（TEST：
+      <code>https://api-test.alchemytech.cc</code>），把响应（含 <code>token</code>）交给 SDK。SDK
+      不签名、不调创建订单；后续接口带头 <code>payment-hub-token</code>。
     </p>
 
     <form id="controls" class="panel" onsubmit="return false">
       <fieldset>
-        <legend>API 凭据</legend>
+        <legend>API 凭据（仅 Demo 创建订单签名用）</legend>
         <label class="field">
           appId
           <input type="text" name="appId" autocomplete="off" placeholder="必填" />
@@ -47,37 +47,6 @@
         <label class="field">
           appSecret
           <input type="password" name="appSecret" autocomplete="off" placeholder="必填" />
-        </label>
-      </fieldset>
-
-      <fieldset>
-        <legend>登录态（建议 accessToken；否则 email 或 uid）</legend>
-        <label class="field">
-          accessToken
-          <input
-            type="text"
-            name="accessToken"
-            autocomplete="off"
-            placeholder="建议：服务端 getToken"
-          />
-        </label>
-        <label class="field">
-          email
-          <input
-            type="email"
-            name="email"
-            autocomplete="off"
-            placeholder="无 token 时与 uid 二选一"
-          />
-        </label>
-        <label class="field">
-          uid
-          <input
-            type="text"
-            name="uid"
-            autocomplete="off"
-            placeholder="无 token 时与 email 二选一"
-          />
         </label>
       </fieldset>
 
@@ -103,7 +72,7 @@
       </fieldset>
 
       <fieldset>
-        <legend>创建订单</legend>
+        <legend>创建订单请求</legend>
         <label class="field">
           side
           <select name="side">
@@ -174,11 +143,14 @@
       </fieldset>
 
       <button type="button" id="regen-order-no">重新生成 merchantOrderNo</button>
-      <button type="button" id="apply-btn">应用并挂载</button>
+      <button type="button" id="apply-btn">创建订单并挂载 SDK</button>
     </form>
 
-    <h2 class="section-title">将提交的 order</h2>
+    <h2 class="section-title">将提交的创建订单请求</h2>
     <pre id="preview">—</pre>
+
+    <h2 class="section-title">创建订单响应（传给 SDK）</h2>
+    <pre id="order-response">—</pre>
 
     <p id="status">未挂载</p>
     <div class="trace-row">
@@ -196,19 +168,19 @@
 
     <script src="./pay-sdk.js"></script>
     <script src="./config.js"></script>
+    <script src="./signed-api.js"></script>
     <script src="./demo-ui.js"></script>
     <script>
       const SS_APP_ID = 'paySdkDemo.appId'
       const SS_APP_SECRET = 'paySdkDemo.appSecret'
-      const SS_ACCESS_TOKEN = 'paySdkDemo.accessToken'
-      const SS_EMAIL = 'paySdkDemo.email'
-      const SS_UID = 'paySdkDemo.uid'
 
       const ui = window.PaySdkDemoUI
+      const signedApi = window.PaySdkDemoSignedApi
       const sdkRef = { current: null }
       const handlers = ui.handlers(sdkRef)
       const form = document.getElementById('controls')
       const previewEl = document.getElementById('preview')
+      const orderResponseEl = document.getElementById('order-response')
       const riskEl = document.getElementById('risk')
       const actionEl = document.getElementById('action')
       const outputEl = document.getElementById('output')
@@ -261,21 +233,6 @@
         } catch (_) {}
         el('appId').value = appId
         el('appSecret').value = appSecret
-
-        let accessToken = ''
-        let email = 'demo@example.com'
-        let uid = ''
-        try {
-          const savedToken = sessionStorage.getItem(SS_ACCESS_TOKEN)
-          const savedEmail = sessionStorage.getItem(SS_EMAIL)
-          const savedUid = sessionStorage.getItem(SS_UID)
-          if (savedToken) accessToken = savedToken
-          if (savedEmail != null && savedEmail !== '') email = savedEmail
-          if (savedUid) uid = savedUid
-        } catch (_) {}
-        el('accessToken').value = accessToken
-        el('email').value = email
-        el('uid').value = uid
       }
 
       function syncPayWayCode() {
@@ -319,26 +276,10 @@
         }
       }
 
-      function readIdentity() {
-        return {
-          accessToken: String(el('accessToken').value || '').trim(),
-          email: String(el('email').value || '').trim(),
-          uid: String(el('uid').value || '').trim()
-        }
-      }
-
       function persistCreds(creds) {
         try {
           sessionStorage.setItem(SS_APP_ID, creds.appId)
           sessionStorage.setItem(SS_APP_SECRET, creds.appSecret)
-        } catch (_) {}
-      }
-
-      function persistIdentity(identity) {
-        try {
-          sessionStorage.setItem(SS_ACCESS_TOKEN, identity.accessToken || '')
-          sessionStorage.setItem(SS_EMAIL, identity.email || '')
-          sessionStorage.setItem(SS_UID, identity.uid || '')
         } catch (_) {}
       }
 
@@ -360,20 +301,13 @@
         )
       }
 
-      function mountSdk() {
+      async function mountSdk() {
         const creds = readCreds()
         if (!creds.appId || !creds.appSecret) {
           statusEl.textContent = '请填写 appId 与 appSecret'
           return
         }
-        const identity = readIdentity()
-        // TEMP: server currently does not require access-token; keep for later restore
-        // if (!identity.accessToken && !identity.email && !identity.uid) {
-        //   statusEl.textContent = '请填写 accessToken，或 email / uid（二选一）'
-        //   return
-        // }
         persistCreds(creds)
-        persistIdentity(identity)
 
         if (sdk) {
           try {
@@ -385,28 +319,64 @@
         const fd = new FormData(form)
         const environment = fd.get('environment') || 'TEST'
         const actionMode = fd.get('actionMode') || 'callback'
-        const order = readOrderFromForm()
-        if (!order.merchantOrderNo) {
-          order.merchantOrderNo = newMerchantOrderNo()
-          el('merchantOrderNo').value = order.merchantOrderNo
+        const orderRequest = readOrderFromForm()
+        if (!orderRequest.merchantOrderNo) {
+          orderRequest.merchantOrderNo = newMerchantOrderNo()
+          el('merchantOrderNo').value = orderRequest.merchantOrderNo
         }
 
         refreshPreview()
         lastRiskConfig = null
         actionEl.textContent = '—'
         outputEl.textContent = '—'
+        orderResponseEl.textContent = '创建订单中…'
         riskEl.textContent = '挂载后采集中…'
         document.getElementById('pay-container').innerHTML = ''
-        statusEl.textContent = '挂载中…'
+        statusEl.textContent = 'Demo 签名创建订单中…'
+        ui.showTraceId(null, null)
 
-        const initConfig = {
+        let createResult
+        try {
+          createResult = await signedApi.createOrder({
+            environment: environment,
+            appId: creds.appId,
+            appSecret: creds.appSecret,
+            order: orderRequest
+          })
+        } catch (err) {
+          statusEl.textContent = '创建订单失败：' + (err.message || err)
+          orderResponseEl.textContent = JSON.stringify(
+            (err && err.envelope) || { message: String(err && err.message) },
+            null,
+            2
+          )
+          if (err && err.traceId) {
+            document.getElementById('trace-id').textContent = err.traceId
+          }
+          return
+        }
+
+        const orderResponse = createResult.data
+        orderResponseEl.textContent = JSON.stringify(orderResponse, null, 2)
+        if (createResult.traceId) {
+          document.getElementById('trace-id').textContent = createResult.traceId
+        }
+
+        if (!orderResponse || !orderResponse.token) {
+          statusEl.textContent = '创建订单成功但缺少 token，无法挂载 SDK'
+          return
+        }
+
+        statusEl.textContent = '创建订单成功，挂载 SDK…'
+
+        sdk = PaySdk.init({
           container: '#pay-container',
           environment: environment,
           actionMode: actionMode,
-          order: order,
+          order: orderResponse,
           api: {
-            appId: creds.appId,
-            appSecret: creds.appSecret
+            pollIntervalMs: 2000,
+            pollTimeoutMs: 300000
           },
           onAction(action) {
             actionEl.textContent = JSON.stringify(action, null, 2)
@@ -417,8 +387,7 @@
             }
           },
           onOrderCreated(orderRes) {
-            statusEl.textContent =
-              'Order ' + orderRes.orderNo + ' created (' + orderRes.method + ').'
+            statusEl.textContent = 'Order ' + orderRes.orderNo + ' ready (' + orderRes.method + ').'
             lastRiskConfig = orderRes.risk || null
             renderRisk({ fingerprintId: null, risk: null })
             ui.showTraceId(null, sdk)
@@ -440,12 +409,7 @@
           onSuccess: handlers.onSuccess,
           onError: handlers.onError,
           onCancel: handlers.onCancel
-        }
-        if (identity.accessToken) initConfig.accessToken = identity.accessToken
-        if (identity.email) initConfig.email = identity.email
-        if (identity.uid) initConfig.uid = identity.uid
-
-        sdk = PaySdk.init(initConfig)
+        })
         sdkRef.current = sdk
 
         ui.run(sdk)
@@ -458,7 +422,9 @@
         el('merchantOrderNo').value = newMerchantOrderNo()
         refreshPreview()
       })
-      document.getElementById('apply-btn').addEventListener('click', mountSdk)
+      document.getElementById('apply-btn').addEventListener('click', function () {
+        void mountSdk()
+      })
       refreshPreview()
     </script>
   </body>
