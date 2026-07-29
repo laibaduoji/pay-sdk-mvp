@@ -57,6 +57,7 @@ export type {
   ApiResponse,
   CreateOrderRequest,
   CreateOrderResponse,
+  CreateOrderInput,
   CreateOrderResponseGooglePay,
   CreateOrderResponseApplePay,
   GooglePayParams,
@@ -106,7 +107,10 @@ function validateConfig(config: PaySdkConfig): void {
   if (!order.orderNo) {
     throw new Error('order.orderNo is required')
   }
-  if (!order.paymentScript || typeof order.paymentScript !== 'object') {
+  if (
+    !order.paymentScript ||
+    (typeof order.paymentScript !== 'object' && typeof order.paymentScript !== 'string')
+  ) {
     throw new Error('order.paymentScript is required')
   }
   if (!order.token || typeof order.token !== 'string' || !order.token.trim()) {

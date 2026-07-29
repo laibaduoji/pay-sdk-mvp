@@ -194,6 +194,20 @@ export interface CreateOrderResponseApplePay {
 
 export type CreateOrderResponse = CreateOrderResponseGooglePay | CreateOrderResponseApplePay
 
+/**
+ * 创建订单 wire / init 入参：`paymentScript` 可为对象或 JSON 字符串（normalize 时解析）。
+ * `method` 可省略，由 paymentScript 形态推断。
+ */
+export type CreateOrderInput = {
+  orderNo: string
+  paymentScript: GooglePayParams | ApplePayParams | string
+  token: string
+  risk?: CreateOrderRisk
+  method?: PayMethod
+  environment?: Environment
+  validateMerchantUrl?: string
+}
+
 /** 支付 customParam：token + 扁平账单字段（对齐 ramp-vue） */
 export interface PayCustomParam {
   encryptedData: string
@@ -447,8 +461,8 @@ interface PaySdkBaseConfig extends PaySdkCallbacks {
  * `order` 为创建订单响应（含 `token` / `paymentScript` / `risk`）；SDK 不再调创建订单、不签名。
  */
 export interface PaySdkConfig extends PaySdkBaseConfig {
-  /** 商户侧创建订单响应（须含 `token`） */
-  order: CreateOrderResponse
+  /** 商户侧创建订单响应（须含 `token`）；`paymentScript` 支持对象或 JSON 字符串 */
+  order: CreateOrderResponse | CreateOrderInput
   /**
    * SDK 运行环境，默认 `PRODUCTION`。
    * 决定内置 API 地址、Google Pay 环境、Checkout Risk 沙盒/生产等。

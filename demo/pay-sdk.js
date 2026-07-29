@@ -842,25 +842,41 @@ apple-pay-button {
   function isApplePayScript(script) {
     return Array.isArray(script.merchantCapabilities) || "total" in script;
   }
+  function coercePaymentScript(raw) {
+    if (raw && typeof raw === "object") return raw;
+    if (typeof raw === "string") {
+      const trimmed = raw.trim();
+      if (!trimmed) {
+        throw new PayApiError("Create order response is missing paymentScript");
+      }
+      try {
+        const parsed = JSON.parse(trimmed);
+        if (parsed && typeof parsed === "object") {
+          return parsed;
+        }
+      } catch {
+        throw new PayApiError("Create order response paymentScript is invalid JSON");
+      }
+    }
+    throw new PayApiError("Create order response is missing paymentScript");
+  }
   function normalizeCreateOrderResponse(data) {
     if (!(data == null ? void 0 : data.orderNo)) {
       throw new PayApiError("Create order response is missing orderNo");
     }
-    if (!data.paymentScript || typeof data.paymentScript !== "object") {
-      throw new PayApiError("Create order response is missing paymentScript");
-    }
+    const paymentScript = coercePaymentScript(data.paymentScript);
     const token = typeof data.token === "string" ? data.token.trim() : "";
     if (!token) {
       throw new PayApiError("Create order response is missing token");
     }
     let method = data.method;
     if (!method) {
-      if (isGooglePayScript(data.paymentScript)) method = "googlePay";
-      else if (isApplePayScript(data.paymentScript)) method = "applePay";
+      if (isGooglePayScript(paymentScript)) method = "googlePay";
+      else if (isApplePayScript(paymentScript)) method = "applePay";
       else throw new PayApiError("Create order response paymentScript is not Google or Apple Pay");
     }
     if (method === "googlePay") {
-      const script = { ...data.paymentScript };
+      const script = { ...paymentScript };
       const environment = data.environment || script.environment;
       if ("environment" in script) delete script.environment;
       return {
@@ -877,7 +893,7 @@ apple-pay-button {
       orderNo: data.orderNo,
       method: "applePay",
       environment: data.environment,
-      paymentScript: data.paymentScript,
+      paymentScript,
       token,
       validateMerchantUrl: appleWire.validateMerchantUrl,
       risk: data.risk
@@ -1640,7 +1656,7 @@ apple-pay-button {
     if (!order.orderNo) {
       throw new Error("order.orderNo is required");
     }
-    if (!order.paymentScript || typeof order.paymentScript !== "object") {
+    if (!order.paymentScript || typeof order.paymentScript !== "object" && typeof order.paymentScript !== "string") {
       throw new Error("order.paymentScript is required");
     }
     if (!order.token || typeof order.token !== "string" || !order.token.trim()) {

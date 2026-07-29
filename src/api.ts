@@ -49,7 +49,8 @@ export class PayApiError extends Error {
 /** 服务端创建订单 data（method 可选，可由 paymentScript 推断） */
 interface CreateOrderWireData {
   orderNo: string
-  paymentScript: GooglePayParams | ApplePayParams
+  /** 对象直接用；部分服务端会下发 JSON 字符串，normalize 时解析 */
+  paymentScript: GooglePayParams | ApplePayParams | string
   token: string
   risk?: CreateOrderRisk
   method?: PayMethod
@@ -65,15 +66,35 @@ function isApplePayScript(script: GooglePayParams | ApplePayParams): script is A
   return Array.isArray((script as ApplePayParams).merchantCapabilities) || 'total' in script
 }
 
+/** 对象原样返回；字符串则 JSON.parse，失败抛错 */
+function coercePaymentScript(
+  raw: GooglePayParams | ApplePayParams | string | null | undefined
+): GooglePayParams | ApplePayParams {
+  if (raw && typeof raw === 'object') return raw
+  if (typeof raw === 'string') {
+    const trimmed = raw.trim()
+    if (!trimmed) {
+      throw new PayApiError('Create order response is missing paymentScript')
+    }
+    try {
+      const parsed: unknown = JSON.parse(trimmed)
+      if (parsed && typeof parsed === 'object') {
+        return parsed as GooglePayParams | ApplePayParams
+      }
+    } catch {
+      throw new PayApiError('Create order response paymentScript is invalid JSON')
+    }
+  }
+  throw new PayApiError('Create order response is missing paymentScript')
+}
+
 export function normalizeCreateOrderResponse(
   data: CreateOrderWireData | CreateOrderResponse
 ): CreateOrderResponse {
   if (!data?.orderNo) {
     throw new PayApiError('Create order response is missing orderNo')
   }
-  if (!data.paymentScript || typeof data.paymentScript !== 'object') {
-    throw new PayApiError('Create order response is missing paymentScript')
-  }
+  const paymentScript = coercePaymentScript(data.paymentScript)
   const token = typeof data.token === 'string' ? data.token.trim() : ''
   if (!token) {
     throw new PayApiError('Create order response is missing token')
@@ -81,13 +102,13 @@ export function normalizeCreateOrderResponse(
 
   let method = data.method
   if (!method) {
-    if (isGooglePayScript(data.paymentScript)) method = 'googlePay'
-    else if (isApplePayScript(data.paymentScript)) method = 'applePay'
+    if (isGooglePayScript(paymentScript)) method = 'googlePay'
+    else if (isApplePayScript(paymentScript)) method = 'applePay'
     else throw new PayApiError('Create order response paymentScript is not Google or Apple Pay')
   }
 
   if (method === 'googlePay') {
-    const script = { ...(data.paymentScript as GooglePayParams) }
+    const script = { ...(paymentScript as GooglePayParams) }
     const environment = data.environment || script.environment
     if ('environment' in script) delete script.environment
     return {
@@ -105,7 +126,7 @@ export function normalizeCreateOrderResponse(
     orderNo: data.orderNo,
     method: 'applePay',
     environment: data.environment,
-    paymentScript: data.paymentScript as ApplePayParams,
+    paymentScript: paymentScript as ApplePayParams,
     token,
     validateMerchantUrl: appleWire.validateMerchantUrl,
     risk: data.risk
