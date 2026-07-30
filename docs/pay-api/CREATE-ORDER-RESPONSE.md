@@ -1,8 +1,6 @@
 # 创建订单响应约定（给服务端）
 
-本文面向**组装创建订单 `data` 的服务端同学**。浏览器 Pay SDK 只消费该 `data`（含 `paymentScript` / `token` / `risk`），不调创建订单、不签名。
-
-Google Pay TEST 凭据对齐 ramp-vue `.env.development` 与通道选择逻辑。
+本文面向**组装创建订单 `data` 的服务端同学**，只列当前联调需改正项与 Google Pay TEST 通道凭据（对齐 ramp-vue `.env.development`）。
 
 ---
 
@@ -44,45 +42,27 @@ Google Pay TEST 凭据对齐 ramp-vue `.env.development` 与通道选择逻辑�
 
 ---
 
-## 2. `data` 硬性约定
+## 2. 硬性约定（本次重点）
 
-| 字段            | 要求                                                                     |
-| --------------- | ------------------------------------------------------------------------ |
-| `orderNo`       | 必填                                                                     |
-| `token`         | 必填；后续 SDK 请求头 `payment-hub-token`                                |
-| `paymentScript` | **必填 object**（禁止字符串）                                            |
-| `environment`   | 测试环境必须 `"TEST"`；影响 Google Pay `PaymentsClient` 与 Checkout 风控 |
-| `method`        | 可选；不传时 SDK 按 `paymentScript` 形态推断 `googlePay` / `applePay`    |
-| `risk`          | 可选                                                                     |
-
-金额与币种：
-
-| 钱包       | 字段                           | 取值                                                        |
-| ---------- | ------------------------------ | ----------------------------------------------------------- |
-| Google Pay | `transactionInfo.currencyCode` | **`fiatCurrency`**                                          |
-| Google Pay | `transactionInfo.totalPrice`   | 法币金额（与 `fiatCurrencyAmount` / `amount` 一致，字符串） |
-| Apple Pay  | `currencyCode`                 | **`fiatCurrency`**                                          |
-| Apple Pay  | `total.amount`                 | 法币金额（字符串）                                          |
+| 项                                        | 要求                                                      |
+| ----------------------------------------- | --------------------------------------------------------- |
+| `paymentScript`                           | **必须是 object**（禁止字符串）                           |
+| `environment`                             | 测试环境必须 `"TEST"`（影响 Google Pay `PaymentsClient`） |
+| Google Pay `transactionInfo.currencyCode` | **`fiatCurrency`**（非法币金额字段同理用 `totalPrice`）   |
+| Apple Pay `currencyCode`                  | **`fiatCurrency`**（金额用 `total.amount`）               |
 
 `payWayCode`：`701` = Google Pay，`501` = Apple Pay。
 
 ---
 
-## 3. 正确示例（TEST）
+## 3. 正确示例（TEST，仅示意本次改动点）
 
 ### 3.1 Google Pay（Unlimint / `PAYMENT_GATEWAY`）
 
 ```json
 {
-  "success": true,
-  "returnCode": "0000",
-  "returnMsg": "SUCCESS",
-  "extend": "",
   "data": {
-    "orderNo": "ord_xxx",
     "environment": "TEST",
-    "method": "googlePay",
-    "token": "payment-hub-token-example",
     "paymentScript": {
       "apiVersion": 2,
       "apiVersionMinor": 0,
@@ -118,14 +98,8 @@ Google Pay TEST 凭据对齐 ramp-vue `.env.development` 与通道选择逻辑�
         "merchantId": "863513232473669406",
         "merchantName": "Example Merchant"
       }
-    },
-    "risk": {
-      "forter": { "enabled": true },
-      "checkout": { "enabled": false },
-      "worldPay": { "enabled": false }
     }
-  },
-  "traceId": "example-trace-id"
+  }
 }
 ```
 
@@ -135,15 +109,8 @@ Google Pay TEST 凭据对齐 ramp-vue `.env.development` 与通道选择逻辑�
 
 ```json
 {
-  "success": true,
-  "returnCode": "0000",
-  "returnMsg": "SUCCESS",
-  "extend": "",
   "data": {
-    "orderNo": "ord_xxx",
     "environment": "TEST",
-    "method": "applePay",
-    "token": "payment-hub-token-example",
     "paymentScript": {
       "countryCode": "US",
       "currencyCode": "USD",
@@ -155,18 +122,10 @@ Google Pay TEST 凭据对齐 ramp-vue `.env.development` 与通道选择逻辑�
         "amount": "80"
       },
       "requiredBillingContactFields": ["name", "postalAddress", "phone", "email"]
-    },
-    "risk": {
-      "forter": { "enabled": true },
-      "checkout": { "enabled": false },
-      "worldPay": { "enabled": false }
     }
-  },
-  "traceId": "example-trace-id"
+  }
 }
 ```
-
-域名校验：可选顶层 `validateMerchantUrl`；未下发时 SDK 使用环境内置 `/payment-hub/domain/verify`。
 
 ---
 
@@ -174,7 +133,7 @@ Google Pay TEST 凭据对齐 ramp-vue `.env.development` 与通道选择逻辑�
 
 前提：`payWayCode = 701`，且响应中 `environment: "TEST"`。
 
-按订单 **`channelCode`** 选择令牌化方式与凭据（来源 ramp-vue development）：
+按订单 **`channelCode`** 选择令牌化方式与凭据：
 
 | 通道                 | channelCode  | 令牌化            | 说明               |
 | -------------------- | ------------ | ----------------- | ------------------ |
