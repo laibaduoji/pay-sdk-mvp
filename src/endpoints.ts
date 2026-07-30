@@ -3,7 +3,7 @@ import type { Environment, PayApiConfig } from './types.js'
 /** 环境对应的 API 根域名（不常改，集中维护） */
 const API_BASE: Record<Environment, string> = {
   TEST: 'https://api-test.alchemytech.cc',
-  PRODUCTION: 'https://openapi.alchemypay.org'
+  PRODUCTION: 'https://api.alchemypay.org'
 }
 
 /** 接口相对路径（相对根域名） */

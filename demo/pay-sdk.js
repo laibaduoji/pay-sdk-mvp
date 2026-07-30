@@ -1177,7 +1177,7 @@ apple-pay-button {
   }
   const API_BASE = {
     TEST: "https://api-test.alchemytech.cc",
-    PRODUCTION: "https://openapi.alchemypay.org"
+    PRODUCTION: "https://api.alchemypay.org"
   };
   const API_PATHS = {
     getToken: "/open/api/v4/merchant/getToken",

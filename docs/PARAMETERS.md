@@ -57,7 +57,7 @@ sdk.ready().then(() => sdk.mount())
 | 环境                 | API 根域名                        |
 | -------------------- | --------------------------------- |
 | `TEST`               | `https://api-test.alchemytech.cc` |
-| `PRODUCTION`（默认） | `https://openapi.alchemypay.org`  |
+| `PRODUCTION`（默认） | `https://api.alchemypay.org`      |
 
 路径：`/payment-hub/domain/verify`、`/payment-hub/alchemy-pay`、
 `/payment-hub/order/detail`。  

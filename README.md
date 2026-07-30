@@ -78,7 +78,7 @@ npm run format     # prettier write
 ```
 
 Built-in API hosts live in [`src/endpoints.ts`](src/endpoints.ts)
-(`TEST` → `api-test.alchemytech.cc`, `PRODUCTION` → `openapi.alchemypay.org`).
+(`TEST` → `api-test.alchemytech.cc`, `PRODUCTION` → `api.alchemypay.org`).
 
 **Create-order** is performed by the merchant server (API Sign). Pass the response
 (including `token`) to `PaySdk.init({ order })`. The SDK does **not** sign and does

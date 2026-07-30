@@ -163,7 +163,7 @@
 
   function apiBase(environment) {
     return environment === 'PRODUCTION'
-      ? 'https://openapi.alchemypay.org'
+      ? 'https://api.alchemypay.org'
       : 'https://api-test.alchemytech.cc'
   }
 

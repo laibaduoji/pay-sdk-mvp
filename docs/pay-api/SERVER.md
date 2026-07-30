@@ -34,14 +34,14 @@ Fingerprint **不**出现在创建订单响应或支付 body 中，服务端一�
 | 环境                 | API 根域名                        |
 | -------------------- | --------------------------------- |
 | `TEST`               | `https://api-test.alchemytech.cc` |
-| `PRODUCTION`（默认） | `https://openapi.alchemypay.org`  |
+| `PRODUCTION`（默认） | `https://api.alchemypay.org`      |
 
 完整 URL = 根域名 + 上表路径。商户也可在 SDK `init.api` 中覆盖个别地址。
 
 Apple 域名校验默认：
 
 - TEST：`https://api-test.alchemytech.cc/payment-hub/domain/verify`
-- PRODUCTION：`https://openapi.alchemypay.org/payment-hub/domain/verify`
+- PRODUCTION：`https://api.alchemypay.org/payment-hub/domain/verify`
 
 创建订单若返回 `validateMerchantUrl`，SDK 优先用响应值。
 

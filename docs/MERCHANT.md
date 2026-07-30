@@ -149,7 +149,7 @@ SDK **不**调用创建订单、**不**签名、**不**需要 `appId` / `appSecr
 | 环境                 | 根域名                            |
 | -------------------- | --------------------------------- |
 | `TEST`               | `https://api-test.alchemytech.cc` |
-| `PRODUCTION`（默认） | `https://openapi.alchemypay.org`  |
+| `PRODUCTION`（默认） | `https://api.alchemypay.org`      |
 
 | 用途           | 路径                                          | 谁调用         |
 | -------------- | --------------------------------------------- | -------------- |
