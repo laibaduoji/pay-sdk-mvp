@@ -233,12 +233,6 @@ Google Pay TEST 凭据对齐 ramp-vue `.env.development` 与通道选择逻辑�
 }
 ```
 
-### 4.3 勿误用（env 有、前端现未启用）
-
-| 名称         | 说明                                                                                                                      |
-| ------------ | ------------------------------------------------------------------------------------------------------------------------- |
-| Checkout.com | `gateway=checkoutltd`，`gatewayMerchantId=pk_sbox_srkhzyxmotpo6vnfhqixvs66kyt`；ramp-vue 选择逻辑已注释，**不要**按此组装 |
-
 ---
 
 ## 5. 与 SDK 缺省的关系
