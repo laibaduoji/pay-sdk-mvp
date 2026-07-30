@@ -176,11 +176,10 @@ Google Pay TEST 凭据对齐 ramp-vue `.env.development` 与通道选择逻辑�
 
 按订单 **`channelCode`** 选择令牌化方式与凭据（来源 ramp-vue development）：
 
-| 通道                 | channelCode  | 令牌化                   | 说明                                                                            |
-| -------------------- | ------------ | ------------------------ | ------------------------------------------------------------------------------- |
-| **Shift4**           | `google_001` | `DIRECT` / ECv2          | 使用 `direct_*`                                                                 |
-| **WorldPay**         | `google_002` | **同样 `DIRECT` / ECv2** | 与 Shift4 **同一套** `direct_*`；**不要**用 env 里的 worldpay `PAYMENT_GATEWAY` |
-| **Unlimint（默认）** | 其它非上述   | `PAYMENT_GATEWAY`        | `gateway=unlimint`                                                              |
+| 通道                 | channelCode  | 令牌化            | 说明               |
+| -------------------- | ------------ | ----------------- | ------------------ |
+| **Shift4**           | `google_001` | `DIRECT` / ECv2   | 使用 `direct_*`    |
+| **Unlimint（默认）** | 其它非上述   | `PAYMENT_GATEWAY` | `gateway=unlimint` |
 
 ### 4.1 Shift4 — `google_001`（DIRECT）
 
@@ -208,25 +207,7 @@ Google Pay TEST 凭据对齐 ramp-vue `.env.development` 与通道选择逻辑�
 }
 ```
 
-### 4.2 WorldPay — `google_002`（DIRECT，同 Shift4）
-
-创建订单 `paymentScript` 的 `merchantInfo` / `tokenizationSpecification` **与 §4.1 相同**。
-
-WorldPay DDC / `sessionId` 等由后续支付与风控处理，**不要**在 Google Pay script 里改成：
-
-```json
-{
-  "type": "PAYMENT_GATEWAY",
-  "parameters": {
-    "gateway": "worldpay",
-    "gatewayMerchantId": "6WBHFV446SSHX7VRTLHG"
-  }
-}
-```
-
-（该组 env 存在于 ramp-vue，但 **当前前端组装 Google Pay 未使用**；`google_002` 走 DIRECT。）
-
-### 4.3 Unlimint — 默认（PAYMENT_GATEWAY）
+### 4.2 Unlimint — 默认（PAYMENT_GATEWAY）
 
 | 字段                             | TEST 值              |
 | -------------------------------- | -------------------- |
@@ -252,12 +233,11 @@ WorldPay DDC / `sessionId` 等由后续支付与风控处理，**不要**在 Goo
 }
 ```
 
-### 4.4 勿误用（env 有、前端现未启用）
+### 4.3 勿误用（env 有、前端现未启用）
 
-| 名称                       | 说明                                                                                                                      |
-| -------------------------- | ------------------------------------------------------------------------------------------------------------------------- |
-| Checkout.com               | `gateway=checkoutltd`，`gatewayMerchantId=pk_sbox_srkhzyxmotpo6vnfhqixvs66kyt`；ramp-vue 选择逻辑已注释，**不要**按此组装 |
-| WorldPay `PAYMENT_GATEWAY` | 见 §4.2；`google_002` 实际用 DIRECT                                                                                       |
+| 名称         | 说明                                                                                                                      |
+| ------------ | ------------------------------------------------------------------------------------------------------------------------- |
+| Checkout.com | `gateway=checkoutltd`，`gatewayMerchantId=pk_sbox_srkhzyxmotpo6vnfhqixvs66kyt`；ramp-vue 选择逻辑已注释，**不要**按此组装 |
 
 ---
 
@@ -269,7 +249,7 @@ WorldPay DDC / `sessionId` 等由后续支付与风控处理，**不要**在 Goo
 - `merchantName` → `Example Merchant`
 - 缺省 `PAYMENT_GATEWAY` → `gateway=unlimint`，`gatewayMerchantId=googletest`
 
-**服务端仍应按通道完整下发**，不要依赖 SDK 补齐（尤其 Shift4 / WorldPay 的 DIRECT，以及 Unlimint 的 `merchantId=863513232473669406`）。
+**服务端仍应按通道完整下发**，不要依赖 SDK 补齐（尤其 Shift4 的 DIRECT，以及 Unlimint 的 `merchantId=863513232473669406`）。
 
 **PRODUCTION 勿使用** `googletest`、`Example Merchant`、测试用 `publicKey` / `merchantId`。
 
