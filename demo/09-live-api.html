@@ -243,7 +243,7 @@
         const p = (window.PaySdkDemoConfig && window.PaySdkDemoConfig.payment) || {}
         el('side').value = 'BUY'
         el('merchantOrderNo').value = newMerchantOrderNo()
-        el('amount').value = p.amount || '80.00'
+        el('amount').value = p.amount || '1'
         el('fiatCurrency').value = p.currency || 'USD'
         el('alpha2').value = p.countryCode || 'US'
         el('cryptoCurrency').value = p.cryptoCurrency || 'USDC'

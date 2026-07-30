@@ -4,7 +4,7 @@
  */
 window.PaySdkDemoConfig = {
   payment: {
-    amount: '80.00',
+    amount: '1',
     currency: 'USD',
     countryCode: 'US',
     network: 'BSC',
