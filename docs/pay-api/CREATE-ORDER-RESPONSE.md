@@ -1,35 +1,27 @@
 # 创建订单响应约定（给服务端）
 
-本文面向**组装创建订单 `data` 的服务端同学**，只列当前联调需改正项与 Google Pay TEST 通道凭据（对齐 ramp-vue `.env.development`）。
+只列当前联调**需要改正**的项；Google Pay TEST 通道凭据对齐 ramp-vue `.env.development`。
 
 ---
 
-## 1. 联调常见错误（必须先改）
+## 1. 必须改正
 
-| 问题                    | 现状（错）                  | 要求（对）                                                                                       |
-| ----------------------- | --------------------------- | ------------------------------------------------------------------------------------------------ |
-| `paymentScript` 类型    | JSON **字符串**             | JSON **对象**                                                                                    |
-| **Google Pay** 测试环境 | `environment: "PRODUCTION"` | `data.environment` 为 `"TEST"`（也可写在 `paymentScript.environment`，SDK 会提升；**推荐顶层**） |
-| `currencyCode`          | `USDC` 等加密货币           | 等于创建订单请求的 **`fiatCurrency`**（如 `"USD"`）                                              |
+| 问题                    | 现状（错）                           | 要求（对）                                                                                                               |
+| ----------------------- | ------------------------------------ | ------------------------------------------------------------------------------------------------------------------------ |
+| `paymentScript` 类型    | JSON **字符串**                      | JSON **对象**（禁止 `JSON.stringify`）                                                                                   |
+| **Google Pay** 测试环境 | `environment: "PRODUCTION"` 或未下发 | `data.environment: "TEST"`（也可写在 `paymentScript.environment`；**推荐顶层**）。Apple Pay **不要**为此加 `environment` |
+| `currencyCode`          | `USDC` 等加密货币                    | 等于创建订单请求的 **`fiatCurrency`**（如 `"USD"`）；Google Pay 在 `transactionInfo.currencyCode`                        |
 
-说明：
-
-- SDK **能**解析字符串形式的 `paymentScript`，但契约要求返回 **object**，禁止服务端再 `JSON.stringify`。
-- 钱包侧 `currencyCode` 对齐 H5 / ramp-vue：`orderDetails.fiatCurrency`，**绝不能**填 `cryptoCurrency`。
-- **Apple Pay 不区分环境**，创建订单响应**不必**返回 `environment`。
-
-### 错误片段（Google Pay，勿再下发）
+### 错误 → 正确（Google Pay）
 
 ```json
+// 错
 {
-  "paymentScript": "{\n  \"currencyCode\": \"USDC\",\n  ...\n}",
-  "environment": "PRODUCTION"
+  "environment": "PRODUCTION",
+  "paymentScript": "{\"transactionInfo\":{\"currencyCode\":\"USDC\",...}}"
 }
-```
 
-### 正确片段（Google Pay）
-
-```json
+// 对
 {
   "environment": "TEST",
   "paymentScript": {
@@ -43,104 +35,16 @@
 
 ---
 
-## 2. 硬性约定（本次重点）
+## 2. Google Pay TEST 通道凭据（需按下单 `channelCode` 改）
 
-| 项                                        | 要求                                                                            |
-| ----------------------------------------- | ------------------------------------------------------------------------------- |
-| `paymentScript`                           | **必须是 object**（禁止字符串）                                                 |
-| `environment`（**仅 Google Pay**）        | 测试环境必须 `"TEST"`（影响 Google Pay `PaymentsClient`）；**Apple Pay 不下发** |
-| Google Pay `transactionInfo.currencyCode` | **`fiatCurrency`**（金额用 `totalPrice`）                                       |
-| Apple Pay `currencyCode`                  | **`fiatCurrency`**（金额用 `total.amount`）                                     |
-
-`payWayCode`：`701` = Google Pay，`501` = Apple Pay。
-
----
-
-## 3. 正确示例（仅示意本次改动点）
-
-### 3.1 Google Pay（Unlimint / `PAYMENT_GATEWAY`，TEST）
-
-```json
-{
-  "data": {
-    "environment": "TEST",
-    "paymentScript": {
-      "apiVersion": 2,
-      "apiVersionMinor": 0,
-      "allowedPaymentMethods": [
-        {
-          "type": "CARD",
-          "parameters": {
-            "allowedAuthMethods": ["PAN_ONLY", "CRYPTOGRAM_3DS"],
-            "allowedCardNetworks": ["MASTERCARD", "VISA"],
-            "billingAddressRequired": true,
-            "billingAddressParameters": {
-              "format": "FULL",
-              "phoneNumberRequired": false
-            }
-          },
-          "tokenizationSpecification": {
-            "type": "PAYMENT_GATEWAY",
-            "parameters": {
-              "gateway": "unlimint",
-              "gatewayMerchantId": "googletest"
-            }
-          }
-        }
-      ],
-      "transactionInfo": {
-        "countryCode": "US",
-        "currencyCode": "USD",
-        "totalPriceStatus": "FINAL",
-        "totalPrice": "80.00",
-        "totalPriceLabel": "Total"
-      },
-      "merchantInfo": {
-        "merchantId": "863513232473669406",
-        "merchantName": "Example Merchant"
-      }
-    }
-  }
-}
-```
-
-> SDK 会把 `callbackIntents` 固定为 `["PAYMENT_AUTHORIZATION"]`，服务端可不下发。
-
-### 3.2 Apple Pay（无需 `environment`）
-
-```json
-{
-  "data": {
-    "paymentScript": {
-      "countryCode": "US",
-      "currencyCode": "USD",
-      "merchantCapabilities": ["supports3DS", "supportsCredit", "supportsDebit"],
-      "supportedNetworks": ["masterCard", "visa"],
-      "total": {
-        "label": "ALCHEMY GPS EUROPE UAB",
-        "type": "final",
-        "amount": "80"
-      },
-      "requiredBillingContactFields": ["name", "postalAddress", "phone", "email"]
-    }
-  }
-}
-```
-
----
-
-## 4. Google Pay TEST 配置（按通道）
-
-前提：`payWayCode = 701`，且响应中 `environment: "TEST"`。
-
-按订单 **`channelCode`** 选择令牌化方式与凭据：
+前提：`payWayCode = 701`，且 `environment: "TEST"`。
 
 | 通道                 | channelCode  | 令牌化            | 说明               |
 | -------------------- | ------------ | ----------------- | ------------------ |
 | **Shift4**           | `google_001` | `DIRECT` / ECv2   | 使用 `direct_*`    |
 | **Unlimint（默认）** | 其它非上述   | `PAYMENT_GATEWAY` | `gateway=unlimint` |
 
-### 4.1 Shift4 — `google_001`（DIRECT）
+### Shift4 — `google_001`（DIRECT）
 
 | 字段                             | TEST 值                                                                                    |
 | -------------------------------- | ------------------------------------------------------------------------------------------ |
@@ -166,7 +70,7 @@
 }
 ```
 
-### 4.2 Unlimint — 默认（PAYMENT_GATEWAY）
+### Unlimint — 默认（PAYMENT_GATEWAY）
 
 | 字段                             | TEST 值              |
 | -------------------------------- | -------------------- |
@@ -192,27 +96,13 @@
 }
 ```
 
----
-
-## 5. 与 SDK 缺省的关系
-
-当 `environment === "TEST"` 且部分 Google Pay 字段缺失时，SDK 可能补齐：
-
-- `merchantId` → `12345678901234567890`
-- `merchantName` → `Example Merchant`
-- 缺省 `PAYMENT_GATEWAY` → `gateway=unlimint`，`gatewayMerchantId=googletest`
-
-**服务端仍应按通道完整下发**，不要依赖 SDK 补齐（尤其 Shift4 的 DIRECT，以及 Unlimint 的 `merchantId=863513232473669406`）。
-
-**PRODUCTION 勿使用** `googletest`、`Example Merchant`、测试用 `publicKey` / `merchantId`。
+**PRODUCTION 勿使用**上述 TEST 凭据（`googletest` / Example Merchant / 测试 `publicKey` 等）。
 
 ---
 
-## 6. 自检清单
+## 3. 自检
 
-- [ ] `paymentScript` 是 **object**，不是字符串
-- [ ] **Google Pay** 测试环境：`data.environment === "TEST"`（Apple Pay 不要求）
-- [ ] `currencyCode === fiatCurrency`（不是 `cryptoCurrency`）
-- [ ] `totalPrice` / `total.amount` 与法币金额一致
-- [ ] Google Pay 令牌化字段与 `channelCode`（§4）一致
-- [ ] PRODUCTION 未误用 Google Pay TEST 凭据
+- [ ] `paymentScript` 是 **object**
+- [ ] Google Pay：`environment === "TEST"`
+- [ ] `currencyCode === fiatCurrency`（不是 crypto）
+- [ ] Google Pay 令牌化与 `channelCode` 一致
