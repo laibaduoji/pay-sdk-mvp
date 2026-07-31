@@ -178,6 +178,10 @@ SDK **不**调用创建订单、**不**签名、**不**需要 `appId` / `appSecr
 
 支付后可能返回需用户继续完成的步骤（webUrl、3DS 等）。
 
+**App 内嵌（推荐）**：原收银台 WebView **不离开**，用 Native **底部抽屉**打开 `webUrl`；SDK 继续轮询。完整契约、Bridge 签名与可粘贴代码见：
+
+→ **[App WebView 接入指南（底部抽屉）](./APP-WEBVIEW.md)**（可单独复制给 App 同学）
+
 ### `action` 载荷形状
 
 ```js
@@ -201,56 +205,41 @@ SDK **不**调用创建订单、**不**签名、**不**需要 `appId` / `appSecr
 | `callback`（**默认**） | 只触发 `onAction`，**不**自动跳转/开窗；适合 App WebView；轮询继续 |
 | `auto`                 | 先 `onAction`，再调配置的 `openAction`；未处理则用 SDK 内置打开    |
 
-**JS Bridge 不是必须的。** 仅当 App 需要接管打开页面或控制权限时再接。
-
-#### 模式 A：H5 自己处理（无需 Bridge）
+### App 推荐（摘要）
 
 ```js
 onAction(action) {
-  // 例如：当前页跳转、或自建 WebView 容器打开 action.url
+  if (action.type === 'webUrl' || action.type === 's3ds') {
+    window.NativeBridge.openPayWebUrl(action.url) // 底部抽屉；勿 sdk.openAction
+    return
+  }
+  sdk.openAction(action) // threeDS / threeDSMethod：当前页 iframe
+}
+onSuccess() {
+  window.NativeBridge.closePayWebUrl()
+}
+onError() {
+  window.NativeBridge.closePayWebUrl()
+}
+```
+
+### 纯 H5（非 App）可整页打开
+
+```js
+onAction(action) {
   if (action.type === 'webUrl' || action.type === 's3ds') {
     window.location.href = action.url
   } else {
-    sdk.openAction(action) // 让 SDK 打开 3DS / method iframe
+    sdk.openAction(action)
   }
 }
 ```
 
-#### 模式 B：抛给 Native，再授权 SDK 打开
+SDK 内置 `sdk.openAction` 行为：
 
-```js
-onAction(action) {
-  // 伪代码：把完整 action 交给 App
-  window.NativeBridge.postMessage({ type: 'PAY_ACTION', payload: action })
-}
-
-// App 处理完权限后回调 H5：
-function onNativeAllowOpen(action) {
-  sdk.openAction(action)
-}
-```
-
-#### 模式 C：`actionMode: 'auto'` + Bridge 打开器
-
-```js
-PaySdk.init({
-  // ...
-  actionMode: 'auto',
-  openAction(action) {
-    if (window.NativeBridge && window.NativeBridge.openPayAction) {
-      window.NativeBridge.openPayAction(action)
-      return true // 已处理，SDK 不再内置打开
-    }
-    return false // 回退 SDK 内置
-  }
-})
-```
-
-SDK 内置打开行为：
-
-- `threeDS`：全屏遮罩 + 约 390×400 challenge iframe（POST MD/JWT）
+- `threeDS`：全屏遮罩 + challenge iframe（POST MD/JWT）
 - `threeDSMethod`：隐藏 iframe POST
-- `webUrl` / `s3ds`：`location.assign`（整页离开）
+- `webUrl` / `s3ds`：`location.assign`（**整页离开**，App 场景勿用于这两类）
 
 ---
 
@@ -339,8 +328,9 @@ SDK 内置打开行为：
 - [ ] `PaySdk.init({ order })` 传入完整创建订单响应
 - [ ] 联调使用 `environment: 'TEST'`
 - [ ] 实现 `onSuccess` / `onError` / `onCancel`
-- [ ] WebView 场景实现 `onAction`（或 `auto` + Bridge），避免二次动作无响应
-- [ ] 离开支付页时调用 `sdk.destroy()`
+- [ ] WebView / App：按 [APP-WEBVIEW.md](./APP-WEBVIEW.md) 实现 Bridge 开/关底部抽屉；`webUrl` **不要** `sdk.openAction`
+- [ ] 创建订单带好 `redirectUrl`（供二级页回跳识别）
+- [ ] 离开支付页时调用 `sdk.destroy()`，并关闭未关的抽屉
 - [ ] Apple：域名已校验；Google：测试账号 / 生产商户配置就绪
 - [ ] 与支付后台确认接口已按统一响应壳（`returnCode === '0000'`）联调通过
 
@@ -349,7 +339,7 @@ SDK 内置打开行为：
 ## 10. 常见问题
 
 **Q：必须用 JS Bridge 吗？**  
-A：否。默认 `callback` 模式只回调 `onAction`。只有 App 要接管开页/权限时才需要 Bridge。
+A：纯浏览器 H5 可不接。**App 内嵌且要在原页继续轮询时**，`webUrl`/`s3ds` 必须 Bridge（或等价 Native 开二级页）。见 [APP-WEBVIEW.md](./APP-WEBVIEW.md)。
 
 **Q：要自己调创建订单、支付接口吗？**  
 A：**创建订单须商户服务端调用**；支付 / 查单 / Apple 域名校验由 SDK 调用。把创建订单响应（含 `token`）传入 `init` 即可。
@@ -364,4 +354,7 @@ A：商户 H5 / WebView 用 **script**。当前交付形态是单文件 `pay-sdk
 A：看 `ready()` 的 reject 文案（钱包脚本加载失败、当前浏览器不支持、`order` 缺 `token` 等）。
 
 **Q：二次动作来了但页面没反应？**  
-A：默认不会自动跳转。请在 `onAction` 里处理，或设 `actionMode: 'auto'` / 调用 `sdk.openAction(action)`。
+A：默认不会自动跳转。App：在 `onAction` 里调 `NativeBridge.openPayWebUrl`；纯 H5：自行跳转或 `sdk.openAction`。详见 [APP-WEBVIEW.md](./APP-WEBVIEW.md)。
+
+**Q：可以对 webUrl 调 `sdk.openAction` 吗？**  
+A：会 `location.assign` 整页离开，**App 场景不要用**。App 请用底部抽屉 Bridge。
