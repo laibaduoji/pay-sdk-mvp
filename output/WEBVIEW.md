@@ -9,7 +9,23 @@ H5 SDK 接入见 [SDK.md](./SDK.md)；参考壳页见 [`html/`](./html/)。
 
 ---
 
-## 1. 目标流程
+## 1. 系统与 WebView 要求
+
+| 平台    | 要求                                                                      |
+| ------- | ------------------------------------------------------------------------- |
+| Android | **8.0+（API 26）**；系统 WebView（开启 JS，可注入 `JavascriptInterface`） |
+| iOS     | **16.0+**；使用 **WKWebView**（勿用已废弃的 UIWebView）                   |
+| 通用    | 收银台页须 **HTTPS**；主收银台 WebView 与二级抽屉 WebView **分离**        |
+
+补充：
+
+- Android：Google Pay 依赖较新系统 WebView，以及设备 / Google 账号环境；不可用时 `ready()` 会失败
+- iOS：Apple Pay 需**真机** + Wallet 可用 + 商户域名已校验；模拟器或无钱包设备不可用
+- 二级动作（webUrl / 3DS 壳页）必须在 Native **底部抽屉**内嵌的独立 WebView 中打开，不要在主 WebView 整页跳转
+
+---
+
+## 2. 目标流程
 
 ```text
 支付接口返回二次动作（webUrl / threeDS / threeDSMethod）
@@ -38,7 +54,7 @@ App 主推也不要对本页叠 Challenge/Method iframe；用二级抽屉 + 壳�
 
 ---
 
-## 2. 职责划分
+## 3. 职责划分
 
 | 角色                           | 职责                                                                                        |
 | ------------------------------ | ------------------------------------------------------------------------------------------- |
@@ -49,9 +65,9 @@ App 主推也不要对本页叠 Challenge/Method iframe；用二级抽屉 + 壳�
 
 ---
 
-## 3. Bridge 契约
+## 4. Bridge 契约
 
-### 3.1 挂载名
+### 4.1 挂载名
 
 Android：
 
@@ -65,7 +81,7 @@ H5：`window.NativeBridge`。历史名兼容：
 var bridge = window.NativeBridge || window.AndroidBridge
 ```
 
-### 3.2 方法（给 `@JavascriptInterface`）
+### 4.2 方法（给 `@JavascriptInterface`）
 
 | 方法               | 参数                                                    | 说明                                                       |
 | ------------------ | ------------------------------------------------------- | ---------------------------------------------------------- |
@@ -97,7 +113,7 @@ class PayJsBridge {
 
 SDK 在 `ready` 后注册 `window.__paySdkSecondaryReturn`：Native 关栏后调用可催原页立刻查单。
 
-### 3.3 哪些 action 走 Bridge
+### 4.3 哪些 action 走 Bridge
 
 | `action.type`   | H5 做法（App 推荐）                                                      | App                |
 | --------------- | ------------------------------------------------------------------------ | ------------------ |
@@ -106,7 +122,7 @@ SDK 在 `ready` 后注册 `window.__paySdkSecondaryReturn`：Native 关栏后调
 | `threeDS`       | `openPayChallenge(shellUrl, JSON.stringify({MD,JWT,action}))`            | 壳页 + 注入        |
 | `threeDSMethod` | `openPayMethod(shellUrl, JSON.stringify({threeDSMethodData,methodUrl}))` | 同上               |
 
-### 3.4 参考壳页
+### 4.4 参考壳页
 
 本包提供（命名/托管由商户自定）：
 
@@ -119,7 +135,7 @@ Native 注入建议：将 `jsonPayload` Base64 后 `evaluateJavascript`，避免
 
 ---
 
-## 4. H5 最小接入（可粘贴）
+## 5. H5 最小接入（可粘贴）
 
 ```js
 var bridge = window.NativeBridge || window.AndroidBridge
@@ -199,7 +215,7 @@ sdk.ready().then(function () {
 
 ---
 
-## 5. 关闭二级 WebView
+## 6. 关闭二级 WebView
 
 ### A. 原页轮询终态（主路径）
 
@@ -223,7 +239,7 @@ SDK 轮询**继续**；`onCancel` **不会**因此触发（`onCancel` 只表示�
 
 ---
 
-## 6. Native 实现要点
+## 7. Native 实现要点
 
 1. 三个 open 方法在**主线程**弹出同一 BottomSheet，内嵌独立 WebView。
 2. **不要**在收银台 WebView 上 `loadUrl(webUrl)`。
@@ -233,7 +249,7 @@ SDK 轮询**继续**；`onCancel` **不会**因此触发（`onCancel` 只表示�
 
 ---
 
-## 7. 与 SDK 行为对齐（勿踩坑）
+## 8. 与 SDK 行为对齐（勿踩坑）
 
 | 点                       | 说明                                                               |
 | ------------------------ | ------------------------------------------------------------------ |
@@ -244,8 +260,9 @@ SDK 轮询**继续**；`onCancel` **不会**因此触发（`onCancel` 只表示�
 
 ---
 
-## 8. 自检清单
+## 9. 自检清单
 
+- [ ] Android 8.0+ / iOS 16+；iOS 使用 WKWebView
 - [ ] 注入 `NativeBridge`：四个方法齐全
 - [ ] 底部抽屉二级 WebView，非当前页跳转
 - [ ] H5：`webUrl`/`s3ds` → Bridge；`threeDS`/`threeDSMethod` → 壳页 Bridge
@@ -257,7 +274,7 @@ SDK 轮询**继续**；`onCancel` **不会**因此触发（`onCancel` 只表示�
 
 ---
 
-## 9. FAQ
+## 10. FAQ
 
 **Q：必须用 Bridge 吗？**  
 App 内嵌且要保活轮询时必须（或等价 Native 开二级页）。

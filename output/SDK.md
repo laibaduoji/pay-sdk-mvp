@@ -22,6 +22,7 @@
 - 页面须 **HTTPS**
 - Google Pay / Apple Pay 依赖官方脚本（SDK 运行时从 CDN 加载，无需商户再引）
 - Apple Pay：Safari / 已校验域名；Google Pay：支持的浏览器与账号环境
+- **App 内嵌**：Android **8.0+（API 26）**；iOS **16.0+** 且使用 **WKWebView**；主 WebView 与二级抽屉分离。详见 [WEBVIEW.md](./WEBVIEW.md)
 
 ---
 
