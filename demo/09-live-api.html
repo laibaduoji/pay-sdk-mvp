@@ -179,11 +179,15 @@
       <button type="button" id="apply-btn">创建订单并挂载 SDK</button>
     </form>
 
-    <h2 class="section-title">将提交的创建订单请求</h2>
-    <pre id="preview">—</pre>
+    <details class="json-fold">
+      <summary class="section-title">将提交的创建订单请求</summary>
+      <pre id="preview">—</pre>
+    </details>
 
-    <h2 class="section-title">创建订单响应（传给 SDK）</h2>
-    <pre id="order-response">—</pre>
+    <details class="json-fold">
+      <summary class="section-title">创建订单响应（传给 SDK）</summary>
+      <pre id="order-response">—</pre>
+    </details>
 
     <p id="status">未挂载</p>
     <div class="trace-row">
@@ -194,7 +198,16 @@
     <div id="pay-container"></div>
     <h2 class="section-title">风控数据</h2>
     <pre id="risk">挂载后采集 Fingerprint（请求头 fingerprint-id）…</pre>
-    <h2 class="section-title">onAction</h2>
+    <h2 class="section-title">onAction / 打开的链接</h2>
+    <p class="meta" id="bridge-hint">
+      App 内：webUrl/s3ds → NativeBridge 底部抽屉（只开支付返回的 webUrl）；原页继续 poll；终态
+      onSuccess/onError → closePayWebUrl。渠道若不回跳 redirectUrl，关抽屉靠轮询，不靠
+      redirectUrl.html。
+    </p>
+    <p class="meta">
+      <strong>当前打开的 webUrl：</strong>
+      <code id="opened-web-url" style="word-break: break-all">—</code>
+    </p>
     <pre id="action">—</pre>
     <h2 class="section-title">结果</h2>
     <pre id="output">—</pre>
@@ -219,6 +232,7 @@
       const orderResponseEl = document.getElementById('order-response')
       const riskEl = document.getElementById('risk')
       const actionEl = document.getElementById('action')
+      const openedWebUrlEl = document.getElementById('opened-web-url')
       const outputEl = document.getElementById('output')
       const statusEl = document.getElementById('status')
 
@@ -251,8 +265,8 @@
         el('address').value = p.address || '0x1a6E411AcDe0fD218061B28f0D36e0Df43836563'
         el('network').value = p.network || 'BSC'
         el('userAccountId').value = ''
-        el('redirectUrl').value = location.origin + '/success'
-        el('callbackUrl').value = location.origin + '/callback'
+        el('redirectUrl').value = 'https://ramp-test.alchemytech.cc/demo/redirectUrl.html'
+        el('callbackUrl').value = 'https://ramp-test.alchemytech.cc/demo/callBackUrl.html'
         el('clientIp').value = ''
         el('clientIp').placeholder = '获取公网 IP 中…'
         el('memo').value = ''
@@ -492,6 +506,16 @@
 
         statusEl.textContent = '创建订单成功，挂载 SDK…'
 
+        const bridge = window.NativeBridge || window.AndroidBridge
+        function canOpenPayWebUrl() {
+          return !!(bridge && typeof bridge.openPayWebUrl === 'function')
+        }
+        function closePayDrawer() {
+          if (bridge && typeof bridge.closePayWebUrl === 'function') {
+            bridge.closePayWebUrl()
+          }
+        }
+
         sdk = PaySdk.init({
           container: '#pay-container',
           environment: environment,
@@ -503,6 +527,28 @@
           },
           onAction(action) {
             actionEl.textContent = JSON.stringify(action, null, 2)
+            // App WebView：webUrl/s3ds 走 Native 底部抽屉（只传支付返回的 url，不是 redirectUrl）
+            if (action.type === 'webUrl' || action.type === 's3ds') {
+              if (openedWebUrlEl) openedWebUrlEl.textContent = action.url || '—'
+              statusEl.textContent =
+                'onAction ' +
+                action.type +
+                ' → 打开 webUrl（原页继续 poll；终态 closePayWebUrl）: ' +
+                (action.url || '')
+              if (canOpenPayWebUrl()) {
+                bridge.openPayWebUrl(action.url)
+                return
+              }
+              if (actionMode === 'callback') {
+                if (
+                  confirm('收到二次动作 ' + action.type + '，是否 sdk.openAction？（浏览器 Demo）')
+                ) {
+                  sdk.openAction(action)
+                }
+              }
+              return
+            }
+            // threeDS / threeDSMethod：当前页 iframe
             if (actionMode === 'callback') {
               if (confirm('收到二次动作 ' + action.type + '，是否 sdk.openAction？')) {
                 sdk.openAction(action)
@@ -529,8 +575,18 @@
             outputEl.textContent = JSON.stringify(result, null, 2)
             ui.showTraceId(null, sdk)
           },
-          onSuccess: handlers.onSuccess,
-          onError: handlers.onError,
+          onSuccess(result) {
+            closePayDrawer()
+            if (openedWebUrlEl) {
+              openedWebUrlEl.textContent =
+                '(已 closePayWebUrl) ' + (openedWebUrlEl.textContent || '')
+            }
+            handlers.onSuccess(result)
+          },
+          onError(error) {
+            closePayDrawer()
+            handlers.onError(error)
+          },
           onCancel: handlers.onCancel
         })
         sdkRef.current = sdk
