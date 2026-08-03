@@ -17,8 +17,6 @@
 <script src="https://你的CDN域名/pay-sdk.js"></script>
 ```
 
-不需要 `npm install`。当前正式推荐路径是 script。
-
 **环境要求：**
 
 - 页面须 **HTTPS**
@@ -152,15 +150,15 @@ API 根域名：`https://api.alchemypay.org`
 
 ## 6. 二次动作（摘要）
 
-出现二次动作时只触发 `onAction`，**不**自动跳转。
+出现二次动作时只触发 `onAction`，**不**自动跳转；App 在 `onAction` 中走 Native Bridge。
 
-| `action.type`     | App（推荐）                                                 | 纯 H5                         |
-| ----------------- | ----------------------------------------------------------- | ----------------------------- |
-| `webUrl` / `s3ds` | `NativeBridge.openPayWebUrl(url, redirectUrl, callbackUrl)` | `location.href = url`         |
-| `threeDS`         | `openPayChallenge(壳页, payload)`                           | `sdk.openAction` 或自托管壳页 |
-| `threeDSMethod`   | `openPayMethod(壳页, payload)`                              | 同上                          |
+| `action.type`     | App                                                         |
+| ----------------- | ----------------------------------------------------------- |
+| `webUrl` / `s3ds` | `NativeBridge.openPayWebUrl(url, redirectUrl, callbackUrl)` |
+| `threeDS`         | `openPayChallenge(壳页, payload)`                           |
+| `threeDSMethod`   | `openPayMethod(壳页, payload)`                              |
 
-**App 禁止**对 `webUrl` / `s3ds` 调用 `sdk.openAction`（会整页 `location.assign`）。
+**禁止**对 `webUrl` / `s3ds` 调用 `sdk.openAction`（会整页 `location.assign`）。
 
 完整 Bridge、壳页与关栏流程 → **[WEBVIEW.md](./WEBVIEW.md)**。参考壳页 → [`html/`](./html/)。
 
@@ -196,19 +194,3 @@ API 根域名：`https://api.alchemypay.org`
 - [ ] 创建订单带 `redirectUrl`（及如需的 `callbackUrl`）；回跳后调 `__paySdkSecondaryReturn()`
 - [ ] 离开支付页 `sdk.destroy()`，并关闭未关的抽屉
 - [ ] 业务接口 `returnCode === '0000'` 联调通过
-
----
-
-## 10. 常见问题
-
-**Q：必须用 JS Bridge 吗？**  
-A：纯 H5 可不接。App 内嵌且要原页继续轮询时，二次动作应走 Bridge。见 [WEBVIEW.md](./WEBVIEW.md)。
-
-**Q：要自己调创建订单、支付接口吗？**  
-A：创建订单须商户服务端；支付 / 查单 / Apple 域名校验由 SDK 调用。
-
-**Q：SDK 还要 appSecret / 签名吗？**  
-A：否。签名只在服务端创建订单时使用；SDK 用 `token` 作 `payment-hub-token`。
-
-**Q：可以对 webUrl 调 `sdk.openAction` 吗？**  
-A：会整页离开，**App 场景禁止**。请用底部抽屉 Bridge。

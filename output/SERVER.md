@@ -92,14 +92,12 @@ App 场景请保证 `redirectUrl`（及如需的 `callbackUrl`）可被 Native `
 
 ### 4.2 响应 `data`（须交给 SDK）
 
-| 字段                  | 必填 | 说明                                     |
-| --------------------- | ---- | ---------------------------------------- |
-| `orderNo`             | 是   | 平台订单号                               |
-| `paymentScript`       | 是   | Google / Apple 原生唤起参数              |
-| `token`               | 是   | SDK 后续请求头 `payment-hub-token`       |
-| `method`              | 否   | 可省略；SDK 按 `paymentScript` 推断      |
-| `risk`                | 否   | 风控开关（Forter / Checkout / WorldPay） |
-| `validateMerchantUrl` | 否   | 仅 Apple；覆盖 SDK 内置域名校验地址      |
+| 字段            | 必填 | 说明                                     |
+| --------------- | ---- | ---------------------------------------- |
+| `orderNo`       | 是   | 平台订单号                               |
+| `paymentScript` | 是   | Google / Apple 原生唤起参数              |
+| `token`         | 是   | SDK 后续请求头 `payment-hub-token`       |
+| `risk`          | 否   | 风控开关（Forter / Checkout / WorldPay） |
 
 收银台：`PaySdk.init({ order: data })`，其中 `data` 为上述响应体（至少含 `orderNo` / `paymentScript` / `token`）。
 

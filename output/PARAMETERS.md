@@ -11,19 +11,17 @@ SDK 编排：**商户已创建订单** → 钱包授权 → 支付 →（需要�
 
 ## 1. 顶层参数
 
-| 参数              | 类型                     |  必传  | 默认值     | 说明                                                                    |
-| ----------------- | ------------------------ | :----: | ---------- | ----------------------------------------------------------------------- |
-| `container`       | `string \| HTMLElement`  | **是** | —          | 按钮渲染容器                                                            |
-| `order`           | `object`                 | **是** | —          | 创建订单响应；须含 `orderNo` / `paymentScript` / `token`                |
-| `api`             | `object`                 |   否   | 内置生产域 | 可传 `headers` / `pollIntervalMs` / `pollTimeoutMs`；**无需** appSecret |
-| `onOrderCreated`  | `(order) => void`        |   否   | —          | ready 规范化订单后                                                      |
-| `onRiskCollected` | `(info) => void`         |   否   | —          | Fingerprint / 风控预采集结束                                            |
-| `onStatusChange`  | `(order) => void`        |   否   | —          | 每次查单成功                                                            |
-| `onAction`        | `(action) => void`       |   否   | —          | 需二次动作（webUrl / s3ds / threeDS / threeDSMethod）；SDK 不自动打开   |
-| `onSuccess`       | `(result) => void`       |   否   | —          | 支付直接成功，或轮询查单到成功态                                        |
-| `onComplete`      | `(result) => void`       |   否   | —          | 编排结束（含非终态 `s3dsComplete`）                                     |
-| `onError`         | `(error: Error) => void` |   否   | —          | API / 钱包失败、查单失败态、超时等                                      |
-| `onCancel`        | `() => void`             |   否   | —          | 用户关闭 Google / Apple Pay 钱包 sheet（未完成授权）                    |
+| 参数             | 类型                     |  必传  | 默认值     | 说明                                                                    |
+| ---------------- | ------------------------ | :----: | ---------- | ----------------------------------------------------------------------- |
+| `container`      | `string \| HTMLElement`  | **是** | —          | 按钮渲染容器                                                            |
+| `order`          | `object`                 | **是** | —          | 创建订单响应；须含 `orderNo` / `paymentScript` / `token`                |
+| `api`            | `object`                 |   否   | 内置生产域 | 可传 `headers` / `pollIntervalMs` / `pollTimeoutMs`；**无需** appSecret |
+| `onStatusChange` | `(order) => void`        |   否   | —          | 每次查单成功                                                            |
+| `onAction`       | `(action) => void`       |   否   | —          | 需二次动作（webUrl / s3ds / threeDS / threeDSMethod）；SDK 不自动打开   |
+| `onSuccess`      | `(result) => void`       |   否   | —          | 支付直接成功，或轮询查单到成功态                                        |
+| `onComplete`     | `(result) => void`       |   否   | —          | 编排结束（含非终态 `s3dsComplete`）                                     |
+| `onError`        | `(error: Error) => void` |   否   | —          | API / 钱包失败、查单失败态、超时等                                      |
+| `onCancel`       | `() => void`             |   否   | —          | 用户关闭 Google / Apple Pay 钱包 sheet（未完成授权）                    |
 
 ### 示例
 
@@ -76,14 +74,12 @@ App 推荐在 `onAction` 调 Bridge：`openPayWebUrl` / `openPayChallenge` / `op
 
 ## 2. `order`（创建订单响应）
 
-| 参数                  | 类型                        |  必传  | 说明                         |
-| --------------------- | --------------------------- | :----: | ---------------------------- |
-| `orderNo`             | `string`                    | **是** | 平台订单号                   |
-| `paymentScript`       | `object`                    | **是** | Google / Apple 原生参数      |
-| `token`               | `string`                    | **是** | 请求头 `payment-hub-token`   |
-| `method`              | `'googlePay' \| 'applePay'` |   否   | 可按 `paymentScript` 推断    |
-| `risk`                | `object`                    |   否   | Forter / Checkout / WorldPay |
-| `validateMerchantUrl` | `string`                    |   否   | 仅 Apple；覆盖域名校验地址   |
+| 参数            | 类型     |  必传  | 说明                         |
+| --------------- | -------- | :----: | ---------------------------- |
+| `orderNo`       | `string` | **是** | 平台订单号                   |
+| `paymentScript` | `object` | **是** | Google / Apple 原生参数      |
+| `token`         | `string` | **是** | 请求头 `payment-hub-token`   |
+| `risk`          | `object` |   否   | Forter / Checkout / WorldPay |
 
 创建订单**请求**字段由服务端调用 openapi，不传入 SDK。见 [SERVER.md](./SERVER.md)。
 
