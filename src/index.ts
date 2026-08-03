@@ -525,14 +525,7 @@ class PaySdk implements PaySdkInstance {
       if (this.destroyed || ctx.generation !== this.pollGeneration || this.settledPayment) return
       this.config.onStatusChange?.(current)
 
-      if (isValidS3dsUrl(current.s3dsUrl)) {
-        const outcome = await this.dispatchAction(describeS3ds(current.s3dsUrl))
-        if (outcome === 'navigated') {
-          this.stopPolling()
-          return
-        }
-      }
-
+      // 不在此重派 s3ds（避免重复开抽屉）；仅催终态判定，新 s3ds 仍由 poll 循环处理
       const terminal = this.applyOrderStatus(ctx.walletResult, ctx.paymentResponse, current)
       if (!terminal) this.wakePollDelay()
     } catch (error) {

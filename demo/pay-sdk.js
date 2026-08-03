@@ -2021,13 +2021,6 @@ apple-pay-button {
         const current = await this.api.queryOrder();
         if (this.destroyed || ctx.generation !== this.pollGeneration || this.settledPayment) return;
         (_b = (_a = this.config).onStatusChange) == null ? void 0 : _b.call(_a, current);
-        if (isValidS3dsUrl(current.s3dsUrl)) {
-          const outcome = await this.dispatchAction(describeS3ds(current.s3dsUrl));
-          if (outcome === "navigated") {
-            this.stopPolling();
-            return;
-          }
-        }
         const terminal = this.applyOrderStatus(ctx.walletResult, ctx.paymentResponse, current);
         if (!terminal) this.wakePollDelay();
       } catch (error) {
