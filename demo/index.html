@@ -551,7 +551,7 @@
 
         statusEl.textContent = '创建订单成功，挂载 SDK…'
 
-        const bridge = window.NativeBridge || window.AndroidBridge
+        const bridge = window.NativeBridge
         // 商户自配壳页 URL；Demo 用同目录参考页（可改名/自托管）
         const challengeShell = new URL('./3ds-challenge.html', location.href).href
         const methodShell = new URL('./3ds-method.html', location.href).href

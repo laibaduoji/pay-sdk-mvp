@@ -75,10 +75,10 @@ Android：
 webView.addJavascriptInterface(PayJsBridge(), "NativeBridge")
 ```
 
-H5：`window.NativeBridge`。历史名兼容：
+H5：`window.NativeBridge`。
 
 ```js
-var bridge = window.NativeBridge || window.AndroidBridge
+var bridge = window.NativeBridge
 ```
 
 ### 4.2 方法（给 `@JavascriptInterface`）
@@ -138,7 +138,7 @@ Native 注入建议：将 `jsonPayload` Base64 后 `evaluateJavascript`，避免
 ## 5. H5 最小接入（可粘贴）
 
 ```js
-var bridge = window.NativeBridge || window.AndroidBridge
+var bridge = window.NativeBridge
 // 商户自托管壳页；本包见 html/3ds-*.html
 var challengeShell = 'https://merchant.example/3ds-challenge.html'
 var methodShell = 'https://merchant.example/3ds-method.html'
