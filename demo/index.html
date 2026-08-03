@@ -255,6 +255,16 @@
         return form.elements.namedItem(name)
       }
 
+      function clearStatusHighlight() {
+        statusEl.classList.remove('status-highlight')
+      }
+
+      function setStatus(text, highlight) {
+        statusEl.textContent = text
+        if (highlight) statusEl.classList.add('status-highlight')
+        else statusEl.classList.remove('status-highlight')
+      }
+
       function payWayForMethod(method) {
         return method === 'applePay' ? '501' : '701'
       }
@@ -432,14 +442,15 @@
       }
 
       async function mountSdk() {
+        clearStatusHighlight()
         const creds = readCreds()
         if (!creds.appId || !creds.appSecret) {
-          statusEl.textContent = '请填写 appId 与 appSecret'
+          setStatus('请填写 appId 与 appSecret', false)
           return
         }
         const identity = readIdentity()
         if (!identity.accessToken && !identity.email && !identity.uid) {
-          statusEl.textContent = '请填写 accessToken，或 email / uid（创建订单需要 access-token）'
+          setStatus('请填写 accessToken，或 email / uid（创建订单需要 access-token）', false)
           return
         }
         persistCreds(creds)
@@ -447,7 +458,7 @@
 
         const clientIp = await fillClientIp()
         if (!clientIp) {
-          statusEl.textContent = '请填写真实 clientIp（公网 IP 获取失败）'
+          setStatus('请填写真实 clientIp（公网 IP 获取失败）', false)
           return
         }
 
@@ -642,6 +653,7 @@
             renderRisk(info)
           },
           onStatusChange(orderStatus) {
+            clearStatusHighlight()
             statusEl.textContent =
               'Payment status: ' +
               orderStatus.orderState +
@@ -659,10 +671,19 @@
                 '(已 closePayWebUrl) ' + (openedWebUrlEl.textContent || '')
             }
             handlers.onSuccess(result)
+            const state =
+              result && result.order && result.order.orderState != null
+                ? result.order.orderState
+                : ''
+            setStatus(
+              state !== '' ? 'Payment status: ' + state + ' · authorized' : 'Payment authorized.',
+              true
+            )
           },
           onError(error) {
             closePayDrawer()
             handlers.onError(error)
+            setStatus('Error: ' + ui.formatError(error), true)
           },
           onCancel: handlers.onCancel
         })
