@@ -208,12 +208,14 @@
     <pre id="risk">挂载后采集 Fingerprint（请求头 fingerprint-id）…</pre>
     <h2 class="section-title">onAction / 打开的链接</h2>
     <p class="meta" id="bridge-hint">
-      App 内：webUrl/s3ds → NativeBridge 底部抽屉（开支付 webUrl，并传 redirect/callback
-      供匹配关栏）；原页继续 poll；终态 onSuccess/onError → closePayWebUrl。二级页命中
-      redirect/callback → Native 关栏并 __paySdkSecondaryReturn 立刻查单。
+      App 内（原页继续 poll）：webUrl/s3ds → openPayWebUrl；threeDS → openPayChallenge(壳页)；
+      threeDSMethod → openPayMethod(壳页)。终态 onSuccess/onError → closePayWebUrl。二级页命中
+      redirect/callback → Native 关栏并 __paySdkSecondaryReturn。参考壳页
+      <a href="./3ds-challenge.html">3ds-challenge.html</a> /
+      <a href="./3ds-method.html">3ds-method.html</a>（商户可改名自托管）。
     </p>
     <p class="meta">
-      <strong>当前打开的 webUrl：</strong>
+      <strong>当前打开的二级页：</strong>
       <code id="opened-web-url" style="word-break: break-all">—</code>
     </p>
     <pre id="action">—</pre>
@@ -515,12 +517,27 @@
         statusEl.textContent = '创建订单成功，挂载 SDK…'
 
         const bridge = window.NativeBridge || window.AndroidBridge
+        // 商户自配壳页 URL；Demo 用同目录参考页（可改名/自托管）
+        const challengeShell = new URL('./3ds-challenge.html', location.href).href
+        const methodShell = new URL('./3ds-method.html', location.href).href
         function canOpenPayWebUrl() {
           return !!(bridge && typeof bridge.openPayWebUrl === 'function')
+        }
+        function canOpenPayChallenge() {
+          return !!(bridge && typeof bridge.openPayChallenge === 'function')
+        }
+        function canOpenPayMethod() {
+          return !!(bridge && typeof bridge.openPayMethod === 'function')
         }
         function closePayDrawer() {
           if (bridge && typeof bridge.closePayWebUrl === 'function') {
             bridge.closePayWebUrl()
+          }
+        }
+        function browserOpenAction(action) {
+          if (actionMode !== 'callback') return
+          if (confirm('收到二次动作 ' + action.type + '，是否 sdk.openAction？（浏览器 Demo）')) {
+            sdk.openAction(action)
           }
         }
 
@@ -535,13 +552,13 @@
           },
           onAction(action) {
             actionEl.textContent = JSON.stringify(action, null, 2)
-            // App WebView：webUrl/s3ds 走 Native 底部抽屉（只传支付返回的 url，不是 redirectUrl）
+            // App：webUrl/s3ds → 抽屉 loadUrl；轮询中新 s3dsUrl 同路替换抽屉
             if (action.type === 'webUrl' || action.type === 's3ds') {
               if (openedWebUrlEl) openedWebUrlEl.textContent = action.url || '—'
               statusEl.textContent =
                 'onAction ' +
                 action.type +
-                ' → 打开 webUrl（原页继续 poll；终态 closePayWebUrl）: ' +
+                ' → 打开二级页（原页继续 poll；终态 closePayWebUrl）: ' +
                 (action.url || '')
               if (canOpenPayWebUrl()) {
                 bridge.openPayWebUrl(
@@ -551,20 +568,44 @@
                 )
                 return
               }
-              if (actionMode === 'callback') {
-                if (
-                  confirm('收到二次动作 ' + action.type + '，是否 sdk.openAction？（浏览器 Demo）')
-                ) {
-                  sdk.openAction(action)
-                }
-              }
+              browserOpenAction(action)
               return
             }
-            // threeDS / threeDSMethod：当前页 iframe
-            if (actionMode === 'callback') {
-              if (confirm('收到二次动作 ' + action.type + '，是否 sdk.openAction？')) {
-                sdk.openAction(action)
+            // App：Challenge → 壳页 + Bridge 注入；原页 poll
+            if (action.type === 'threeDS') {
+              if (openedWebUrlEl) openedWebUrlEl.textContent = challengeShell
+              statusEl.textContent =
+                'onAction threeDS → openPayChallenge（原页 poll；终态 closePayWebUrl）'
+              if (canOpenPayChallenge()) {
+                bridge.openPayChallenge(
+                  challengeShell,
+                  JSON.stringify({
+                    MD: action.MD,
+                    JWT: action.JWT,
+                    action: action.action
+                  })
+                )
+                return
               }
+              browserOpenAction(action)
+              return
+            }
+            // App：Method → 壳页 + Bridge 注入；原页 poll；其后可能再出 s3ds/webUrl
+            if (action.type === 'threeDSMethod') {
+              if (openedWebUrlEl) openedWebUrlEl.textContent = methodShell
+              statusEl.textContent =
+                'onAction threeDSMethod → openPayMethod（原页 poll；终态 closePayWebUrl）'
+              if (canOpenPayMethod()) {
+                bridge.openPayMethod(
+                  methodShell,
+                  JSON.stringify({
+                    threeDSMethodData: action.threeDSMethodData,
+                    methodUrl: action.methodUrl
+                  })
+                )
+                return
+              }
+              browserOpenAction(action)
             }
           },
           onOrderCreated(orderRes) {
