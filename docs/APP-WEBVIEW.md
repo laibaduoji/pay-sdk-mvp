@@ -15,8 +15,10 @@ SDK 默认行为已对齐本流程：`actionMode: 'callback'` 时只回调 `onAc
   → H5 调 Native Bridge：底部抽屉打开新 WebView(url)
   → 原收银台 WebView 里 SDK 继续 poll order/detail
   → 用户完成后：
-       A) 原页 onSuccess / onError → closePayWebUrl()
-       B) 二级页导航命中 redirectUrl → Native dismiss
+       A) 原页 poll 终态 onSuccess / onError → closePayWebUrl()
+       B) 二级页导航命中 redirectUrl/callbackUrl → Native dismiss
+          → 主 WebView 调 window.__paySdkSecondaryReturn() → SDK 立刻查单
+          → 终态同样 onSuccess / onError（落地本身不等于成功）
 ```
 
 **禁止**在收银台 WebView 内对 `webUrl` / `s3ds` 执行：
@@ -28,11 +30,11 @@ SDK 默认行为已对齐本流程：`actionMode: 'callback'` 时只回调 `onAc
 
 ## 2. 职责划分
 
-| 角色                           | 职责                                                               |
-| ------------------------------ | ------------------------------------------------------------------ |
-| 收银台 WebView（H5 + Pay SDK） | 调钱包、支付、`onAction`、轮询查单、`onSuccess`/`onError`          |
-| Native App                     | 注入 Bridge；底部抽屉打开/关闭二级 WebView；可选匹配 `redirectUrl` |
-| 商户服务端                     | 创建订单时填写可识别的 `redirectUrl`                               |
+| 角色                           | 职责                                                                                        |
+| ------------------------------ | ------------------------------------------------------------------------------------------- |
+| 收银台 WebView（H5 + Pay SDK） | 调钱包、支付、`onAction`、轮询查单、`onSuccess`/`onError`                                   |
+| Native App                     | 注入 Bridge；底部抽屉打开/关闭二级 WebView；匹配 `redirectUrl`/`callbackUrl` 关栏并通知原页 |
+| 商户服务端                     | 创建订单时填写可识别的 `redirectUrl`（及如需的浏览器态 `callbackUrl`）                      |
 
 ---
 
@@ -56,20 +58,22 @@ var bridge = window.NativeBridge || window.AndroidBridge
 
 ### 3.2 方法（给 `@JavascriptInterface`）
 
-| 方法             | 参数         | 说明                                     |
-| ---------------- | ------------ | ---------------------------------------- |
-| `openPayWebUrl`  | `String url` | 用**底部抽屉**打开新 WebView，加载该 URL |
-| `closePayWebUrl` | 无参         | 关闭二级抽屉 WebView                     |
+| 方法             | 参数                                                      | 说明                                                          |
+| ---------------- | --------------------------------------------------------- | ------------------------------------------------------------- |
+| `openPayWebUrl`  | `url`, `redirectUrl`?, `callbackUrl`?（后两参可空字符串） | 底部抽屉加载 **支付 webUrl**；后两参供 Native startsWith 关栏 |
+| `closePayWebUrl` | 无参                                                      | 关闭二级抽屉 WebView                                          |
 
-只传 **url 字符串**，不传整段 action JSON。
+只传字符串，不传整段 action JSON。打开的始终是支付返回的 `webUrl`/`s3ds` URL，**不是** redirect/callback 本身。
 
 伪代码：
 
 ```kotlin
 class PayJsBridge {
   @JavascriptInterface
-  fun openPayWebUrl(url: String) {
+  fun openPayWebUrl(url: String, redirectUrl: String, callbackUrl: String) {
     // 主线程：BottomSheet + WebView.loadUrl(url)
+    // 保存 redirectUrl/callbackUrl，二级导航 startsWith 命中则 dismiss
+    // 并 evaluateJavascript: window.__paySdkSecondaryReturn&&window.__paySdkSecondaryReturn()
   }
 
   @JavascriptInterface
@@ -78,6 +82,8 @@ class PayJsBridge {
   }
 }
 ```
+
+SDK 在 `ready` 后注册 `window.__paySdkSecondaryReturn`：Native 关栏后调用可催原页立刻 `queryOrder`；终态仍走商户 `onSuccess`/`onError`。
 
 ### 3.3 哪些 action 走 Bridge
 
@@ -120,7 +126,8 @@ var sdk = PaySdk.init({
   onAction: function (action) {
     if (action.type === 'webUrl' || action.type === 's3ds') {
       if (canOpenPayWebUrl()) {
-        bridge.openPayWebUrl(action.url)
+        // 后两参为创建订单的 redirectUrl / callbackUrl，供 Native 匹配关栏
+        bridge.openPayWebUrl(action.url, redirectUrl || '', callbackUrl || '')
         return
       }
       // 正式 App：不要对本页 openAction(webUrl)
@@ -165,17 +172,17 @@ sdk.ready().then(function () {
 - `onSuccess` / `onError` → 调 `closePayWebUrl()`
 - 与 SDK `GET /payment-hub/order/detail` 结果一致
 
-### B. 二级页命中 redirectUrl（兜底）
+### B. 二级页命中 redirectUrl / callbackUrl（兜底）
 
-1. 创建订单填写稳定落地地址，例如：  
-   `https://your-merchant.com/pay/complete`
-2. Native 监听二级 WebView 导航；当 URL **以该前缀 startsWith**（或 host+path 白名单）命中 → `dismiss` 抽屉
-3. 落地页可极简；最终业务成功仍以原页 `onSuccess` 为准
+**仅当渠道会浏览器回跳到创建订单的落地地址时启用。** 若渠道不回跳，只依赖路径 A（轮询关抽屉）。
 
-匹配建议：
+1. 创建订单填写渠道会真实跳回的 `redirectUrl`（及如需的 `callbackUrl`）
+2. H5 `openPayWebUrl(webUrl, redirectUrl, callbackUrl)` 把前缀交给 Native
+3. Native 监听二级 WebView 导航；`currentUrl.startsWith(redirectUrl|callbackUrl)` → `dismiss` 抽屉
+4. Native 在主收银台 WebView 执行 `window.__paySdkSecondaryReturn()`，SDK 立刻查单
+5. 落地页可极简；**业务成功仍以查单终态 `onSuccess` 为准**（不要把打开落地页直接当成成功）
 
-- 推荐：`currentUrl.startsWith(redirectUrl)`（忽略后续 query 差异时可只比 origin+path）
-- 不推荐：只比 host（易误关）
+匹配建议：`startsWith` 完整前缀（可只比 origin+path）；不要只比 host。
 
 ### 用户中途下滑关闭抽屉
 
@@ -192,7 +199,7 @@ sdk.ready().then(function () {
 1. `openPayWebUrl` 在**主线程**弹出 BottomSheet / 半屏容器，内嵌独立 WebView。
 2. **不要**在收银台 WebView 上 `loadUrl(webUrl)`。
 3. 二级 WebView 与主 WebView Cookie 默认隔离；按渠道要求配置第三方 Cookie（若需要）。
-4. 同时实现：导航匹配 `redirectUrl` dismiss + 接收 H5 `closePayWebUrl`。
+4. 同时实现：导航匹配 `redirectUrl`/`callbackUrl` dismiss → 通知 `__paySdkSecondaryReturn` + 接收 H5 `closePayWebUrl`。
 5. 收银台页销毁时（Activity finish）务必让 H5 调 `sdk.destroy()`，并关掉未关的抽屉。
 
 ---
@@ -210,10 +217,10 @@ sdk.ready().then(function () {
 
 ## 8. App / H5 自检清单
 
-- [ ] Android 注入 `NativeBridge`，实现 `openPayWebUrl` / `closePayWebUrl`
+- [ ] Android 注入 `NativeBridge`，实现三参 `openPayWebUrl` / `closePayWebUrl`
 - [ ] 打开形态为**底部抽屉**二级 WebView，非当前页跳转
-- [ ] H5：`webUrl`/`s3ds` → Bridge；`threeDS`/`threeDSMethod` → `sdk.openAction`
-- [ ] 创建订单带好 `redirectUrl`，Native 可 startsWith 匹配
+- [ ] H5：`webUrl`/`s3ds` → Bridge（带 redirect/callback）；`threeDS`/`threeDSMethod` → `sdk.openAction`
+- [ ] 创建订单带好 `redirectUrl`，Native startsWith 命中后 dismiss 并调 `__paySdkSecondaryReturn`
 - [ ] `onSuccess` / `onError` 调用 `closePayWebUrl`
 - [ ] 未对 `webUrl` 调用 `sdk.openAction`
 - [ ] 联调时确认原页 Network 仍在轮询 `order/detail`

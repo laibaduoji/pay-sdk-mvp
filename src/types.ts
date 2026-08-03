@@ -503,6 +503,11 @@ export interface RuntimeWalletConfig {
   risk?: CreateOrderRisk
   /** 创建订单后启动的预采集；支付时复用 / await */
   riskCollection?: Promise<PayRiskPayload>
+  /**
+   * 钱包授权成功后立刻 kickoff api.pay（不 await）。
+   * processPayment / onAction 仍等钱包弹窗关闭后再跑，避免二级页被挡住。
+   */
+  onBeginPay?: (result: PayResult) => void
   onSuccess?: (result: PayResult) => void | Promise<void>
   onError?: (error: Error) => void
   onCancel?: () => void

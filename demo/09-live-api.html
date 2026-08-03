@@ -208,9 +208,9 @@
     <pre id="risk">挂载后采集 Fingerprint（请求头 fingerprint-id）…</pre>
     <h2 class="section-title">onAction / 打开的链接</h2>
     <p class="meta" id="bridge-hint">
-      App 内：webUrl/s3ds → NativeBridge 底部抽屉（只开支付返回的 webUrl）；原页继续 poll；终态
-      onSuccess/onError → closePayWebUrl。渠道若不回跳 redirectUrl，关抽屉靠轮询，不靠
-      redirectUrl.html。
+      App 内：webUrl/s3ds → NativeBridge 底部抽屉（开支付 webUrl，并传 redirect/callback
+      供匹配关栏）；原页继续 poll；终态 onSuccess/onError → closePayWebUrl。二级页命中
+      redirect/callback → Native 关栏并 __paySdkSecondaryReturn 立刻查单。
     </p>
     <p class="meta">
       <strong>当前打开的 webUrl：</strong>
@@ -544,7 +544,7 @@
                 ' → 打开 webUrl（原页继续 poll；终态 closePayWebUrl）: ' +
                 (action.url || '')
               if (canOpenPayWebUrl()) {
-                bridge.openPayWebUrl(action.url)
+                bridge.openPayWebUrl(action.url, v('redirectUrl') || '', v('callbackUrl') || '')
                 return
               }
               if (actionMode === 'callback') {

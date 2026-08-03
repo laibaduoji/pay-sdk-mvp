@@ -557,8 +557,9 @@ var PaySdk = function(exports) {
     }
     try {
       const risk = await pending.riskPromise;
-      await ((_a = config.onSuccess) == null ? void 0 : _a.call(config, { ...normalizeGoogleResult(paymentData), risk }));
+      pending.authorizedResult = { ...normalizeGoogleResult(paymentData), risk };
       pending.settled = true;
+      (_a = config.onBeginPay) == null ? void 0 : _a.call(config, pending.authorizedResult);
       return { transactionState: "SUCCESS" };
     } catch (err) {
       const error = toError(err);
@@ -658,20 +659,27 @@ var PaySdk = function(exports) {
     return getPaymentsClient(config).createButton(buttonOptions(config, onClick));
   }
   async function payWithGoogle(config) {
-    var _a, _b;
+    var _a, _b, _c, _d;
     const client = getPaymentsClient(config);
     const riskPromise = resolveRiskCollection(config);
     const pending = { riskPromise, settled: false };
     pendingPays.set(config, pending);
     try {
       await client.loadPaymentData(buildPaymentDataRequest(config));
+      if (pending.authorizedResult) {
+        try {
+          await ((_a = config.onSuccess) == null ? void 0 : _a.call(config, pending.authorizedResult));
+        } catch (err) {
+          (_b = config.onError) == null ? void 0 : _b.call(config, toError(err));
+        }
+      }
     } catch (err) {
       if (isGoogleCancel(err)) {
-        (_a = config.onCancel) == null ? void 0 : _a.call(config);
+        (_c = config.onCancel) == null ? void 0 : _c.call(config);
         return;
       }
       if (!pending.settled) {
-        (_b = config.onError) == null ? void 0 : _b.call(config, toError(err));
+        (_d = config.onError) == null ? void 0 : _d.call(config, toError(err));
       }
     } finally {
       pendingPays.delete(config);
@@ -805,18 +813,28 @@ apple-pay-button {
     };
     session.onpaymentauthorized = (event) => {
       void (async () => {
-        var _a2, _b;
+        var _a2, _b, _c, _d;
+        let completed = false;
         try {
           const base = normalizeAppleResult(event.payment);
           const risk = await riskPromise;
-          await ((_a2 = config.onSuccess) == null ? void 0 : _a2.call(config, { ...base, risk }));
           session.completePayment(ApplePaySession.STATUS_SUCCESS);
-        } catch (err) {
+          completed = true;
+          const authorized = { ...base, risk };
+          (_a2 = config.onBeginPay) == null ? void 0 : _a2.call(config, authorized);
           try {
-            session.completePayment(ApplePaySession.STATUS_FAILURE);
-          } catch {
+            await ((_b = config.onSuccess) == null ? void 0 : _b.call(config, authorized));
+          } catch (err) {
+            (_c = config.onError) == null ? void 0 : _c.call(config, toError(err));
           }
-          (_b = config.onError) == null ? void 0 : _b.call(config, toError(err));
+        } catch (err) {
+          if (!completed) {
+            try {
+              session.completePayment(ApplePaySession.STATUS_FAILURE);
+            } catch {
+            }
+          }
+          (_d = config.onError) == null ? void 0 : _d.call(config, toError(err));
         }
       })();
     };
@@ -1672,13 +1690,14 @@ apple-pay-button {
     }
     return error instanceof TypeError;
   }
-  function runtimeConfigFromOrder(config, order, api, onWalletAuthorized) {
+  function runtimeConfigFromOrder(config, order, api, onWalletAuthorized, onBeginPay) {
     var _a;
     const environment = resolveEnvironment(config.environment || order.environment);
     const common = {
       container: config.container,
       environment,
       risk: order.risk,
+      onBeginPay,
       onSuccess: onWalletAuthorized,
       onError: config.onError,
       onCancel: config.onCancel
@@ -1745,7 +1764,11 @@ apple-pay-button {
       this.pollDelayResolve = null;
       this.pollGeneration = 0;
       this.paymentInFlight = false;
+      this.settledPayment = false;
       this.destroyed = false;
+      this.earlyPayPromise = null;
+      this.pollContext = null;
+      this.forceCheckInFlight = false;
       this.config = config;
       this.fingerprintIdPromise = collectFingerprint();
       this.api = new PayApiClient(this.buildApiConfig(resolveEnvironment(config.environment)));
@@ -1775,9 +1798,17 @@ apple-pay-button {
         this.api = new PayApiClient(this.buildApiConfig(environment));
         this.api.restoreLastTraceId(prevTraceId);
         this.api.setPaymentHubToken(order.token);
-        this.runtimeConfig = runtimeConfigFromOrder(this.config, order, this.api, async (result) => {
-          await this.processPayment(result);
-        });
+        this.runtimeConfig = runtimeConfigFromOrder(
+          this.config,
+          order,
+          this.api,
+          async (result) => {
+            await this.processPayment(result);
+          },
+          (result) => {
+            this.beginPay(result);
+          }
+        );
         this.runtimeConfig.riskCollection = collectRisk(
           this.runtimeConfig.risk,
           this.runtimeConfig.environment
@@ -1791,6 +1822,7 @@ apple-pay-button {
             });
           }
         );
+        this.bindSecondaryReturnHook();
       }
       return ready(this.runtimeConfig);
     }
@@ -1843,28 +1875,42 @@ apple-pay-button {
       if (this.destroyed || !this.runtimeConfig) return;
       this._button = renderButton(this.runtimeConfig, () => this._pay());
     }
+    /** 钱包授权后立刻 kickoff pay；失败时留下 rejected promise 供 processPayment 消费 */
+    beginPay(walletResult) {
+      if (this.destroyed || !this.order || this.earlyPayPromise || this.settledPayment) return;
+      this.paymentInFlight = true;
+      this.settledPayment = false;
+      try {
+        this.earlyPayPromise = this.api.pay(this.buildPayRequest(walletResult));
+      } catch (error) {
+        this.paymentInFlight = false;
+        this.earlyPayPromise = Promise.reject(error instanceof Error ? error : toError(error));
+      }
+    }
     async processPayment(walletResult) {
       if (!this.order) {
         throw new Error("Order is not ready");
       }
-      if (this.destroyed) return;
-      if (this.paymentInFlight) {
+      if (this.destroyed || this.settledPayment) return;
+      const early = this.earlyPayPromise;
+      if (!early && this.paymentInFlight) {
         throw new Error("Payment already in progress");
       }
       this.paymentInFlight = true;
       try {
-        const request = this.buildPayRequest(walletResult);
-        const paymentResponse = await this.api.pay(request);
-        if (this.destroyed) return;
+        const paymentResponse = await (early ?? this.api.pay(this.buildPayRequest(walletResult)));
+        this.earlyPayPromise = null;
+        if (this.destroyed || this.settledPayment) return;
         if (!hasSecondaryAction(paymentResponse)) {
           this.finish(walletResult, paymentResponse);
           return;
         }
         const action = describePayResponse(paymentResponse);
-        if (this.destroyed) return;
+        if (this.destroyed || this.settledPayment) return;
         if (action) await this.dispatchAction(action);
         void this.pollOrder(walletResult, paymentResponse);
       } catch (error) {
+        this.earlyPayPromise = null;
         this.paymentInFlight = false;
         this.stopPolling();
         this.actionView.destroy();
@@ -1901,6 +1947,7 @@ apple-pay-button {
       const timeoutMs = (apiConfig == null ? void 0 : apiConfig.pollTimeoutMs) ?? 3e5;
       const startedAt = Date.now();
       const generation = ++this.pollGeneration;
+      this.pollContext = { walletResult, paymentResponse, generation };
       let lastS3dsUrl = "";
       let consecutiveTransientErrors = 0;
       let firstTick = true;
@@ -1925,20 +1972,8 @@ apple-pay-button {
               return;
             }
           }
-          if (current.orderState === ORDER_STATE_PENDING && current.s3dsComplete !== true) {
-            continue;
-          }
-          if (ORDER_STATE_FAIL.has(current.orderState)) {
-            throw new Error(
-              current.failureReason || `Payment failed (${orderStateLabel(current.orderState)})`
-            );
-          }
-          if (ORDER_STATE_SUCCESS.has(current.orderState)) {
-            this.finish(walletResult, paymentResponse, current);
-            return;
-          }
-          this.complete(walletResult, paymentResponse, current);
-          return;
+          const terminal = this.applyOrderStatus(walletResult, paymentResponse, current);
+          if (terminal) return;
         } catch (error) {
           if (this.destroyed || generation !== this.pollGeneration) return;
           if (isTransientPollError(error)) {
@@ -1948,6 +1983,83 @@ apple-pay-button {
           this.fail(toError(error));
           return;
         }
+      }
+    }
+    /**
+     * @returns true 已终态结算；false 仍 pending，继续 poll
+     */
+    applyOrderStatus(walletResult, paymentResponse, current) {
+      if (current.orderState === ORDER_STATE_PENDING && current.s3dsComplete !== true) {
+        return false;
+      }
+      if (ORDER_STATE_FAIL.has(current.orderState)) {
+        this.fail(
+          new Error(
+            current.failureReason || `Payment failed (${orderStateLabel(current.orderState)})`
+          )
+        );
+        return true;
+      }
+      if (ORDER_STATE_SUCCESS.has(current.orderState)) {
+        this.finish(walletResult, paymentResponse, current);
+        return true;
+      }
+      this.complete(walletResult, paymentResponse, current);
+      return true;
+    }
+    /**
+     * Native 二级页命中 redirectUrl/callbackUrl 后调用 window.__paySdkSecondaryReturn()：
+     * 立刻查单；终态走 onSuccess/onError，否则继续原 poll。
+     */
+    async forceOrderCheck() {
+      var _a, _b;
+      if (this.destroyed || this.settledPayment || this.forceCheckInFlight) return;
+      const ctx = this.pollContext;
+      if (!ctx || ctx.generation !== this.pollGeneration || !this.order) return;
+      this.forceCheckInFlight = true;
+      try {
+        const current = await this.api.queryOrder();
+        if (this.destroyed || ctx.generation !== this.pollGeneration || this.settledPayment) return;
+        (_b = (_a = this.config).onStatusChange) == null ? void 0 : _b.call(_a, current);
+        if (isValidS3dsUrl(current.s3dsUrl)) {
+          const outcome = await this.dispatchAction(describeS3ds(current.s3dsUrl));
+          if (outcome === "navigated") {
+            this.stopPolling();
+            return;
+          }
+        }
+        const terminal = this.applyOrderStatus(ctx.walletResult, ctx.paymentResponse, current);
+        if (!terminal) this.wakePollDelay();
+      } catch (error) {
+        if (this.destroyed || ctx.generation !== this.pollGeneration) return;
+        if (isTransientPollError(error)) {
+          this.wakePollDelay();
+          return;
+        }
+        this.fail(toError(error));
+      } finally {
+        this.forceCheckInFlight = false;
+      }
+    }
+    wakePollDelay() {
+      if (this.pollTimer != null) {
+        window.clearTimeout(this.pollTimer);
+        this.pollTimer = null;
+      }
+      const resume = this.pollDelayResolve;
+      this.pollDelayResolve = null;
+      resume == null ? void 0 : resume();
+    }
+    bindSecondaryReturnHook() {
+      if (typeof window === "undefined") return;
+      window.__paySdkSecondaryReturn = () => {
+        void this.forceOrderCheck();
+      };
+    }
+    unbindSecondaryReturnHook() {
+      if (typeof window === "undefined") return;
+      if (window.__paySdkSecondaryReturn) {
+        delete window.__paySdkSecondaryReturn;
       }
     }
     delay(ms) {
@@ -1962,6 +2074,7 @@ apple-pay-button {
     }
     stopPolling() {
       this.pollGeneration += 1;
+      this.pollContext = null;
       if (this.pollTimer != null) {
         window.clearTimeout(this.pollTimer);
         this.pollTimer = null;
@@ -1972,9 +2085,12 @@ apple-pay-button {
     }
     finish(walletResult, paymentResponse, order) {
       var _a, _b, _c, _d, _e2;
+      if (this.destroyed || this.settledPayment) return;
+      this.settledPayment = true;
       this.stopPolling();
       this.actionView.destroy();
       this.paymentInFlight = false;
+      this.earlyPayPromise = null;
       const result = {
         ...walletResult,
         orderNo: (_a = this.order) == null ? void 0 : _a.orderNo,
@@ -1986,9 +2102,12 @@ apple-pay-button {
     }
     complete(walletResult, paymentResponse, order) {
       var _a, _b, _c;
+      if (this.destroyed || this.settledPayment) return;
+      this.settledPayment = true;
       this.stopPolling();
       this.actionView.destroy();
       this.paymentInFlight = false;
+      this.earlyPayPromise = null;
       (_c = (_b = this.config).onComplete) == null ? void 0 : _c.call(_b, {
         ...walletResult,
         orderNo: (_a = this.order) == null ? void 0 : _a.orderNo,
@@ -1998,17 +2117,22 @@ apple-pay-button {
     }
     fail(error) {
       var _a, _b;
+      if (this.destroyed || this.settledPayment) return;
+      this.settledPayment = true;
       this.stopPolling();
       this.actionView.destroy();
       this.paymentInFlight = false;
+      this.earlyPayPromise = null;
       (_b = (_a = this.config).onError) == null ? void 0 : _b.call(_a, error);
     }
     destroy() {
       var _a;
       this.destroyed = true;
+      this.unbindSecondaryReturnHook();
       this.stopPolling();
       this.actionView.destroy();
       this.paymentInFlight = false;
+      this.earlyPayPromise = null;
       (_a = this._button) == null ? void 0 : _a.remove();
       this._button = null;
       if (this.runtimeConfig) {

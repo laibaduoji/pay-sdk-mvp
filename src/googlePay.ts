@@ -1,4 +1,4 @@
-import type { GooglePayParams, RuntimeWalletConfig } from './types.js'
+import type { GooglePayParams, PayResult, RuntimeWalletConfig } from './types.js'
 import { normalizeGoogleResult, isGoogleCancel, toError } from './normalize.js'
 import { resolveRiskCollection } from './risk/index.js'
 
@@ -17,8 +17,10 @@ const paymentsClients = new WeakMap<RuntimeWalletConfig, google.payments.api.Pay
 
 interface PendingGooglePay {
   riskPromise: Promise<import('./types.js').PayRiskPayload>
-  /** 已在 onPaymentAuthorized 里处理过成功/失败，避免 loadPaymentData catch 重复回调 */
+  /** 已在 onPaymentAuthorized 里处理过授权结果，避免 loadPaymentData catch 重复回调 */
   settled: boolean
+  /** 授权成功后暂存，等 GP 弹窗关闭（loadPaymentData resolve）再 processPayment */
+  authorizedResult?: PayResult
 }
 
 const pendingPays = new WeakMap<RuntimeWalletConfig, PendingGooglePay>()
@@ -119,6 +121,10 @@ function merchantInfo(config: RuntimeWalletConfig): google.payments.api.Merchant
   return info as google.payments.api.MerchantInfo
 }
 
+/**
+ * 只完成钱包授权：normalize + risk 后立刻 SUCCESS，关闭 GP 弹窗。
+ * processPayment / onAction 放到 loadPaymentData resolve 之后，避免二级 WebView 被挡住。
+ */
 async function onPaymentAuthorized(
   config: RuntimeWalletConfig,
   paymentData: google.payments.api.PaymentData
@@ -137,8 +143,10 @@ async function onPaymentAuthorized(
 
   try {
     const risk = await pending.riskPromise
-    await config.onSuccess?.({ ...normalizeGoogleResult(paymentData), risk })
+    pending.authorizedResult = { ...normalizeGoogleResult(paymentData), risk }
     pending.settled = true
+    // 并行 kickoff api.pay；onAction / 开抽屉仍等 loadPaymentData resolve
+    config.onBeginPay?.(pending.authorizedResult)
     return { transactionState: 'SUCCESS' }
   } catch (err) {
     const error = toError(err)
@@ -268,6 +276,14 @@ export async function payWithGoogle(config: RuntimeWalletConfig): Promise<void> 
 
   try {
     await client.loadPaymentData(buildPaymentDataRequest(config))
+    // GP 弹窗已关：再跑 processPayment / onAction（含 openPayWebUrl）
+    if (pending.authorizedResult) {
+      try {
+        await config.onSuccess?.(pending.authorizedResult)
+      } catch (err) {
+        config.onError?.(toError(err))
+      }
+    }
   } catch (err) {
     if (isGoogleCancel(err)) {
       config.onCancel?.()

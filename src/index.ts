@@ -142,13 +142,15 @@ function runtimeConfigFromOrder(
   config: PaySdkConfig,
   order: CreateOrderResponse,
   api: PayApiClient,
-  onWalletAuthorized: (result: PayResult) => void | Promise<void>
+  onWalletAuthorized: (result: PayResult) => void | Promise<void>,
+  onBeginPay: (result: PayResult) => void
 ): RuntimeWalletConfig {
   const environment = resolveEnvironment(config.environment || order.environment)
   const common = {
     container: config.container,
     environment,
     risk: order.risk,
+    onBeginPay,
     onSuccess: onWalletAuthorized,
     onError: config.onError,
     onCancel: config.onCancel
@@ -222,7 +224,15 @@ class PaySdk implements PaySdkInstance {
   private pollDelayResolve: (() => void) | null = null
   private pollGeneration = 0
   private paymentInFlight = false
+  private settledPayment = false
   private destroyed = false
+  private earlyPayPromise: Promise<PayResponse> | null = null
+  private pollContext: {
+    walletResult: PayResult
+    paymentResponse: PayResponse
+    generation: number
+  } | null = null
+  private forceCheckInFlight = false
 
   constructor(config: PaySdkConfig) {
     this.config = config
@@ -258,9 +268,17 @@ class PaySdk implements PaySdkInstance {
       this.api.restoreLastTraceId(prevTraceId)
       this.api.setPaymentHubToken(order.token)
 
-      this.runtimeConfig = runtimeConfigFromOrder(this.config, order, this.api, async (result) => {
-        await this.processPayment(result)
-      })
+      this.runtimeConfig = runtimeConfigFromOrder(
+        this.config,
+        order,
+        this.api,
+        async (result) => {
+          await this.processPayment(result)
+        },
+        (result) => {
+          this.beginPay(result)
+        }
+      )
 
       this.runtimeConfig.riskCollection = collectRisk(
         this.runtimeConfig.risk,
@@ -274,6 +292,7 @@ class PaySdk implements PaySdkInstance {
           })
         }
       )
+      this.bindSecondaryReturnHook()
     }
     return detectReady(this.runtimeConfig)
   }
@@ -335,20 +354,35 @@ class PaySdk implements PaySdkInstance {
     this._button = renderButton(this.runtimeConfig, () => this._pay())
   }
 
+  /** 钱包授权后立刻 kickoff pay；失败时留下 rejected promise 供 processPayment 消费 */
+  private beginPay(walletResult: PayResult): void {
+    if (this.destroyed || !this.order || this.earlyPayPromise || this.settledPayment) return
+    this.paymentInFlight = true
+    this.settledPayment = false
+    try {
+      this.earlyPayPromise = this.api.pay(this.buildPayRequest(walletResult))
+    } catch (error) {
+      this.paymentInFlight = false
+      this.earlyPayPromise = Promise.reject(error instanceof Error ? error : toError(error))
+    }
+  }
+
   private async processPayment(walletResult: PayResult): Promise<void> {
     if (!this.order) {
       throw new Error('Order is not ready')
     }
-    if (this.destroyed) return
-    if (this.paymentInFlight) {
+    if (this.destroyed || this.settledPayment) return
+
+    const early = this.earlyPayPromise
+    if (!early && this.paymentInFlight) {
       throw new Error('Payment already in progress')
     }
 
     this.paymentInFlight = true
     try {
-      const request = this.buildPayRequest(walletResult)
-      const paymentResponse = await this.api.pay(request)
-      if (this.destroyed) return
+      const paymentResponse = await (early ?? this.api.pay(this.buildPayRequest(walletResult)))
+      this.earlyPayPromise = null
+      if (this.destroyed || this.settledPayment) return
 
       if (!hasSecondaryAction(paymentResponse)) {
         this.finish(walletResult, paymentResponse)
@@ -356,10 +390,11 @@ class PaySdk implements PaySdkInstance {
       }
 
       const action = describePayResponse(paymentResponse)
-      if (this.destroyed) return
+      if (this.destroyed || this.settledPayment) return
       if (action) await this.dispatchAction(action)
       void this.pollOrder(walletResult, paymentResponse)
     } catch (error) {
+      this.earlyPayPromise = null
       this.paymentInFlight = false
       this.stopPolling()
       this.actionView.destroy()
@@ -401,6 +436,7 @@ class PaySdk implements PaySdkInstance {
     const timeoutMs = apiConfig?.pollTimeoutMs ?? 300_000
     const startedAt = Date.now()
     const generation = ++this.pollGeneration
+    this.pollContext = { walletResult, paymentResponse, generation }
     let lastS3dsUrl = ''
     let consecutiveTransientErrors = 0
     let firstTick = true
@@ -430,23 +466,8 @@ class PaySdk implements PaySdkInstance {
           }
         }
 
-        // 仅 orderState === PENDING 且未 s3dsComplete 时继续（有 s3dsUrl 但未导航也继续）
-        if (current.orderState === ORDER_STATE_PENDING && current.s3dsComplete !== true) {
-          continue
-        }
-
-        if (ORDER_STATE_FAIL.has(current.orderState)) {
-          throw new Error(
-            current.failureReason || `Payment failed (${orderStateLabel(current.orderState)})`
-          )
-        }
-        if (ORDER_STATE_SUCCESS.has(current.orderState)) {
-          this.finish(walletResult, paymentResponse, current)
-          return
-        }
-        // 其它非 pending（TRANSFER 等）或仅 s3dsComplete
-        this.complete(walletResult, paymentResponse, current)
-        return
+        const terminal = this.applyOrderStatus(walletResult, paymentResponse, current)
+        if (terminal) return
       } catch (error) {
         if (this.destroyed || generation !== this.pollGeneration) return
         if (isTransientPollError(error)) {
@@ -456,6 +477,97 @@ class PaySdk implements PaySdkInstance {
         this.fail(toError(error))
         return
       }
+    }
+  }
+
+  /**
+   * @returns true 已终态结算；false 仍 pending，继续 poll
+   */
+  private applyOrderStatus(
+    walletResult: PayResult,
+    paymentResponse: PayResponse,
+    current: QueryOrderResponse
+  ): boolean {
+    // 仅 orderState === PENDING 且未 s3dsComplete 时继续（有 s3dsUrl 但未导航也继续）
+    if (current.orderState === ORDER_STATE_PENDING && current.s3dsComplete !== true) {
+      return false
+    }
+
+    if (ORDER_STATE_FAIL.has(current.orderState)) {
+      this.fail(
+        new Error(
+          current.failureReason || `Payment failed (${orderStateLabel(current.orderState)})`
+        )
+      )
+      return true
+    }
+    if (ORDER_STATE_SUCCESS.has(current.orderState)) {
+      this.finish(walletResult, paymentResponse, current)
+      return true
+    }
+    // 其它非 pending（TRANSFER 等）或仅 s3dsComplete
+    this.complete(walletResult, paymentResponse, current)
+    return true
+  }
+
+  /**
+   * Native 二级页命中 redirectUrl/callbackUrl 后调用 window.__paySdkSecondaryReturn()：
+   * 立刻查单；终态走 onSuccess/onError，否则继续原 poll。
+   */
+  private async forceOrderCheck(): Promise<void> {
+    if (this.destroyed || this.settledPayment || this.forceCheckInFlight) return
+    const ctx = this.pollContext
+    if (!ctx || ctx.generation !== this.pollGeneration || !this.order) return
+
+    this.forceCheckInFlight = true
+    try {
+      const current = await this.api.queryOrder()
+      if (this.destroyed || ctx.generation !== this.pollGeneration || this.settledPayment) return
+      this.config.onStatusChange?.(current)
+
+      if (isValidS3dsUrl(current.s3dsUrl)) {
+        const outcome = await this.dispatchAction(describeS3ds(current.s3dsUrl))
+        if (outcome === 'navigated') {
+          this.stopPolling()
+          return
+        }
+      }
+
+      const terminal = this.applyOrderStatus(ctx.walletResult, ctx.paymentResponse, current)
+      if (!terminal) this.wakePollDelay()
+    } catch (error) {
+      if (this.destroyed || ctx.generation !== this.pollGeneration) return
+      if (isTransientPollError(error)) {
+        this.wakePollDelay()
+        return
+      }
+      this.fail(toError(error))
+    } finally {
+      this.forceCheckInFlight = false
+    }
+  }
+
+  private wakePollDelay(): void {
+    if (this.pollTimer != null) {
+      window.clearTimeout(this.pollTimer)
+      this.pollTimer = null
+    }
+    const resume = this.pollDelayResolve
+    this.pollDelayResolve = null
+    resume?.()
+  }
+
+  private bindSecondaryReturnHook(): void {
+    if (typeof window === 'undefined') return
+    window.__paySdkSecondaryReturn = () => {
+      void this.forceOrderCheck()
+    }
+  }
+
+  private unbindSecondaryReturnHook(): void {
+    if (typeof window === 'undefined') return
+    if (window.__paySdkSecondaryReturn) {
+      delete window.__paySdkSecondaryReturn
     }
   }
 
@@ -472,6 +584,7 @@ class PaySdk implements PaySdkInstance {
 
   private stopPolling(): void {
     this.pollGeneration += 1
+    this.pollContext = null
     if (this.pollTimer != null) {
       window.clearTimeout(this.pollTimer)
       this.pollTimer = null
@@ -486,9 +599,12 @@ class PaySdk implements PaySdkInstance {
     paymentResponse: PayResponse,
     order?: QueryOrderResponse
   ): void {
+    if (this.destroyed || this.settledPayment) return
+    this.settledPayment = true
     this.stopPolling()
     this.actionView.destroy()
     this.paymentInFlight = false
+    this.earlyPayPromise = null
     const result = {
       ...walletResult,
       orderNo: this.order?.orderNo,
@@ -504,9 +620,12 @@ class PaySdk implements PaySdkInstance {
     paymentResponse: PayResponse,
     order: QueryOrderResponse
   ): void {
+    if (this.destroyed || this.settledPayment) return
+    this.settledPayment = true
     this.stopPolling()
     this.actionView.destroy()
     this.paymentInFlight = false
+    this.earlyPayPromise = null
     this.config.onComplete?.({
       ...walletResult,
       orderNo: this.order?.orderNo,
@@ -516,17 +635,22 @@ class PaySdk implements PaySdkInstance {
   }
 
   private fail(error: Error): void {
+    if (this.destroyed || this.settledPayment) return
+    this.settledPayment = true
     this.stopPolling()
     this.actionView.destroy()
     this.paymentInFlight = false
+    this.earlyPayPromise = null
     this.config.onError?.(error)
   }
 
   destroy(): void {
     this.destroyed = true
+    this.unbindSecondaryReturnHook()
     this.stopPolling()
     this.actionView.destroy()
     this.paymentInFlight = false
+    this.earlyPayPromise = null
     this._button?.remove()
     this._button = null
     if (this.runtimeConfig) {
@@ -543,6 +667,8 @@ export function init(config: PaySdkConfig): PaySdkInstance {
 declare global {
   interface Window {
     PaySdk: { init: typeof init }
+    /** Native 二级页命中 redirect/callback 后调用，催原页立刻查单 */
+    __paySdkSecondaryReturn?: () => void
   }
 }
 
