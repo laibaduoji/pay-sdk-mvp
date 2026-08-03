@@ -1,6 +1,8 @@
 /**
  * Managed-flow demo mock for /v1/pay/* (and Apple validate path).
  * Driven by checkbox options; plug in via api.fetch.
+ *
+ * payOutcome webUrl / threeDS / threeDSMethod 使用联调抓包沙箱 fixture（JWT/token 可能过期）。
  */
 ;(function (global) {
   const SUCCESS = {
@@ -9,6 +11,45 @@
     returnMsg: 'SUCCESS',
     extend: '',
     traceId: 'demo-mock-trace'
+  }
+
+  /** 真实沙箱支付响应快照（仅 data；traceId 见各 fixture） */
+  const PAY_FIXTURES = {
+    webUrl: {
+      traceId: '6a703f701c5cd2cc4848425de62eea9d',
+      data: {
+        tradeNo: '100217857411690961095',
+        webUrl:
+          'https://sandbox.cardpay.com/MI/payments/redirect?token=039ebe84-8663-446b-a12d-427545582f43'
+      }
+    },
+    threeDS: {
+      traceId: '6a0416ec45381f7646d9343f1d6c53db',
+      data: {
+        amount: '200',
+        tradeNo: '100217786529097410406',
+        month: '12',
+        year: '2030',
+        JWT: 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJqdGkiOiI4ZmQ4Y2MxMy1iMzBlLTQ3YmYtYmNiNC1lM2I3NDBkYzU4MDYiLCJpYXQiOjE3Nzg2NTI5MTMsImlzcyI6IjY0NjFmZDU3ZDQ1M2E3NGRkMjJlNzIxMCIsIlJldHVyblVybCI6Imh0dHBzOi8vZmlhdGFwaS1zYnguYWxjaGVteXBheS5vcmcvY2FsbGJhY2svd29ybGRQYXkvdGhyZWVkcyIsIk9iamVjdGlmeVBheWxvYWQiOnRydWUsIlBheWxvYWQiOiJ7XCJQYXlsb2FkXCI6XCJleUp0WlhOellXZGxWSGx3WlNJNklrTlNaWEVpTENKdFpYTnpZV2RsVm1WeWMybHZiaUk2SWpJdU1pNHdJaXdpZEdoeVpXVkVVMU5sY25abGNsUnlZVzV6U1VRaU9pSTJNekUxWXpVek1pMWtOVEJqTFRSa05HVXRZV1E1TlMxaU9UWXpORGM1TkRBM09UQWlMQ0poWTNOVWNtRnVjMGxFSWpvaU5XTTJaVFUwTXpZdFlqSTROUzAwWXpneUxXRTNZV1F0TWpWaVlXTTVOVFV3TmpRMUlpd2lZMmhoYkd4bGJtZGxWMmx1Wkc5M1UybDZaU0k2SWpBeUluMFwiLFwiQUNTVXJsXCI6XCJodHRwczovL2F1dGhlbnRpY2F0aW9uLmNhcmRpbmFsY29tbWVyY2UuY29tL1RocmVlRFNlY3VyZS9WMl8xXzAvQ1JlcT9vaWQ9NjBkMGM3M2QyYmMwMDE3NDJkMTdiOTc0JnRpZD01YzZlNTQzNi1iMjg1LTRjODItYTdhZC0yNWJhYzk1NTA2NDVcIixcIlRyYW5zYWN0aW9uSWRcIjpcInFrYVZJVFJpdUtUM09DYXlCVDUxXCJ9IiwiZXhwIjoxNzc4NjYwMTEzLCJPcmdVbml0SWQiOiI2NDYxZmQ1N2Q0NTNhNzRkZDIyZTcyMGYifQ.j9i6nnmDrnuKNyuXj4i84WnK5yZyJHoCfreQZEzSTv0',
+        MD: '100317786529101530377',
+        tokenNumber: '4179710559796835',
+        action: 'https://centinelapi.cardinalcommerce.com/V2/Cruise/StepUp',
+        version: '2.2.0',
+        exponent: '2'
+      }
+    },
+    threeDSMethod: {
+      traceId: '6a5f0db51c1586d67446cb33bf5a34d6',
+      data: {
+        methodUrl:
+          'https://methodurl.vcas.visa.com/DeviceFingerprintWeb/V2/Browser/RenderMethodURL?id=60d0c73d2bc001742d17b974',
+        threeDSMethodData:
+          'eyJ0aHJlZURTTWV0aG9kTm90aWZpY2F0aW9uVVJMIjoiaHR0cHM6Ly9maWF0YXBpLXNieC5hbGNoZW15cGF5Lm9yZy9jYWxsYmFjay9zaGlmdC9maW5nZXJwcmludC8xMDAzMTc4NDYxNDMyNjY4MDA4NzMiLCJ0aHJlZURTU2VydmVyVHJhbnNJRCI6IjYwOWNmNDI5LTY0ZDMtNGUxOS05NjcyLTIzMWNmM2E1MDhmNyJ9',
+        orderNo: 'XZZ515971485e762297QBATU3UNTRGGT',
+        tradeNo: '100217846143265270919',
+        threeDSServerTransID: '609cf429-64d3-4e19-9672-231cf3a508f7'
+      }
+    }
   }
 
   const cfg = global.PaySdkDemoConfig || {
@@ -38,8 +79,12 @@
     omitValidateUrl: true
   }
 
-  function envelope(data) {
-    return { ...SUCCESS, data }
+  function envelope(data, traceId) {
+    return {
+      ...SUCCESS,
+      traceId: traceId || SUCCESS.traceId,
+      data
+    }
   }
 
   function jsonResponse(body, status) {
@@ -218,24 +263,9 @@
       }
     }
 
-    if (outcome === 'webUrl') {
-      return envelope({
-        webUrl: new URL('./psp-checkout-mock.html', location.href).href
-      })
-    }
-    if (outcome === 'threeDS') {
-      return envelope({
-        MD: 'demo-md',
-        JWT: 'demo-jwt',
-        // 本地 Mock ACS，避免 acs.example 在 App WebView 里加载失败
-        action: new URL('./3ds-acs-mock.html', location.href).href
-      })
-    }
-    if (outcome === 'threeDSMethod') {
-      return envelope({
-        threeDSMethodData: 'demo-method-data',
-        methodUrl: new URL('./3ds-method-endpoint.html', location.href).href
-      })
+    if (outcome === 'webUrl' || outcome === 'threeDS' || outcome === 'threeDSMethod') {
+      const fixture = PAY_FIXTURES[outcome]
+      return envelope({ ...fixture.data }, fixture.traceId)
     }
     return envelope({})
   }
@@ -254,15 +284,7 @@
       })
     }
 
-    if (state.ticks === 2 && outcome === 'webUrl') {
-      return envelope({
-        orderNo: orderNo,
-        orderState: 1,
-        s3dsUrl: new URL('./psp-checkout-mock.html', location.href).href + '?s3ds=1',
-        s3dsComplete: false
-      })
-    }
-
+    // webUrl / threeDS / threeDSMethod：不注入假 s3dsUrl，数 tick 后终态以便 closePayWebUrl
     if (state.ticks >= 3) {
       return envelope({
         orderNo: orderNo,
