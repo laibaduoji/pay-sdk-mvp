@@ -3,7 +3,7 @@
 面向：**商户 Android / iOS App** 与内嵌收银台 H5。  
 可单独复制本文给 App 同学落地。
 
-SDK 默认 `actionMode: 'callback'`：只回调 `onAction`，**不会**自动打开页面，并在需二次动作时继续轮询订单状态。
+SDK 出现二次动作时**只回调** `onAction`，**不会**自动打开页面，并在需二次动作时继续轮询订单状态。App 须在 `onAction` 中调 Native Bridge。
 
 H5 SDK 接入见 [SDK.md](./SDK.md)；参考壳页见 [`html/`](./html/)。
 
@@ -45,12 +45,9 @@ H5 SDK 接入见 [SDK.md](./SDK.md)；参考壳页见 [`html/`](./html/)。
 
 无二次动作时：关钱包 sheet 后直接 `onSuccess`（不强制 poll）。
 
-**禁止**在收银台 WebView 内对 `webUrl` / `s3ds` 执行：
+**禁止**在收银台 WebView 内对 `webUrl` / `s3ds` 执行整页跳转（如 `location.assign` / `location.href`），否则原页轮询中断。
 
-- `sdk.openAction(action)`（内部是 `location.assign`，整页离开）
-- `window.location = url` / `location.href = url`
-
-App 主推也不要对本页叠 Challenge/Method iframe；用二级抽屉 + 壳页。浏览器调试可 fallback `sdk.openAction`。
+不要对本页叠 Challenge/Method iframe；用二级抽屉 + 壳页。
 
 ---
 
@@ -155,9 +152,13 @@ function closePayDrawer() {
   }
 }
 
+function missingBridge(method) {
+  console.error('[PaySdk] NativeBridge.' + method + ' missing; please upgrade the App')
+  // 正式 App：可 Toast「请升级 App」
+}
+
 var sdk = PaySdk.init({
   container: '#pay-button',
-  environment: 'TEST',
   order: createOrderResponseData,
   onAction: function (action) {
     if (action.type === 'webUrl' || action.type === 's3ds') {
@@ -165,7 +166,7 @@ var sdk = PaySdk.init({
         bridge.openPayWebUrl(action.url, redirectUrl || '', callbackUrl || '')
         return
       }
-      console.error('[PaySdk] NativeBridge.openPayWebUrl missing')
+      missingBridge('openPayWebUrl')
       return
     }
     if (action.type === 'threeDS') {
@@ -176,7 +177,7 @@ var sdk = PaySdk.init({
         )
         return
       }
-      sdk.openAction(action) // 仅浏览器 fallback
+      missingBridge('openPayChallenge')
       return
     }
     if (action.type === 'threeDSMethod') {
@@ -190,7 +191,7 @@ var sdk = PaySdk.init({
         )
         return
       }
-      sdk.openAction(action)
+      missingBridge('openPayMethod')
     }
   },
   onSuccess: function () {
@@ -208,10 +209,7 @@ sdk.ready().then(function () {
 
 ### 无 Bridge 时
 
-| 场景             | 建议                                                   |
-| ---------------- | ------------------------------------------------------ |
-| 正式 App WebView | Toast「请升级 App」；**禁止** `sdk.openAction(webUrl)` |
-| 浏览器调试       | 可临时 `location.href` 或 `sdk.openAction`（仅调试）   |
+正式 App WebView 必须注入完整 `NativeBridge`。缺失时提示用户升级 App，**不要**在收银台页做整页跳转打开 `webUrl` / `s3ds`。
 
 ---
 
@@ -251,12 +249,12 @@ SDK 轮询**继续**；`onCancel` **不会**因此触发（`onCancel` 只表示�
 
 ## 8. 与 SDK 行为对齐（勿踩坑）
 
-| 点                       | 说明                                                               |
-| ------------------------ | ------------------------------------------------------------------ |
-| 默认 `callback`          | 只 `onAction`，不自动开页；有二次动作时继续 poll                   |
-| 无二次动作               | 直接 `onSuccess`                                                   |
-| `sdk.openAction(webUrl)` | **必然**整页离开；App 禁止                                         |
-| App 主推                 | `callback` + `onAction` 调 Bridge（不要依赖 `actionMode: 'auto'`） |
+| 点              | 说明                                               |
+| --------------- | -------------------------------------------------- |
+| 二次动作默认    | 只 `onAction`，不自动开页；有二次动作时继续 poll   |
+| 无二次动作      | 直接 `onSuccess`                                   |
+| `webUrl`/`s3ds` | **禁止**收银台整页跳转；必须 Bridge 开二级抽屉     |
+| App 主推        | `onAction` 调 Bridge（`openPayWebUrl` / 壳页方法） |
 
 ---
 
@@ -268,19 +266,6 @@ SDK 轮询**继续**；`onCancel` **不会**因此触发（`onCancel` 只表示�
 - [ ] H5：`webUrl`/`s3ds` → Bridge；`threeDS`/`threeDSMethod` → 壳页 Bridge
 - [ ] 创建订单 `redirectUrl`；命中后 dismiss + `__paySdkSecondaryReturn`
 - [ ] `onSuccess` / `onError` 调 `closePayWebUrl`
-- [ ] 未对 `webUrl` 调 `sdk.openAction`
+- [ ] 未在收银台 WebView 对 `webUrl`/`s3ds` 做整页跳转
 - [ ] 联调确认原页仍在轮询 `order/detail`
 - [ ] 离开收银台 `sdk.destroy()` 并关抽屉
-
----
-
-## 10. FAQ
-
-**Q：必须用 Bridge 吗？**  
-App 内嵌且要保活轮询时必须（或等价 Native 开二级页）。
-
-**Q：必须用本包壳页 URL 吗？**  
-不必。可改名、自托管；也可用本页 `sdk.openAction`（浏览器）。
-
-**Q：只做 redirect 关抽屉、不做 closePayWebUrl？**  
-不推荐。两路都做。

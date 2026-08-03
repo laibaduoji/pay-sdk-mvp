@@ -68,7 +68,7 @@ API 根域名：`https://api.alchemypay.org`
 出现二次动作时只触发 `onAction`，**不**自动跳转；原页继续轮询。
 
 App 推荐在 `onAction` 调 Bridge：`openPayWebUrl` / `openPayChallenge` / `openPayMethod`（见 [WEBVIEW.md](./WEBVIEW.md)）。  
-**不要**对 `webUrl` / `s3ds` 调 `sdk.openAction`。
+**不要**在收银台 WebView 内对 `webUrl` / `s3ds` 做整页跳转。
 
 ---
 

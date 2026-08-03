@@ -1,7 +1,7 @@
 # Pay SDK 接入文档（商户最终版）
 
-本文说明商户如何在 **H5 / App WebView** 中接入 Pay SDK，完成 Google Pay / Apple Pay 支付。  
-纯 H5 阅读本文即可；**App 内嵌**的 Bridge / 底部抽屉 / 3DS 壳页见 [WEBVIEW.md](./WEBVIEW.md)。
+本文说明商户如何在 **App WebView**（及同构收银台 H5）中接入 Pay SDK，完成 Google Pay / Apple Pay 支付。  
+**App 内嵌须同时阅读** [WEBVIEW.md](./WEBVIEW.md)（Bridge / 底部抽屉 / 3DS 壳页）；服务端见 [SERVER.md](./SERVER.md)。
 
 同目录 [`pay-sdk.js`](./pay-sdk.js) 为交付用 SDK 文件。
 
@@ -84,7 +84,8 @@ SDK **不**调用创建订单、**不**签名、**不**需要 `appId` / `appSecr
         onCancel() {
           console.log('用户取消')
         },
-        // 需二次动作（webUrl / s3ds / threeDS / threeDSMethod）；SDK 不自动打开，App 在此调 Bridge
+        // 需二次动作（webUrl / s3ds / threeDS / threeDSMethod）；SDK 不自动打开
+        // App：在此调 Native Bridge，完整示例见 WEBVIEW.md
         onAction(action) {
           console.log('二次动作', action)
         }
@@ -139,13 +140,14 @@ API 根域名：`https://api.alchemypay.org`
 
 ## 5. 实例方法
 
-| 方法                     | 说明                                             |
-| ------------------------ | ------------------------------------------------ |
-| `PaySdk.init(config)`    | 校验配置并返回实例                               |
-| `sdk.ready()`            | 规范化订单、预采风控、检查钱包可用               |
-| `sdk.mount()`            | 渲染支付按钮                                     |
-| `sdk.openAction(action)` | 打开二次动作（浏览器 fallback；App 主推 Bridge） |
-| `sdk.destroy()`          | 移除按钮、清理 iframe 与轮询                     |
+| 方法                  | 说明                               |
+| --------------------- | ---------------------------------- |
+| `PaySdk.init(config)` | 校验配置并返回实例                 |
+| `sdk.ready()`         | 规范化订单、预采风控、检查钱包可用 |
+| `sdk.mount()`         | 渲染支付按钮                       |
+| `sdk.destroy()`       | 移除按钮、清理 iframe 与轮询       |
+
+二次动作打开方式见 §6 与 [WEBVIEW.md](./WEBVIEW.md)；**不要**在收银台 WebView 内对 `webUrl` / `s3ds` 做整页跳转。
 
 ---
 
@@ -159,7 +161,7 @@ API 根域名：`https://api.alchemypay.org`
 | `threeDS`         | `openPayChallenge(壳页, payload)`                           |
 | `threeDSMethod`   | `openPayMethod(壳页, payload)`                              |
 
-**禁止**对 `webUrl` / `s3ds` 调用 `sdk.openAction`（会整页 `location.assign`）。
+**禁止**在收银台 WebView 内对 `webUrl` / `s3ds` 做整页跳转（会中断原页轮询）。
 
 完整 Bridge、壳页与关栏流程 → **[WEBVIEW.md](./WEBVIEW.md)**。参考壳页 → [`html/`](./html/)。
 
@@ -191,7 +193,7 @@ API 根域名：`https://api.alchemypay.org`
 - [ ] **服务端**创建订单响应含 `orderNo` / `paymentScript` / `token`
 - [ ] `PaySdk.init({ order })` 传入完整响应
 - [ ] 实现 `onSuccess` / `onError` / `onCancel` / `onAction`
-- [ ] App：按 [WEBVIEW.md](./WEBVIEW.md) 实现 Bridge；`webUrl`/`s3ds` 不要 `sdk.openAction`
+- [ ] App：按 [WEBVIEW.md](./WEBVIEW.md) 实现 Bridge；`webUrl`/`s3ds` 不在收银台做整页跳转
 - [ ] 创建订单带 `redirectUrl`（及如需的 `callbackUrl`）；回跳后调 `__paySdkSecondaryReturn()`
 - [ ] 离开支付页 `sdk.destroy()`，并关闭未关的抽屉
 - [ ] 业务接口 `returnCode === '0000'` 联调通过
