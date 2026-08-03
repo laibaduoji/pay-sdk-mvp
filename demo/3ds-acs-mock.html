@@ -1,0 +1,74 @@
+<!doctype html>
+<html lang="zh-CN">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Mock ACS Challenge</title>
+    <style>
+      html,
+      body {
+        margin: 0;
+        padding: 16px;
+        font-family: -apple-system, system-ui, sans-serif;
+        background: #f7f7f8;
+        color: #222;
+      }
+      .card {
+        max-width: 360px;
+        margin: 24px auto;
+        padding: 20px;
+        background: #fff;
+        border-radius: 8px;
+        border: 1px solid #e8e8e8;
+      }
+      h1 {
+        font-size: 18px;
+        margin: 0 0 8px;
+      }
+      p {
+        font-size: 13px;
+        line-height: 1.45;
+        color: #555;
+        margin: 0 0 12px;
+      }
+      code {
+        font-size: 11px;
+        word-break: break-all;
+      }
+      .ok {
+        color: #0a7a32;
+        font-weight: 600;
+      }
+    </style>
+  </head>
+  <body>
+    <div class="card">
+      <h1>Mock ACS · 3DS Challenge</h1>
+      <p class="ok">已收到 Challenge POST（Demo 假银行页）。</p>
+      <p>
+        真实环境这里是发卡行验证页。本页仅供 Mock：原收银台应继续 poll，数秒后订单终态并
+        <code>closePayWebUrl</code>。
+      </p>
+      <p><strong>MD</strong><br /><code id="md">—</code></p>
+      <p><strong>JWT</strong><br /><code id="jwt">—</code></p>
+    </div>
+    <script>
+      ;(function () {
+        var md = '—'
+        var jwt = '—'
+        try {
+          var params = new URLSearchParams(location.search)
+          if (params.get('MD')) md = params.get('MD')
+          if (params.get('JWT')) jwt = params.get('JWT')
+        } catch (_) {}
+        // form POST 到本页时，部分 WebView 不会把 body 暴露给 JS；Demo 只展示「已到达 ACS」
+        document.getElementById('md').textContent = md
+        document.getElementById('jwt').textContent = jwt
+        if (md === '—' && document.referrer) {
+          document.getElementById('md').textContent = '(form POST · 见 Network)'
+          document.getElementById('jwt').textContent = '(form POST · 见 Network)'
+        }
+      })()
+    </script>
+  </body>
+</html>

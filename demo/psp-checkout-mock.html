@@ -1,0 +1,32 @@
+<!doctype html>
+<html lang="zh-CN">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Mock PSP Checkout</title>
+    <style>
+      body {
+        margin: 0;
+        padding: 20px;
+        font:
+          14px/1.45 -apple-system,
+          system-ui,
+          sans-serif;
+        color: #222;
+      }
+      .ok {
+        color: #0a7a32;
+        font-weight: 600;
+      }
+    </style>
+  </head>
+  <body>
+    <h1>Mock PSP / webUrl</h1>
+    <p class="ok">二级抽屉已打开本页（Demo）。</p>
+    <p>原收银台继续 poll；终态会 closePayWebUrl。也可跳到 redirect / callback 测关栏。</p>
+    <p>
+      <a id="to-redirect" href="./redirectUrl.html">去 redirectUrl</a> ·
+      <a id="to-callback" href="./callBackUrl.html">去 callbackUrl</a>
+    </p>
+  </body>
+</html>

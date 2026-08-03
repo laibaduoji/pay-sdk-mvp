@@ -95,11 +95,11 @@
         },
         threeDS: {
           title: '返回 3DS Challenge',
-          desc: '支付接口返回 MD/JWT/action；App 开 Challenge 壳页；原页 poll。'
+          desc: '支付返回 MD/JWT/action → 壳页 POST 到本地 Mock ACS（3ds-acs-mock.html）；原页 poll。'
         },
         threeDSMethod: {
           title: '返回 3DS Method',
-          desc: '支付接口返回 threeDSMethodData/methodUrl；App 开 Method 壳页；原页 poll。'
+          desc: '支付返回 Method 字段 → 壳页 POST 到本地 Mock Method 端点；原页 poll。'
         }
       }
       const ALLOWED = Object.keys(OUTCOME_META)

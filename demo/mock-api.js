@@ -219,19 +219,22 @@
     }
 
     if (outcome === 'webUrl') {
-      return envelope({ webUrl: 'https://psp.example/checkout/' + (orderNo || 'xxx') })
+      return envelope({
+        webUrl: new URL('./psp-checkout-mock.html', location.href).href
+      })
     }
     if (outcome === 'threeDS') {
       return envelope({
         MD: 'demo-md',
         JWT: 'demo-jwt',
-        action: 'https://acs.example/challenge'
+        // 本地 Mock ACS，避免 acs.example 在 App WebView 里加载失败
+        action: new URL('./3ds-acs-mock.html', location.href).href
       })
     }
     if (outcome === 'threeDSMethod') {
       return envelope({
         threeDSMethodData: 'demo-method-data',
-        methodUrl: 'https://psp.example/3ds-method'
+        methodUrl: new URL('./3ds-method-endpoint.html', location.href).href
       })
     }
     return envelope({})
@@ -255,7 +258,7 @@
       return envelope({
         orderNo: orderNo,
         orderState: 1,
-        s3dsUrl: 'https://acs.example/s3ds/' + orderNo,
+        s3dsUrl: new URL('./psp-checkout-mock.html', location.href).href + '?s3ds=1',
         s3dsComplete: false
       })
     }

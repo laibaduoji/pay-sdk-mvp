@@ -1,0 +1,25 @@
+<!doctype html>
+<html lang="zh-CN">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Mock 3DS Method</title>
+    <style>
+      body {
+        margin: 0;
+        padding: 12px;
+        font:
+          13px/1.4 -apple-system,
+          system-ui,
+          sans-serif;
+        color: #444;
+      }
+    </style>
+  </head>
+  <body>
+    <p>Mock Method endpoint（隐藏 iframe 会 POST 到此）。Demo 无需交互；原页继续 poll。</p>
+    <script>
+      document.body.setAttribute('data-pay-sdk-method', 'ok')
+    </script>
+  </body>
+</html>
