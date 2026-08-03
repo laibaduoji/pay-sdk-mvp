@@ -9,7 +9,7 @@ window.PaySdkDemoConfig = {
     countryCode: 'US',
     network: 'BSC',
     cryptoCurrency: 'USDC',
-    address: '0x1a6E411AcDe0fD218061B28f0D36e0Df43836563'
+    address: '0x1c16531598b5fefd76faed0aa5627e6068a5a1bd'
   },
 
   googlePay: {

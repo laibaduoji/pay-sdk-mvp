@@ -133,6 +133,8 @@ frames / navigate.
 
 ## Docs
 
-- [docs/MERCHANT.md](docs/MERCHANT.md) — merchant integration
-- [docs/PARAMETERS.md](docs/PARAMETERS.md) — init parameters
-- [docs/pay-api/](docs/pay-api/) — API contracts
+- [output/](output/) — **商户最终版交付包**（SDK 文件、接入文档、WebView、3DS 壳页）
+- [output/SDK.md](output/SDK.md) — merchant H5 / SDK
+- [output/WEBVIEW.md](output/WEBVIEW.md) — App WebView / Bridge
+- [docs/pay-api/](docs/pay-api/) — internal API contracts（详细类型）
+- [docs/PARAMETERS.md](docs/PARAMETERS.md) — internal full parameter notes（商户见 output/PARAMETERS.md）

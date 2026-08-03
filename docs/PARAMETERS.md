@@ -1,5 +1,8 @@
 # 参数说明文档
 
+> **商户请优先阅读 [`output/PARAMETERS.md`](../output/PARAMETERS.md)**（最终版交付包）。  
+> 下文为仓库内部完整参数说明，可与 `output/` 对照；二次动作 App 接入见 [`output/WEBVIEW.md`](../output/WEBVIEW.md)。
+
 `PaySdk.init(config)` 的完整参数说明。图例：**必传** = 必须提供，否则 `init` 抛错；可选 = 不传则使用默认值。
 
 SDK 编排：**商户已创建订单** → 钱包授权 → 支付 →（需要时）查询。  
@@ -86,8 +89,8 @@ Google Pay **TEST** 环境默认（创建订单未下发时 SDK 补齐，有值�
 | `callback`（默认） | 只调用 `onAction(action)`，**不**自动跳转 / 开 iframe；轮询继续       |
 | `auto`             | 先调 `onAction`，再试 `openAction`（Bridge）；未处理则用 SDK 内置打开 |
 
-商户也可随时调用 `sdk.openAction(action)`。
-
+App 内嵌推荐在 `onAction` 里走 Native 底部抽屉：`openPayWebUrl` / `openPayChallenge` / `openPayMethod`（见 [`output/WEBVIEW.md`](../output/WEBVIEW.md)、[`output/SDK.md`](../output/SDK.md)）。  
+`sdk.openAction` 仅作浏览器 / Demo fallback；**不要**对 `webUrl` / `s3ds` 调用（会 `location.assign`）。
 ---
 
 ## 2. `order`（创建订单响应）

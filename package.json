@@ -8,7 +8,7 @@
     "dev": "vite --config vite.demo.config.ts",
     "demo": "npm run build && vite --config vite.demo.config.ts",
     "typecheck": "tsc --noEmit",
-    "build": "tsc --noEmit && vite build && tsc --emitDeclarationOnly && cp dist/pay-sdk.js demo/pay-sdk.js",
+    "build": "tsc --noEmit && vite build && tsc --emitDeclarationOnly && cp dist/pay-sdk.js demo/pay-sdk.js && cp dist/pay-sdk.js output/pay-sdk.js",
     "preview": "npm run build && vite --config vite.demo.config.ts",
     "format": "prettier --write .",
     "format:check": "prettier --check .",

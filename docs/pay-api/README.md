@@ -80,13 +80,13 @@ sequenceDiagram
 
 ### 接口 3 支付结果分支
 
-| 条件                                 | 客户端动作                                         | 是否轮询接口 4 |
-| ------------------------------------ | -------------------------------------------------- | -------------- |
-| `returnCode !== '0000'`              | 失败，吐出 `returnMsg`                             | **否**         |
-| `data` 无二次动作字段                | 成功回调                                           | **否**         |
-| 有 `webUrl`                          | 打开 `webUrl`（SDK 默认只 `onAction`，不强制跳转） | **是**         |
-| 有 `MD` + `JWT` + `action`           | 打开 3DS 页（同上，可由商户 / `sdk.openAction`）   | **是**         |
-| 有 `threeDSMethodData` + `methodUrl` | 打开 Shift4 方法页                                 | **是**         |
+| 条件                                 | 客户端动作                                                                     | 是否轮询接口 4 |
+| ------------------------------------ | ------------------------------------------------------------------------------ | -------------- |
+| `returnCode !== '0000'`              | 失败，吐出 `returnMsg`                                                         | **否**         |
+| `data` 无二次动作字段                | 成功回调                                                                       | **否**         |
+| 有 `webUrl`                          | `onAction(webUrl)`；App 用 Bridge 抽屉打开，勿 `sdk.openAction`                | **是**         |
+| 有 `MD` + `JWT` + `action`           | `onAction(threeDS)`；App 推荐 Challenge 壳页 Bridge，浏览器可 `sdk.openAction` | **是**         |
+| 有 `threeDSMethodData` + `methodUrl` | `onAction(threeDSMethod)`；App 推荐 Method 壳页 Bridge                         | **是**         |
 
 ### 接口 4 轮询规则（建议间隔 2s）
 
