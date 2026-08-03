@@ -823,6 +823,9 @@ apple-pay-button {
           await ((_a2 = config.onAuthorizePay) == null ? void 0 : _a2.call(config, authorized));
           session.completePayment(ApplePaySession.STATUS_SUCCESS);
           completed = true;
+          await new Promise((resolve) => {
+            window.setTimeout(resolve, 400);
+          });
           try {
             await ((_b = config.onSuccess) == null ? void 0 : _b.call(config, authorized));
           } catch (err) {

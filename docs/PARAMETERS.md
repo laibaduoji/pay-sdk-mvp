@@ -161,9 +161,8 @@ App 内嵌推荐在 `onAction` 里走 Native 底部抽屉：`openPayWebUrl` / `o
 
 ## 5. Demo
 
-| 示例                               | 文件                                                                |
-| ---------------------------------- | ------------------------------------------------------------------- |
-| Mock 编排（四种 outcome 见 index） | [`demo/10-mock-pay-outcome.html`](../demo/10-mock-pay-outcome.html) |
-| 真实 API 联调                      | [`demo/09-live-api.html`](../demo/09-live-api.html)                 |
+| 示例          | 文件                                    |
+| ------------- | --------------------------------------- |
+| 真实 API 联调 | [`demo/index.html`](../demo/index.html) |
 
-Demo 09 用 [`demo/signed-api.js`](../demo/signed-api.js) **签名创建订单**（仅 demo 持有 appSecret）：先取 `accessToken`（或 email/uid getToken），创建订单请求头带 `access-token`，再把响应（含 `token`）交给 SDK。
+Demo 用 [`demo/signed-api.js`](../demo/signed-api.js) **签名创建订单**（仅 demo 持有 appSecret）：先取 `accessToken`（或 email/uid getToken），创建订单请求头带 `access-token`，再把响应（含 `token`）交给 SDK。

@@ -3,48 +3,688 @@
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>Pay SDK Demos</title>
+    <title>SDK Managed Flow — Live API</title>
     <link rel="stylesheet" href="./common.css" />
+    <style>
+      .panel label.field {
+        display: grid;
+        grid-template-columns: 140px 1fr;
+        align-items: center;
+        gap: 8px;
+        margin: 6px 0;
+        cursor: default;
+      }
+      .panel label.field input,
+      .panel label.field select {
+        min-width: 0;
+        padding: 6px 8px;
+        font-size: 13px;
+        border: 1px solid #ccc;
+        border-radius: 4px;
+      }
+      .panel label.field input[readonly] {
+        background: #eee;
+        color: #555;
+      }
+    </style>
   </head>
   <body>
-    <h1>Pay SDK Demos</h1>
-    <p class="meta">
-      先 <code>npm run build</code>，再 <code>npm run demo</code>。参数说明见
-      <a href="../docs/PARAMETERS.md">docs/PARAMETERS.md</a>；GitHub Pages 使用同目录
-      <a href="./pay-sdk.js">pay-sdk.js</a>。
+    <p class="meta"><a href="./index.html">← Demos</a> · PARAMETERS</p>
+    <h1>SDK 完整支付编排（真实 API）</h1>
+    <details class="json-fold">
+      <summary class="section-title">说明</summary>
+      <p class="meta">
+        Demo 用 <code>appId</code> / <code>appSecret</code> 签名创建订单（TEST：
+        <code>https://api-test.alchemytech.cc</code>），请求头另带
+        <code>access-token</code>（建议手填；否则 email/uid 先 getToken）。创建订单响应含
+        <code>token</code> 后交给 SDK；SDK 不签名、不调创建订单，后续接口带头
+        <code>payment-hub-token</code>。
+      </p>
+    </details>
+
+    <details class="json-fold">
+      <summary class="section-title">参数配置</summary>
+      <form id="controls" class="panel" onsubmit="return false">
+        <fieldset>
+          <legend>API 凭据（仅 Demo 创建订单签名用）</legend>
+          <label class="field">
+            appId
+            <input type="text" name="appId" autocomplete="off" placeholder="必填" />
+          </label>
+          <label class="field">
+            appSecret
+            <input type="password" name="appSecret" autocomplete="off" placeholder="必填" />
+          </label>
+        </fieldset>
+
+        <fieldset>
+          <legend>登录态（创建订单 access-token；建议 accessToken，否则 email 或 uid）</legend>
+          <label class="field">
+            accessToken
+            <input
+              type="text"
+              name="accessToken"
+              autocomplete="off"
+              placeholder="建议：服务端 getToken"
+            />
+          </label>
+          <label class="field">
+            email
+            <input
+              type="email"
+              name="email"
+              autocomplete="off"
+              placeholder="无 token 时与 uid 二选一"
+            />
+          </label>
+          <label class="field">
+            uid
+            <input
+              type="text"
+              name="uid"
+              autocomplete="off"
+              placeholder="无 token 时与 email 二选一"
+            />
+          </label>
+        </fieldset>
+
+        <fieldset>
+          <legend>环境</legend>
+          <label><input type="radio" name="environment" value="TEST" checked /> TEST</label>
+          <label><input type="radio" name="environment" value="PRODUCTION" /> PRODUCTION</label>
+        </fieldset>
+
+        <fieldset>
+          <legend>钱包（按系统预选，可改）</legend>
+          <label><input type="radio" name="method" value="googlePay" /> Google Pay</label>
+          <label><input type="radio" name="method" value="applePay" /> Apple Pay</label>
+        </fieldset>
+
+        <fieldset>
+          <legend>二次动作</legend>
+          <label
+            ><input type="radio" name="actionMode" value="callback" checked /> callback（只
+            onAction）</label
+          >
+          <label><input type="radio" name="actionMode" value="auto" /> auto（SDK 自动打开）</label>
+        </fieldset>
+
+        <fieldset>
+          <legend>创建订单请求</legend>
+          <label class="field">
+            side
+            <select name="side">
+              <option value="BUY" selected>BUY</option>
+              <option value="SELL">SELL</option>
+            </select>
+          </label>
+          <label class="field">
+            merchantOrderNo
+            <input type="text" name="merchantOrderNo" autocomplete="off" />
+          </label>
+          <label class="field">
+            amount
+            <input type="text" name="amount" />
+          </label>
+          <label class="field">
+            fiatCurrency
+            <input type="text" name="fiatCurrency" />
+          </label>
+          <label class="field">
+            alpha2
+            <input type="text" name="alpha2" />
+          </label>
+          <label class="field">
+            cryptoCurrency
+            <input type="text" name="cryptoCurrency" />
+          </label>
+          <label class="field">
+            orderType
+            <input type="text" name="orderType" />
+          </label>
+          <label class="field">
+            address
+            <input type="text" name="address" />
+          </label>
+          <label class="field">
+            network
+            <input type="text" name="network" />
+          </label>
+          <label class="field">
+            payWayCode
+            <input type="text" name="payWayCode" readonly />
+          </label>
+          <label class="field">
+            userAccountId
+            <input type="text" name="userAccountId" placeholder="可选" />
+          </label>
+          <label class="field">
+            redirectUrl
+            <input type="text" name="redirectUrl" />
+          </label>
+          <label class="field">
+            callbackUrl
+            <input type="text" name="callbackUrl" />
+          </label>
+          <label class="field">
+            clientIp
+            <input type="text" name="clientIp" />
+          </label>
+          <label class="field">
+            memo
+            <input type="text" name="memo" placeholder="可选" />
+          </label>
+          <label class="field">
+            withdrawType
+            <input type="text" name="withdrawType" placeholder="可选，空则不传" />
+          </label>
+        </fieldset>
+      </form>
+    </details>
+
+    <div class="demo-actions">
+      <button type="button" id="regen-order-no">重新生成 merchantOrderNo</button>
+      <button type="button" id="apply-btn">创建订单并挂载 SDK</button>
+    </div>
+
+    <details class="json-fold">
+      <summary class="section-title">将提交的创建订单请求</summary>
+      <pre id="preview">—</pre>
+    </details>
+
+    <details class="json-fold">
+      <summary class="section-title">创建订单响应（传给 SDK）</summary>
+      <pre id="order-response">—</pre>
+    </details>
+
+    <p id="status">未挂载</p>
+    <div class="trace-row">
+      <span class="label">traceId</span>
+      <code id="trace-id">—</code>
+      <button type="button" id="trace-copy">复制</button>
+    </div>
+    <div id="pay-container"></div>
+    <h2 class="section-title">风控数据</h2>
+    <pre id="risk">挂载后采集 Fingerprint（请求头 fingerprint-id）…</pre>
+    <h2 class="section-title">onAction / 打开的链接</h2>
+    <p class="meta" id="bridge-hint">
+      App 内（原页继续 poll）：webUrl/s3ds → openPayWebUrl；threeDS → openPayChallenge(壳页)；
+      threeDSMethod → openPayMethod(壳页)。终态 onSuccess/onError → closePayWebUrl。二级页命中
+      redirect/callback → Native 关栏并 __paySdkSecondaryReturn。参考壳页
+      <a href="./3ds-challenge.html">3ds-challenge.html</a> /
+      <a href="./3ds-method.html">3ds-method.html</a>（商户可改名自托管）。
     </p>
+    <p class="meta">
+      <strong>当前打开的二级页：</strong>
+      <code id="opened-web-url" style="word-break: break-all">—</code>
+    </p>
+    <pre id="action">—</pre>
+    <h2 class="section-title">结果</h2>
+    <pre id="output">—</pre>
 
-    <h2 class="section-title">Mock：支付接口返回（四种）</h2>
-    <ul class="nav">
-      <li>
-        <a href="./10-mock-pay-outcome.html?outcome=success"
-          >无二次动作（直接成功） <small>pay 空 data → onSuccess</small></a
-        >
-      </li>
-      <li>
-        <a href="./10-mock-pay-outcome.html?outcome=webUrl"
-          >返回 webUrl <small>二级页 + 原页 poll；可再出 s3dsUrl</small></a
-        >
-      </li>
-      <li>
-        <a href="./10-mock-pay-outcome.html?outcome=threeDS"
-          >返回 3DS Challenge <small>MD/JWT/action → Challenge 壳页</small></a
-        >
-      </li>
-      <li>
-        <a href="./10-mock-pay-outcome.html?outcome=threeDSMethod"
-          >返回 3DS Method <small>threeDSMethodData/methodUrl → Method 壳页</small></a
-        >
-      </li>
-    </ul>
+    <script src="./pay-sdk.js"></script>
+    <script src="./config.js"></script>
+    <script src="./signed-api.js"></script>
+    <script src="./demo-ui.js"></script>
+    <script>
+      const SS_APP_ID = 'paySdkDemo.appId'
+      const SS_APP_SECRET = 'paySdkDemo.appSecret'
+      const SS_ACCESS_TOKEN = 'paySdkDemo.accessToken'
+      const SS_EMAIL = 'paySdkDemo.email'
+      const SS_UID = 'paySdkDemo.uid'
 
-    <h2 class="section-title">真实 API</h2>
-    <ul class="nav">
-      <li>
-        <a href="./09-live-api.html"
-          >完整支付编排（真实 API） <small>demo 签名创建订单 → 响应交给 SDK</small></a
-        >
-      </li>
-    </ul>
+      const ui = window.PaySdkDemoUI
+      const signedApi = window.PaySdkDemoSignedApi
+      const sdkRef = { current: null }
+      const handlers = ui.handlers(sdkRef)
+      const form = document.getElementById('controls')
+      const previewEl = document.getElementById('preview')
+      const orderResponseEl = document.getElementById('order-response')
+      const riskEl = document.getElementById('risk')
+      const actionEl = document.getElementById('action')
+      const openedWebUrlEl = document.getElementById('opened-web-url')
+      const outputEl = document.getElementById('output')
+      const statusEl = document.getElementById('status')
+
+      let sdk = null
+      let lastRiskConfig = null
+
+      ui.bindTraceCopy()
+
+      function el(name) {
+        return form.elements.namedItem(name)
+      }
+
+      function payWayForMethod(method) {
+        return method === 'applePay' ? '501' : '701'
+      }
+
+      /** Apple 设备（iOS / iPadOS / macOS）预选 Apple Pay，其余 Google Pay */
+      function isApplePlatform() {
+        const ua = navigator.userAgent || ''
+        const platform = navigator.platform || ''
+        if (/iPhone|iPad|iPod/i.test(ua)) return true
+        // iPadOS 13+ 常报 MacIntel + 触控
+        if (platform === 'MacIntel' && Number(navigator.maxTouchPoints || 0) > 1) return true
+        if (/Macintosh|Mac OS X/i.test(ua)) return true
+        return false
+      }
+
+      function detectPreferredWalletMethod() {
+        if (isApplePlatform()) return 'applePay'
+        return 'googlePay'
+      }
+
+      function selectWalletMethod(method) {
+        const radios = form.querySelectorAll('input[name="method"]')
+        radios.forEach(function (radio) {
+          radio.checked = radio.value === method
+        })
+        syncPayWayCode()
+      }
+
+      function newMerchantOrderNo() {
+        return 'm_ord_live_' + Date.now().toString(36)
+      }
+
+      function applyDefaults() {
+        const p = (window.PaySdkDemoConfig && window.PaySdkDemoConfig.payment) || {}
+        el('side').value = 'BUY'
+        el('merchantOrderNo').value = newMerchantOrderNo()
+        el('amount').value = p.amount || '1'
+        el('fiatCurrency').value = p.currency || 'USD'
+        el('alpha2').value = p.countryCode || 'US'
+        el('cryptoCurrency').value = p.cryptoCurrency || 'USDC'
+        el('orderType').value = '4'
+        el('address').value = p.address || '0x1c16531598b5fefd76faed0aa5627e6068a5a1bd'
+        el('network').value = p.network || 'BSC'
+        el('userAccountId').value = ''
+        el('redirectUrl').value = 'https://ramp-test.alchemytech.cc/demo/redirectUrl.html'
+        el('callbackUrl').value = 'https://ramp-test.alchemytech.cc/demo/callBackUrl.html'
+        el('clientIp').value = ''
+        el('clientIp').placeholder = '获取公网 IP 中…'
+        el('memo').value = ''
+        el('withdrawType').value = ''
+        selectWalletMethod(detectPreferredWalletMethod())
+
+        const cfgApi = (window.PaySdkDemoConfig && window.PaySdkDemoConfig.api) || {}
+        let appId = cfgApi.appId || ''
+        let appSecret = cfgApi.appSecret || ''
+        try {
+          const savedId = sessionStorage.getItem(SS_APP_ID)
+          const savedSecret = sessionStorage.getItem(SS_APP_SECRET)
+          if (savedId) appId = savedId
+          if (savedSecret) appSecret = savedSecret
+        } catch (_) {}
+        el('appId').value = appId
+        el('appSecret').value = appSecret
+
+        let accessToken = ''
+        let email = 'demo001@example.com'
+        let uid = ''
+        try {
+          const savedToken = sessionStorage.getItem(SS_ACCESS_TOKEN)
+          const savedEmail = sessionStorage.getItem(SS_EMAIL)
+          const savedUid = sessionStorage.getItem(SS_UID)
+          if (savedToken) accessToken = savedToken
+          if (savedEmail != null && savedEmail !== '') email = savedEmail
+          if (savedUid) uid = savedUid
+        } catch (_) {}
+        el('accessToken').value = accessToken
+        el('email').value = email
+        el('uid').value = uid
+      }
+
+      async function fillClientIp() {
+        const current = String(el('clientIp').value || '').trim()
+        if (current && current !== '127.0.0.1') return current
+        el('clientIp').placeholder = '获取公网 IP 中…'
+        const ip = await ui.fetchPublicIp()
+        if (ip) {
+          el('clientIp').value = ip
+          el('clientIp').placeholder = ''
+          return ip
+        }
+        el('clientIp').placeholder = '获取失败，请手动填写公网 IP'
+        return ''
+      }
+
+      function syncPayWayCode() {
+        const method = new FormData(form).get('method') || 'googlePay'
+        el('payWayCode').value = payWayForMethod(method)
+      }
+
+      function readOrderFromForm() {
+        const v = (name) => String(el(name).value || '').trim()
+        const order = {
+          side: v('side') || 'BUY',
+          merchantOrderNo: v('merchantOrderNo') || newMerchantOrderNo(),
+          amount: v('amount'),
+          fiatCurrency: v('fiatCurrency'),
+          alpha2: v('alpha2'),
+          cryptoCurrency: v('cryptoCurrency'),
+          orderType: v('orderType'),
+          address: v('address'),
+          network: v('network'),
+          payWayCode: v('payWayCode') || payWayForMethod('googlePay'),
+          redirectUrl: v('redirectUrl'),
+          callbackUrl: v('callbackUrl'),
+          clientIp: v('clientIp')
+        }
+        const userAccountId = v('userAccountId')
+        if (userAccountId) order.userAccountId = userAccountId
+        const memo = v('memo')
+        if (memo) order.memo = memo
+        const withdrawType = v('withdrawType')
+        if (withdrawType !== '') {
+          const n = Number(withdrawType)
+          if (Number.isFinite(n)) order.withdrawType = n
+        }
+        return order
+      }
+
+      function readCreds() {
+        return {
+          appId: String(el('appId').value || '').trim(),
+          appSecret: String(el('appSecret').value || '').trim()
+        }
+      }
+
+      function readIdentity() {
+        return {
+          accessToken: String(el('accessToken').value || '').trim(),
+          email: String(el('email').value || '').trim(),
+          uid: String(el('uid').value || '').trim()
+        }
+      }
+
+      function persistCreds(creds) {
+        try {
+          sessionStorage.setItem(SS_APP_ID, creds.appId)
+          sessionStorage.setItem(SS_APP_SECRET, creds.appSecret)
+        } catch (_) {}
+      }
+
+      function persistIdentity(identity) {
+        try {
+          sessionStorage.setItem(SS_ACCESS_TOKEN, identity.accessToken || '')
+          sessionStorage.setItem(SS_EMAIL, identity.email || '')
+          sessionStorage.setItem(SS_UID, identity.uid || '')
+        } catch (_) {}
+      }
+
+      function refreshPreview() {
+        syncPayWayCode()
+        previewEl.textContent = JSON.stringify(readOrderFromForm(), null, 2)
+      }
+
+      function renderRisk(info) {
+        riskEl.textContent = JSON.stringify(
+          {
+            note: 'Fingerprint 仅请求头 fingerprint-id，不在支付 body',
+            fingerprintId: (info && info.fingerprintId) || null,
+            orderRiskConfig: lastRiskConfig,
+            payBodyRisk: (info && info.risk) || null
+          },
+          null,
+          2
+        )
+      }
+
+      async function mountSdk() {
+        const creds = readCreds()
+        if (!creds.appId || !creds.appSecret) {
+          statusEl.textContent = '请填写 appId 与 appSecret'
+          return
+        }
+        const identity = readIdentity()
+        if (!identity.accessToken && !identity.email && !identity.uid) {
+          statusEl.textContent = '请填写 accessToken，或 email / uid（创建订单需要 access-token）'
+          return
+        }
+        persistCreds(creds)
+        persistIdentity(identity)
+
+        const clientIp = await fillClientIp()
+        if (!clientIp) {
+          statusEl.textContent = '请填写真实 clientIp（公网 IP 获取失败）'
+          return
+        }
+
+        if (sdk) {
+          try {
+            sdk.destroy()
+          } catch (_) {}
+          sdk = null
+        }
+
+        const fd = new FormData(form)
+        const environment = fd.get('environment') || 'TEST'
+        const actionMode = fd.get('actionMode') || 'callback'
+        const orderRequest = readOrderFromForm()
+        if (!orderRequest.merchantOrderNo) {
+          orderRequest.merchantOrderNo = newMerchantOrderNo()
+          el('merchantOrderNo').value = orderRequest.merchantOrderNo
+        }
+
+        refreshPreview()
+        lastRiskConfig = null
+        actionEl.textContent = '—'
+        outputEl.textContent = '—'
+        orderResponseEl.textContent = '—'
+        riskEl.textContent = '挂载后采集中…'
+        document.getElementById('pay-container').innerHTML = ''
+        ui.showTraceId(null, null)
+
+        let accessToken
+        try {
+          statusEl.textContent = identity.accessToken
+            ? '使用已填 accessToken…'
+            : 'Demo 签名 getToken 中…'
+          const ensured = await signedApi.ensureAccessToken({
+            environment: environment,
+            appId: creds.appId,
+            appSecret: creds.appSecret,
+            accessToken: identity.accessToken,
+            email: identity.email,
+            uid: identity.uid
+          })
+          accessToken = ensured.accessToken
+          if (ensured.from === 'getToken') {
+            el('accessToken').value = accessToken
+            persistIdentity(readIdentity())
+            if (ensured.traceId) ui.showTraceId(ensured.traceId)
+          }
+        } catch (err) {
+          statusEl.textContent = 'getToken 失败：' + (err.message || err)
+          orderResponseEl.textContent = JSON.stringify(
+            (err && err.envelope) || { message: String(err && err.message) },
+            null,
+            2
+          )
+          ui.showTraceId(err && err.traceId)
+          return
+        }
+
+        statusEl.textContent = 'Demo 签名创建订单中（带头 access-token）…'
+        orderResponseEl.textContent = '创建订单中…'
+
+        let createResult
+        try {
+          createResult = await signedApi.createOrder({
+            environment: environment,
+            appId: creds.appId,
+            appSecret: creds.appSecret,
+            accessToken: accessToken,
+            order: orderRequest
+          })
+        } catch (err) {
+          statusEl.textContent = '创建订单失败：' + (err.message || err)
+          orderResponseEl.textContent = JSON.stringify(
+            (err && err.envelope) || { message: String(err && err.message) },
+            null,
+            2
+          )
+          ui.showTraceId(err && err.traceId)
+          return
+        }
+
+        const orderResponse = createResult.data
+        orderResponseEl.textContent = JSON.stringify(orderResponse, null, 2)
+        ui.showTraceId(createResult.traceId)
+
+        if (!orderResponse || !orderResponse.token) {
+          statusEl.textContent = '创建订单成功但缺少 token，无法挂载 SDK'
+          return
+        }
+
+        statusEl.textContent = '创建订单成功，挂载 SDK…'
+
+        const bridge = window.NativeBridge || window.AndroidBridge
+        // 商户自配壳页 URL；Demo 用同目录参考页（可改名/自托管）
+        const challengeShell = new URL('./3ds-challenge.html', location.href).href
+        const methodShell = new URL('./3ds-method.html', location.href).href
+        function canOpenPayWebUrl() {
+          return !!(bridge && typeof bridge.openPayWebUrl === 'function')
+        }
+        function canOpenPayChallenge() {
+          return !!(bridge && typeof bridge.openPayChallenge === 'function')
+        }
+        function canOpenPayMethod() {
+          return !!(bridge && typeof bridge.openPayMethod === 'function')
+        }
+        function closePayDrawer() {
+          if (bridge && typeof bridge.closePayWebUrl === 'function') {
+            bridge.closePayWebUrl()
+          }
+        }
+        function browserOpenAction(action) {
+          if (actionMode !== 'callback') return
+          if (confirm('收到二次动作 ' + action.type + '，是否 sdk.openAction？（浏览器 Demo）')) {
+            sdk.openAction(action)
+          }
+        }
+
+        sdk = PaySdk.init({
+          container: '#pay-container',
+          environment: environment,
+          actionMode: actionMode,
+          order: orderResponse,
+          api: {
+            pollIntervalMs: 2000,
+            pollTimeoutMs: 300000
+          },
+          onAction(action) {
+            actionEl.textContent = JSON.stringify(action, null, 2)
+            // App：webUrl/s3ds → 抽屉 loadUrl；轮询中新 s3dsUrl 同路替换抽屉
+            if (action.type === 'webUrl' || action.type === 's3ds') {
+              if (openedWebUrlEl) openedWebUrlEl.textContent = action.url || '—'
+              statusEl.textContent =
+                'onAction ' +
+                action.type +
+                ' → 打开二级页（原页继续 poll；终态 closePayWebUrl）: ' +
+                (action.url || '')
+              if (canOpenPayWebUrl()) {
+                bridge.openPayWebUrl(
+                  action.url,
+                  String(el('redirectUrl').value || '').trim(),
+                  String(el('callbackUrl').value || '').trim()
+                )
+                return
+              }
+              browserOpenAction(action)
+              return
+            }
+            // App：Challenge → 壳页 + Bridge 注入；原页 poll
+            if (action.type === 'threeDS') {
+              if (openedWebUrlEl) openedWebUrlEl.textContent = challengeShell
+              statusEl.textContent =
+                'onAction threeDS → openPayChallenge（原页 poll；终态 closePayWebUrl）'
+              if (canOpenPayChallenge()) {
+                bridge.openPayChallenge(
+                  challengeShell,
+                  JSON.stringify({
+                    MD: action.MD,
+                    JWT: action.JWT,
+                    action: action.action
+                  })
+                )
+                return
+              }
+              browserOpenAction(action)
+              return
+            }
+            // App：Method → 壳页 + Bridge 注入；原页 poll；其后可能再出 s3ds/webUrl
+            if (action.type === 'threeDSMethod') {
+              if (openedWebUrlEl) openedWebUrlEl.textContent = methodShell
+              statusEl.textContent =
+                'onAction threeDSMethod → openPayMethod（原页 poll；终态 closePayWebUrl）'
+              if (canOpenPayMethod()) {
+                bridge.openPayMethod(
+                  methodShell,
+                  JSON.stringify({
+                    threeDSMethodData: action.threeDSMethodData,
+                    methodUrl: action.methodUrl
+                  })
+                )
+                return
+              }
+              browserOpenAction(action)
+            }
+          },
+          onOrderCreated(orderRes) {
+            statusEl.textContent = 'Order ' + orderRes.orderNo + ' ready (' + orderRes.method + ').'
+            lastRiskConfig = orderRes.risk || null
+            renderRisk({ fingerprintId: null, risk: null })
+            ui.showTraceId(null, sdk)
+          },
+          onRiskCollected(info) {
+            renderRisk(info)
+          },
+          onStatusChange(orderStatus) {
+            statusEl.textContent =
+              'Payment status: ' +
+              orderStatus.orderState +
+              (orderStatus.s3dsUrl ? ' · s3dsUrl' : '')
+            ui.showTraceId(null, sdk)
+          },
+          onComplete(result) {
+            outputEl.textContent = JSON.stringify(result, null, 2)
+            ui.showTraceId(null, sdk)
+          },
+          onSuccess(result) {
+            closePayDrawer()
+            if (openedWebUrlEl) {
+              openedWebUrlEl.textContent =
+                '(已 closePayWebUrl) ' + (openedWebUrlEl.textContent || '')
+            }
+            handlers.onSuccess(result)
+          },
+          onError(error) {
+            closePayDrawer()
+            handlers.onError(error)
+          },
+          onCancel: handlers.onCancel
+        })
+        sdkRef.current = sdk
+
+        ui.run(sdk)
+      }
+
+      applyDefaults()
+      form.addEventListener('change', refreshPreview)
+      form.addEventListener('input', refreshPreview)
+      document.getElementById('regen-order-no').addEventListener('click', function () {
+        el('merchantOrderNo').value = newMerchantOrderNo()
+        refreshPreview()
+      })
+      document.getElementById('apply-btn').addEventListener('click', function () {
+        void mountSdk()
+      })
+      refreshPreview()
+      void fillClientIp().then(function () {
+        refreshPreview()
+      })
+    </script>
   </body>
 </html>

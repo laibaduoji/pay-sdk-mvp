@@ -73,10 +73,13 @@ export function payWithApple(config: RuntimeWalletConfig): void {
         const base = normalizeAppleResult(event.payment)
         const risk = await riskPromise
         const authorized = { ...base, risk }
-        // 先 await 支付结果，再关 sheet；随后 onSuccess 立刻 onAction
+        // 关 sheet 前完成支付；completePayment 后稍等系统 sheet 动画，再 onAction / 二级抽屉
         await config.onAuthorizePay?.(authorized)
         session.completePayment(ApplePaySession.STATUS_SUCCESS)
         completed = true
+        await new Promise<void>((resolve) => {
+          window.setTimeout(resolve, 400)
+        })
         try {
           await config.onSuccess?.(authorized)
         } catch (err) {
