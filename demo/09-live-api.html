@@ -544,7 +544,11 @@
                 ' → 打开 webUrl（原页继续 poll；终态 closePayWebUrl）: ' +
                 (action.url || '')
               if (canOpenPayWebUrl()) {
-                bridge.openPayWebUrl(action.url, v('redirectUrl') || '', v('callbackUrl') || '')
+                bridge.openPayWebUrl(
+                  action.url,
+                  String(el('redirectUrl').value || '').trim(),
+                  String(el('callbackUrl').value || '').trim()
+                )
                 return
               }
               if (actionMode === 'callback') {
