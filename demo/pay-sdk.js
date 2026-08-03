@@ -557,9 +557,10 @@ var PaySdk = function(exports) {
     }
     try {
       const risk = await pending.riskPromise;
-      pending.authorizedResult = { ...normalizeGoogleResult(paymentData), risk };
+      const authorized = { ...normalizeGoogleResult(paymentData), risk };
+      await ((_a = config.onAuthorizePay) == null ? void 0 : _a.call(config, authorized));
+      pending.authorizedResult = authorized;
       pending.settled = true;
-      (_a = config.onBeginPay) == null ? void 0 : _a.call(config, pending.authorizedResult);
       return { transactionState: "SUCCESS" };
     } catch (err) {
       const error = toError(err);
@@ -818,10 +819,10 @@ apple-pay-button {
         try {
           const base = normalizeAppleResult(event.payment);
           const risk = await riskPromise;
+          const authorized = { ...base, risk };
+          await ((_a2 = config.onAuthorizePay) == null ? void 0 : _a2.call(config, authorized));
           session.completePayment(ApplePaySession.STATUS_SUCCESS);
           completed = true;
-          const authorized = { ...base, risk };
-          (_a2 = config.onBeginPay) == null ? void 0 : _a2.call(config, authorized);
           try {
             await ((_b = config.onSuccess) == null ? void 0 : _b.call(config, authorized));
           } catch (err) {
@@ -1690,14 +1691,14 @@ apple-pay-button {
     }
     return error instanceof TypeError;
   }
-  function runtimeConfigFromOrder(config, order, api, onWalletAuthorized, onBeginPay) {
+  function runtimeConfigFromOrder(config, order, api, onWalletAuthorized, onAuthorizePay) {
     var _a;
     const environment = resolveEnvironment(config.environment || order.environment);
     const common = {
       container: config.container,
       environment,
       risk: order.risk,
-      onBeginPay,
+      onAuthorizePay,
       onSuccess: onWalletAuthorized,
       onError: config.onError,
       onCancel: config.onCancel
@@ -1805,8 +1806,8 @@ apple-pay-button {
           async (result) => {
             await this.processPayment(result);
           },
-          (result) => {
-            this.beginPay(result);
+          async (result) => {
+            await this.authorizePay(result);
           }
         );
         this.runtimeConfig.riskCollection = collectRisk(
@@ -1875,16 +1876,28 @@ apple-pay-button {
       if (this.destroyed || !this.runtimeConfig) return;
       this._button = renderButton(this.runtimeConfig, () => this._pay());
     }
-    /** 钱包授权后立刻 kickoff pay；失败时留下 rejected promise 供 processPayment 消费 */
-    beginPay(walletResult) {
-      if (this.destroyed || !this.order || this.earlyPayPromise || this.settledPayment) return;
+    /**
+     * 钱包授权后、关 sheet 前调用：await api.pay，缓存到 earlyPayPromise。
+     * 失败抛错给钱包层（GP return ERROR / Apple FAILURE），不走 onAction。
+     */
+    async authorizePay(walletResult) {
+      if (this.destroyed || !this.order) {
+        throw new Error("Order is not ready");
+      }
+      if (this.earlyPayPromise || this.settledPayment) {
+        if (this.earlyPayPromise) await this.earlyPayPromise;
+        return;
+      }
       this.paymentInFlight = true;
       this.settledPayment = false;
+      const payPromise = this.api.pay(this.buildPayRequest(walletResult));
+      this.earlyPayPromise = payPromise;
       try {
-        this.earlyPayPromise = this.api.pay(this.buildPayRequest(walletResult));
+        await payPromise;
       } catch (error) {
+        this.earlyPayPromise = null;
         this.paymentInFlight = false;
-        this.earlyPayPromise = Promise.reject(error instanceof Error ? error : toError(error));
+        throw error instanceof Error ? error : toError(error);
       }
     }
     async processPayment(walletResult) {

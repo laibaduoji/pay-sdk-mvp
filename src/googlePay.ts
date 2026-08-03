@@ -122,8 +122,8 @@ function merchantInfo(config: RuntimeWalletConfig): google.payments.api.Merchant
 }
 
 /**
- * 只完成钱包授权：normalize + risk 后立刻 SUCCESS，关闭 GP 弹窗。
- * processPayment / onAction 放到 loadPaymentData resolve 之后，避免二级 WebView 被挡住。
+ * 授权后先 await api.pay，再 return SUCCESS 关 GP 弹窗。
+ * processPayment / onAction 放到 loadPaymentData resolve 之后（复用已缓存 pay 响应立刻开抽屉）。
  */
 async function onPaymentAuthorized(
   config: RuntimeWalletConfig,
@@ -143,10 +143,11 @@ async function onPaymentAuthorized(
 
   try {
     const risk = await pending.riskPromise
-    pending.authorizedResult = { ...normalizeGoogleResult(paymentData), risk }
+    const authorized = { ...normalizeGoogleResult(paymentData), risk }
+    // 关弹窗前等支付结果；失败则 ERROR，不关 SUCCESS、不开抽屉
+    await config.onAuthorizePay?.(authorized)
+    pending.authorizedResult = authorized
     pending.settled = true
-    // 并行 kickoff api.pay；onAction / 开抽屉仍等 loadPaymentData resolve
-    config.onBeginPay?.(pending.authorizedResult)
     return { transactionState: 'SUCCESS' }
   } catch (err) {
     const error = toError(err)
@@ -276,7 +277,7 @@ export async function payWithGoogle(config: RuntimeWalletConfig): Promise<void> 
 
   try {
     await client.loadPaymentData(buildPaymentDataRequest(config))
-    // GP 弹窗已关：再跑 processPayment / onAction（含 openPayWebUrl）
+    // GP 弹窗已关、pay 已完成：processPayment 立刻 onAction（开抽屉）
     if (pending.authorizedResult) {
       try {
         await config.onSuccess?.(pending.authorizedResult)

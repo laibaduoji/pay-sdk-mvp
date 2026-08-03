@@ -72,16 +72,15 @@ export function payWithApple(config: RuntimeWalletConfig): void {
       try {
         const base = normalizeAppleResult(event.payment)
         const risk = await riskPromise
-        // 先关 Apple Pay sheet，再 processPayment / onAction，避免二级 WebView 被挡住
+        const authorized = { ...base, risk }
+        // 先 await 支付结果，再关 sheet；随后 onSuccess 立刻 onAction
+        await config.onAuthorizePay?.(authorized)
         session.completePayment(ApplePaySession.STATUS_SUCCESS)
         completed = true
-        const authorized = { ...base, risk }
-        // 并行 kickoff api.pay；onAction 仍在下方 await onSuccess 中
-        config.onBeginPay?.(authorized)
         try {
           await config.onSuccess?.(authorized)
         } catch (err) {
-          // 已 SUCCESS complete，无法再 STATUS_FAILURE；支付失败走商户 onError
+          // 已 SUCCESS complete，无法再 STATUS_FAILURE；后续失败走商户 onError
           config.onError?.(toError(err))
         }
       } catch (err) {

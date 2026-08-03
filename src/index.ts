@@ -143,14 +143,14 @@ function runtimeConfigFromOrder(
   order: CreateOrderResponse,
   api: PayApiClient,
   onWalletAuthorized: (result: PayResult) => void | Promise<void>,
-  onBeginPay: (result: PayResult) => void
+  onAuthorizePay: (result: PayResult) => void | Promise<void>
 ): RuntimeWalletConfig {
   const environment = resolveEnvironment(config.environment || order.environment)
   const common = {
     container: config.container,
     environment,
     risk: order.risk,
-    onBeginPay,
+    onAuthorizePay,
     onSuccess: onWalletAuthorized,
     onError: config.onError,
     onCancel: config.onCancel
@@ -275,8 +275,8 @@ class PaySdk implements PaySdkInstance {
         async (result) => {
           await this.processPayment(result)
         },
-        (result) => {
-          this.beginPay(result)
+        async (result) => {
+          await this.authorizePay(result)
         }
       )
 
@@ -354,16 +354,29 @@ class PaySdk implements PaySdkInstance {
     this._button = renderButton(this.runtimeConfig, () => this._pay())
   }
 
-  /** 钱包授权后立刻 kickoff pay；失败时留下 rejected promise 供 processPayment 消费 */
-  private beginPay(walletResult: PayResult): void {
-    if (this.destroyed || !this.order || this.earlyPayPromise || this.settledPayment) return
+  /**
+   * 钱包授权后、关 sheet 前调用：await api.pay，缓存到 earlyPayPromise。
+   * 失败抛错给钱包层（GP return ERROR / Apple FAILURE），不走 onAction。
+   */
+  private async authorizePay(walletResult: PayResult): Promise<void> {
+    if (this.destroyed || !this.order) {
+      throw new Error('Order is not ready')
+    }
+    if (this.earlyPayPromise || this.settledPayment) {
+      if (this.earlyPayPromise) await this.earlyPayPromise
+      return
+    }
+
     this.paymentInFlight = true
     this.settledPayment = false
+    const payPromise = this.api.pay(this.buildPayRequest(walletResult))
+    this.earlyPayPromise = payPromise
     try {
-      this.earlyPayPromise = this.api.pay(this.buildPayRequest(walletResult))
+      await payPromise
     } catch (error) {
+      this.earlyPayPromise = null
       this.paymentInFlight = false
-      this.earlyPayPromise = Promise.reject(error instanceof Error ? error : toError(error))
+      throw error instanceof Error ? error : toError(error)
     }
   }
 
@@ -380,6 +393,7 @@ class PaySdk implements PaySdkInstance {
 
     this.paymentInFlight = true
     try {
+      // early 已在 authorizePay 中 await 完成时，此处几乎立刻拿到响应并 onAction
       const paymentResponse = await (early ?? this.api.pay(this.buildPayRequest(walletResult)))
       this.earlyPayPromise = null
       if (this.destroyed || this.settledPayment) return
