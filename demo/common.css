@@ -135,11 +135,19 @@ h1 {
   margin-top: 6px;
 }
 
-.panel button {
+.panel button,
+.demo-actions button {
   margin-top: 4px;
   padding: 8px 14px;
   font-size: 14px;
   cursor: pointer;
+}
+
+.demo-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin: 12px 0 4px;
 }
 
 .section-title {
