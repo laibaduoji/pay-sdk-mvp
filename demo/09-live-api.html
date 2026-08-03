@@ -31,153 +31,159 @@
   <body>
     <p class="meta"><a href="./index.html">← Demos</a> · PARAMETERS</p>
     <h1>SDK 完整支付编排（真实 API）</h1>
-    <p class="meta">
-      Demo 用 <code>appId</code> / <code>appSecret</code> 签名创建订单（TEST：
-      <code>https://api-test.alchemytech.cc</code>），请求头另带
-      <code>access-token</code>（建议手填；否则 email/uid 先 getToken）。创建订单响应含
-      <code>token</code> 后交给 SDK；SDK 不签名、不调创建订单，后续接口带头
-      <code>payment-hub-token</code>。
-    </p>
+    <details class="json-fold">
+      <summary class="section-title">说明</summary>
+      <p class="meta">
+        Demo 用 <code>appId</code> / <code>appSecret</code> 签名创建订单（TEST：
+        <code>https://api-test.alchemytech.cc</code>），请求头另带
+        <code>access-token</code>（建议手填；否则 email/uid 先 getToken）。创建订单响应含
+        <code>token</code> 后交给 SDK；SDK 不签名、不调创建订单，后续接口带头
+        <code>payment-hub-token</code>。
+      </p>
+    </details>
 
-    <form id="controls" class="panel" onsubmit="return false">
-      <fieldset>
-        <legend>API 凭据（仅 Demo 创建订单签名用）</legend>
-        <label class="field">
-          appId
-          <input type="text" name="appId" autocomplete="off" placeholder="必填" />
-        </label>
-        <label class="field">
-          appSecret
-          <input type="password" name="appSecret" autocomplete="off" placeholder="必填" />
-        </label>
-      </fieldset>
+    <details class="json-fold">
+      <summary class="section-title">参数配置</summary>
+      <form id="controls" class="panel" onsubmit="return false">
+        <fieldset>
+          <legend>API 凭据（仅 Demo 创建订单签名用）</legend>
+          <label class="field">
+            appId
+            <input type="text" name="appId" autocomplete="off" placeholder="必填" />
+          </label>
+          <label class="field">
+            appSecret
+            <input type="password" name="appSecret" autocomplete="off" placeholder="必填" />
+          </label>
+        </fieldset>
 
-      <fieldset>
-        <legend>登录态（创建订单 access-token；建议 accessToken，否则 email 或 uid）</legend>
-        <label class="field">
-          accessToken
-          <input
-            type="text"
-            name="accessToken"
-            autocomplete="off"
-            placeholder="建议：服务端 getToken"
-          />
-        </label>
-        <label class="field">
-          email
-          <input
-            type="email"
-            name="email"
-            autocomplete="off"
-            placeholder="无 token 时与 uid 二选一"
-          />
-        </label>
-        <label class="field">
-          uid
-          <input
-            type="text"
-            name="uid"
-            autocomplete="off"
-            placeholder="无 token 时与 email 二选一"
-          />
-        </label>
-      </fieldset>
+        <fieldset>
+          <legend>登录态（创建订单 access-token；建议 accessToken，否则 email 或 uid）</legend>
+          <label class="field">
+            accessToken
+            <input
+              type="text"
+              name="accessToken"
+              autocomplete="off"
+              placeholder="建议：服务端 getToken"
+            />
+          </label>
+          <label class="field">
+            email
+            <input
+              type="email"
+              name="email"
+              autocomplete="off"
+              placeholder="无 token 时与 uid 二选一"
+            />
+          </label>
+          <label class="field">
+            uid
+            <input
+              type="text"
+              name="uid"
+              autocomplete="off"
+              placeholder="无 token 时与 email 二选一"
+            />
+          </label>
+        </fieldset>
 
-      <fieldset>
-        <legend>环境</legend>
-        <label><input type="radio" name="environment" value="TEST" checked /> TEST</label>
-        <label><input type="radio" name="environment" value="PRODUCTION" /> PRODUCTION</label>
-      </fieldset>
+        <fieldset>
+          <legend>环境</legend>
+          <label><input type="radio" name="environment" value="TEST" checked /> TEST</label>
+          <label><input type="radio" name="environment" value="PRODUCTION" /> PRODUCTION</label>
+        </fieldset>
 
-      <fieldset>
-        <legend>钱包</legend>
-        <label><input type="radio" name="method" value="googlePay" checked /> Google Pay</label>
-        <label><input type="radio" name="method" value="applePay" /> Apple Pay</label>
-      </fieldset>
+        <fieldset>
+          <legend>钱包</legend>
+          <label><input type="radio" name="method" value="googlePay" checked /> Google Pay</label>
+          <label><input type="radio" name="method" value="applePay" /> Apple Pay</label>
+        </fieldset>
 
-      <fieldset>
-        <legend>二次动作</legend>
-        <label
-          ><input type="radio" name="actionMode" value="callback" checked /> callback（只
-          onAction）</label
-        >
-        <label><input type="radio" name="actionMode" value="auto" /> auto（SDK 自动打开）</label>
-      </fieldset>
+        <fieldset>
+          <legend>二次动作</legend>
+          <label
+            ><input type="radio" name="actionMode" value="callback" checked /> callback（只
+            onAction）</label
+          >
+          <label><input type="radio" name="actionMode" value="auto" /> auto（SDK 自动打开）</label>
+        </fieldset>
 
-      <fieldset>
-        <legend>创建订单请求</legend>
-        <label class="field">
-          side
-          <select name="side">
-            <option value="BUY" selected>BUY</option>
-            <option value="SELL">SELL</option>
-          </select>
-        </label>
-        <label class="field">
-          merchantOrderNo
-          <input type="text" name="merchantOrderNo" autocomplete="off" />
-        </label>
-        <label class="field">
-          amount
-          <input type="text" name="amount" />
-        </label>
-        <label class="field">
-          fiatCurrency
-          <input type="text" name="fiatCurrency" />
-        </label>
-        <label class="field">
-          alpha2
-          <input type="text" name="alpha2" />
-        </label>
-        <label class="field">
-          cryptoCurrency
-          <input type="text" name="cryptoCurrency" />
-        </label>
-        <label class="field">
-          orderType
-          <input type="text" name="orderType" />
-        </label>
-        <label class="field">
-          address
-          <input type="text" name="address" />
-        </label>
-        <label class="field">
-          network
-          <input type="text" name="network" />
-        </label>
-        <label class="field">
-          payWayCode
-          <input type="text" name="payWayCode" readonly />
-        </label>
-        <label class="field">
-          userAccountId
-          <input type="text" name="userAccountId" placeholder="可选" />
-        </label>
-        <label class="field">
-          redirectUrl
-          <input type="text" name="redirectUrl" />
-        </label>
-        <label class="field">
-          callbackUrl
-          <input type="text" name="callbackUrl" />
-        </label>
-        <label class="field">
-          clientIp
-          <input type="text" name="clientIp" />
-        </label>
-        <label class="field">
-          memo
-          <input type="text" name="memo" placeholder="可选" />
-        </label>
-        <label class="field">
-          withdrawType
-          <input type="text" name="withdrawType" placeholder="可选，空则不传" />
-        </label>
-      </fieldset>
+        <fieldset>
+          <legend>创建订单请求</legend>
+          <label class="field">
+            side
+            <select name="side">
+              <option value="BUY" selected>BUY</option>
+              <option value="SELL">SELL</option>
+            </select>
+          </label>
+          <label class="field">
+            merchantOrderNo
+            <input type="text" name="merchantOrderNo" autocomplete="off" />
+          </label>
+          <label class="field">
+            amount
+            <input type="text" name="amount" />
+          </label>
+          <label class="field">
+            fiatCurrency
+            <input type="text" name="fiatCurrency" />
+          </label>
+          <label class="field">
+            alpha2
+            <input type="text" name="alpha2" />
+          </label>
+          <label class="field">
+            cryptoCurrency
+            <input type="text" name="cryptoCurrency" />
+          </label>
+          <label class="field">
+            orderType
+            <input type="text" name="orderType" />
+          </label>
+          <label class="field">
+            address
+            <input type="text" name="address" />
+          </label>
+          <label class="field">
+            network
+            <input type="text" name="network" />
+          </label>
+          <label class="field">
+            payWayCode
+            <input type="text" name="payWayCode" readonly />
+          </label>
+          <label class="field">
+            userAccountId
+            <input type="text" name="userAccountId" placeholder="可选" />
+          </label>
+          <label class="field">
+            redirectUrl
+            <input type="text" name="redirectUrl" />
+          </label>
+          <label class="field">
+            callbackUrl
+            <input type="text" name="callbackUrl" />
+          </label>
+          <label class="field">
+            clientIp
+            <input type="text" name="clientIp" />
+          </label>
+          <label class="field">
+            memo
+            <input type="text" name="memo" placeholder="可选" />
+          </label>
+          <label class="field">
+            withdrawType
+            <input type="text" name="withdrawType" placeholder="可选，空则不传" />
+          </label>
+        </fieldset>
 
-      <button type="button" id="regen-order-no">重新生成 merchantOrderNo</button>
-      <button type="button" id="apply-btn">创建订单并挂载 SDK</button>
-    </form>
+        <button type="button" id="regen-order-no">重新生成 merchantOrderNo</button>
+        <button type="button" id="apply-btn">创建订单并挂载 SDK</button>
+      </form>
+    </details>
 
     <details class="json-fold">
       <summary class="section-title">将提交的创建订单请求</summary>

@@ -152,6 +152,14 @@ h1 {
   margin: 1.25rem 0 0;
 }
 
+.json-fold > .panel {
+  margin-top: 0.4rem;
+}
+
+.json-fold > .meta {
+  margin-bottom: 0.5rem;
+}
+
 .json-fold > summary.section-title {
   cursor: pointer;
   list-style: none;
