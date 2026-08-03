@@ -14,12 +14,32 @@
       <a href="./pay-sdk.js">pay-sdk.js</a>。
     </p>
 
+    <h2 class="section-title">Mock：支付接口返回（四种）</h2>
     <ul class="nav">
       <li>
-        <a href="./08-managed-flow.html"
-          >完整支付编排 Mock <small>Mock 创建订单响应（含 token）→ init SDK</small></a
+        <a href="./10-mock-pay-outcome.html?outcome=success"
+          >无二次动作（直接成功） <small>pay 空 data → onSuccess</small></a
         >
       </li>
+      <li>
+        <a href="./10-mock-pay-outcome.html?outcome=webUrl"
+          >返回 webUrl <small>二级页 + 原页 poll；可再出 s3dsUrl</small></a
+        >
+      </li>
+      <li>
+        <a href="./10-mock-pay-outcome.html?outcome=threeDS"
+          >返回 3DS Challenge <small>MD/JWT/action → Challenge 壳页</small></a
+        >
+      </li>
+      <li>
+        <a href="./10-mock-pay-outcome.html?outcome=threeDSMethod"
+          >返回 3DS Method <small>threeDSMethodData/methodUrl → Method 壳页</small></a
+        >
+      </li>
+    </ul>
+
+    <h2 class="section-title">真实 API</h2>
+    <ul class="nav">
       <li>
         <a href="./09-live-api.html"
           >完整支付编排（真实 API） <small>demo 签名创建订单 → 响应交给 SDK</small></a

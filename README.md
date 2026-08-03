@@ -21,11 +21,11 @@ npm run format     # prettier write
 
 ## Demos
 
-| 文件                                                   | 说明                                                      |
-| ------------------------------------------------------ | --------------------------------------------------------- |
-| [demo/index.html](demo/index.html)                     | 目录页                                                    |
-| [demo/08-managed-flow.html](demo/08-managed-flow.html) | 完整编排 Mock（Mock 生成创建订单响应含 token → init SDK） |
-| [demo/09-live-api.html](demo/09-live-api.html)         | 真实 openapi（demo 签名创建订单 → 响应交给 SDK）          |
+| 文件                                                           | 说明                                                          |
+| -------------------------------------------------------------- | ------------------------------------------------------------- |
+| [demo/index.html](demo/index.html)                             | 目录页（含四种支付返回 Mock 入口）                            |
+| [demo/10-mock-pay-outcome.html](demo/10-mock-pay-outcome.html) | Mock 编排：`?outcome=success\|webUrl\|threeDS\|threeDSMethod` |
+| [demo/09-live-api.html](demo/09-live-api.html)                 | 真实 openapi（demo 签名创建订单 → 响应交给 SDK）              |
 
 共享 Mock / 凭据见 [`demo/config.js`](demo/config.js)、[`demo/mock-api.js`](demo/mock-api.js)、
 [`demo/signed-api.js`](demo/signed-api.js)（仅 demo 签名）。

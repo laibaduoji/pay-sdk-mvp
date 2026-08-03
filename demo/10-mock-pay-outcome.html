@@ -3,20 +3,25 @@
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>9.8 SDK Managed Payment Flow</title>
+    <title>Mock 支付返回</title>
     <link rel="stylesheet" href="./common.css" />
   </head>
   <body>
     <p class="meta"><a href="./index.html">← Demos</a> · PARAMETERS</p>
-    <h1>SDK 完整支付编排（Mock）</h1>
-    <p class="meta">
-      勾选下方选项后点「应用并挂载」：Demo 先用 Mock
-      <strong>创建订单响应</strong>（含 <code>token</code>）再 <code>PaySdk.init</code>；SDK
-      只走支付 / 查询 / 域名校验（ <code>api.fetch</code>）。真实钱包仍依赖浏览器环境；二次动作默认
-      <code>callback</code>，可确认后 <code>sdk.openAction</code>。
+    <h1 id="page-title">SDK Mock：支付接口返回</h1>
+    <p class="meta" id="page-desc">
+      本页由 URL <code>?outcome=</code> 固定模拟支付接口返回（见目录页四个入口）。Demo 用 Mock
+      <strong>创建订单响应</strong>（含 <code>token</code>）再 <code>PaySdk.init</code>；支付 /
+      查询走 <code>api.fetch</code>。App 内二次动作走 NativeBridge；浏览器可 confirm 后
+      <code>sdk.openAction</code>。
     </p>
 
     <form id="controls" class="panel" onsubmit="return false">
+      <fieldset>
+        <legend>当前支付返回（由 URL 固定）</legend>
+        <p class="meta" id="outcome-label" style="margin: 0">—</p>
+      </fieldset>
+
       <fieldset>
         <legend>环境</legend>
         <label><input type="radio" name="environment" value="TEST" checked /> TEST</label>
@@ -39,14 +44,6 @@
         <label><input type="checkbox" name="forter" /> Forter</label>
         <label><input type="checkbox" name="checkout" /> Checkout</label>
         <label><input type="checkbox" name="worldPay" /> WorldPay</label>
-      </fieldset>
-
-      <fieldset>
-        <legend>支付结果（接口 3）</legend>
-        <label><input type="radio" name="payOutcome" value="success" checked /> 直接成功</label>
-        <label><input type="radio" name="payOutcome" value="webUrl" /> webUrl</label>
-        <label><input type="radio" name="payOutcome" value="threeDS" /> 3DS (MD/JWT/action)</label>
-        <label><input type="radio" name="payOutcome" value="threeDSMethod" /> threeDSMethod</label>
       </fieldset>
 
       <fieldset>
@@ -73,7 +70,11 @@
     <div id="pay-container"></div>
     <h2 class="section-title">风控数据</h2>
     <pre id="risk">挂载后采集 Fingerprint（请求头 fingerprint-id）…</pre>
-    <h2 class="section-title">onAction</h2>
+    <h2 class="section-title">onAction / 二级页</h2>
+    <p class="meta">
+      <strong>当前打开：</strong>
+      <code id="opened-web-url" style="word-break: break-all">—</code>
+    </p>
     <pre id="action">—</pre>
     <h2 class="section-title">结果</h2>
     <pre id="output">—</pre>
@@ -83,6 +84,26 @@
     <script src="./mock-api.js"></script>
     <script src="./demo-ui.js"></script>
     <script>
+      const OUTCOME_META = {
+        success: {
+          title: '无二次动作（直接成功）',
+          desc: '支付接口返回空 data → 关钱包 sheet 后直接 onSuccess（不强制 poll）。'
+        },
+        webUrl: {
+          title: '返回 webUrl',
+          desc: '支付接口返回 webUrl；原页 poll；可再出 s3dsUrl；终态 closePayWebUrl。'
+        },
+        threeDS: {
+          title: '返回 3DS Challenge',
+          desc: '支付接口返回 MD/JWT/action；App 开 Challenge 壳页；原页 poll。'
+        },
+        threeDSMethod: {
+          title: '返回 3DS Method',
+          desc: '支付接口返回 threeDSMethodData/methodUrl；App 开 Method 壳页；原页 poll。'
+        }
+      }
+      const ALLOWED = Object.keys(OUTCOME_META)
+
       const mock = window.PaySdkDemoMock
       const ui = window.PaySdkDemoUI
       const sdkRef = { current: null }
@@ -93,6 +114,15 @@
       const actionEl = document.getElementById('action')
       const outputEl = document.getElementById('output')
       const statusEl = document.getElementById('status')
+      const openedWebUrlEl = document.getElementById('opened-web-url')
+
+      const q = new URLSearchParams(location.search).get('outcome') || 'success'
+      const payOutcome = ALLOWED.indexOf(q) >= 0 ? q : 'success'
+      const meta = OUTCOME_META[payOutcome]
+      document.getElementById('page-title').textContent = 'SDK Mock：' + meta.title
+      document.getElementById('outcome-label').textContent =
+        'outcome=' + payOutcome + ' — ' + meta.desc
+      document.title = 'Mock · ' + meta.title
 
       let sdk = null
       let lastRiskConfig = null
@@ -108,7 +138,7 @@
           forter: fd.get('forter') === 'on',
           checkout: fd.get('checkout') === 'on',
           worldPay: fd.get('worldPay') === 'on',
-          payOutcome: fd.get('payOutcome') || 'success',
+          payOutcome: payOutcome,
           actionMode: fd.get('actionMode') || 'callback',
           omitValidateUrl: fd.get('omitValidateUrl') === 'on'
         }
@@ -142,8 +172,8 @@
             '0x1a6E411AcDe0fD218061B28f0D36e0Df43836563',
           network: p.network || 'BSC',
           payWayCode: payWayCode || '701',
-          redirectUrl: location.origin + '/success',
-          callbackUrl: location.origin + '/callback',
+          redirectUrl: new URL('./redirectUrl.html', location.href).href,
+          callbackUrl: new URL('./callBackUrl.html', location.href).href,
           clientIp: (window.__demoClientIp && String(window.__demoClientIp).trim()) || ''
         }
       }
@@ -181,12 +211,40 @@
         lastRiskConfig = null
         actionEl.textContent = '—'
         outputEl.textContent = '—'
+        if (openedWebUrlEl) openedWebUrlEl.textContent = '—'
         riskEl.textContent = '挂载后采集中…'
         document.getElementById('pay-container').innerHTML = ''
 
         const payWayCode = opts.method === 'applePay' ? '501' : '701'
         const orderResponse = mock.takeCreateOrder(demoOrder(payWayCode))
         previewEl.textContent = JSON.stringify(orderResponse, null, 2)
+
+        const bridge = window.NativeBridge || window.AndroidBridge
+        const challengeShell = new URL('./3ds-challenge.html', location.href).href
+        const methodShell = new URL('./3ds-method.html', location.href).href
+        const redirectUrl = orderResponse.redirectUrl || demoOrder(payWayCode).redirectUrl
+        const callbackUrl = orderResponse.callbackUrl || demoOrder(payWayCode).callbackUrl
+
+        function canOpenPayWebUrl() {
+          return !!(bridge && typeof bridge.openPayWebUrl === 'function')
+        }
+        function canOpenPayChallenge() {
+          return !!(bridge && typeof bridge.openPayChallenge === 'function')
+        }
+        function canOpenPayMethod() {
+          return !!(bridge && typeof bridge.openPayMethod === 'function')
+        }
+        function closePayDrawer() {
+          if (bridge && typeof bridge.closePayWebUrl === 'function') {
+            bridge.closePayWebUrl()
+          }
+        }
+        function browserOpenAction(action) {
+          if (opts.actionMode !== 'callback') return
+          if (confirm('收到二次动作 ' + action.type + '，是否 sdk.openAction？（浏览器 Demo）')) {
+            sdk.openAction(action)
+          }
+        }
 
         sdk = PaySdk.init({
           container: '#pay-container',
@@ -202,10 +260,53 @@
           },
           onAction(action) {
             actionEl.textContent = JSON.stringify(action, null, 2)
-            if (opts.actionMode === 'callback') {
-              if (confirm('收到二次动作 ' + action.type + '，是否 sdk.openAction？')) {
-                sdk.openAction(action)
+            if (action.type === 'webUrl' || action.type === 's3ds') {
+              if (openedWebUrlEl) openedWebUrlEl.textContent = action.url || '—'
+              statusEl.textContent =
+                'onAction ' +
+                action.type +
+                ' → 打开二级页（原页继续 poll；终态 closePayWebUrl）: ' +
+                (action.url || '')
+              if (canOpenPayWebUrl()) {
+                bridge.openPayWebUrl(action.url, redirectUrl || '', callbackUrl || '')
+                return
               }
+              browserOpenAction(action)
+              return
+            }
+            if (action.type === 'threeDS') {
+              if (openedWebUrlEl) openedWebUrlEl.textContent = challengeShell
+              statusEl.textContent =
+                'onAction threeDS → openPayChallenge（原页 poll；终态 closePayWebUrl）'
+              if (canOpenPayChallenge()) {
+                bridge.openPayChallenge(
+                  challengeShell,
+                  JSON.stringify({
+                    MD: action.MD,
+                    JWT: action.JWT,
+                    action: action.action
+                  })
+                )
+                return
+              }
+              browserOpenAction(action)
+              return
+            }
+            if (action.type === 'threeDSMethod') {
+              if (openedWebUrlEl) openedWebUrlEl.textContent = methodShell
+              statusEl.textContent =
+                'onAction threeDSMethod → openPayMethod（原页 poll；终态 closePayWebUrl）'
+              if (canOpenPayMethod()) {
+                bridge.openPayMethod(
+                  methodShell,
+                  JSON.stringify({
+                    threeDSMethodData: action.threeDSMethodData,
+                    methodUrl: action.methodUrl
+                  })
+                )
+                return
+              }
+              browserOpenAction(action)
             }
           },
           onOrderCreated(order) {
@@ -227,8 +328,18 @@
             outputEl.textContent = JSON.stringify(result, null, 2)
             ui.showTraceId(null, sdk)
           },
-          onSuccess: handlers.onSuccess,
-          onError: handlers.onError,
+          onSuccess(result) {
+            closePayDrawer()
+            if (openedWebUrlEl) {
+              openedWebUrlEl.textContent =
+                '(已 closePayWebUrl) ' + (openedWebUrlEl.textContent || '')
+            }
+            handlers.onSuccess(result)
+          },
+          onError(error) {
+            closePayDrawer()
+            handlers.onError(error)
+          },
           onCancel: handlers.onCancel
         })
 
