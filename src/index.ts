@@ -4,6 +4,7 @@ import type {
   PayResult,
   PaySdkConfig,
   PaySdkInstance,
+  PaySdkSettleResult,
   PaymentAction,
   PaymentActionMode,
   QueryOrderResponse,
@@ -46,6 +47,7 @@ export type {
   ApplePayButtonConfig,
   ApplePayConfig,
   PayResult,
+  PaySdkSettleResult,
   GooglePayResult,
   ApplePayResult,
   CreateOrderRisk,
@@ -601,9 +603,16 @@ class PaySdk implements PaySdkInstance {
     resume?.()
   }
 
+  private settleResult(order?: QueryOrderResponse): PaySdkSettleResult {
+    return {
+      orderNo: this.order?.orderNo,
+      order
+    }
+  }
+
   private finish(
-    walletResult: PayResult,
-    paymentResponse: PayResponse,
+    _walletResult: PayResult,
+    _paymentResponse: PayResponse,
     order?: QueryOrderResponse
   ): void {
     if (this.destroyed || this.settledPayment) return
@@ -612,19 +621,14 @@ class PaySdk implements PaySdkInstance {
     this.actionView.destroy()
     this.paymentInFlight = false
     this.earlyPayPromise = null
-    const result = {
-      ...walletResult,
-      orderNo: this.order?.orderNo,
-      paymentResponse,
-      order
-    }
+    const result = this.settleResult(order)
     void this.config.onSuccess?.(result)
     this.config.onComplete?.(result)
   }
 
   private complete(
-    walletResult: PayResult,
-    paymentResponse: PayResponse,
+    _walletResult: PayResult,
+    _paymentResponse: PayResponse,
     order: QueryOrderResponse
   ): void {
     if (this.destroyed || this.settledPayment) return
@@ -633,12 +637,7 @@ class PaySdk implements PaySdkInstance {
     this.actionView.destroy()
     this.paymentInFlight = false
     this.earlyPayPromise = null
-    this.config.onComplete?.({
-      ...walletResult,
-      orderNo: this.order?.orderNo,
-      paymentResponse,
-      order
-    })
+    this.config.onComplete?.(this.settleResult(order))
   }
 
   private fail(error: Error): void {

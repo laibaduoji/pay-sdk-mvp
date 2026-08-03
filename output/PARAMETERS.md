@@ -99,17 +99,11 @@ Fingerprint **不在**创建订单下发：SDK `init` 采集，仅请求头 `fin
 
 ---
 
-## 4. 成功回调结果（摘要）
+## 4. 成功回调结果（`onSuccess` / `onComplete`）
 
 ```js
 {
-  method: 'googlePay' | 'applePay',
-  token: '...',
-  risk: { /* ... */ },
   orderNo: 'ord_xxx',
-  paymentResponse: { /* 支付接口 data */ },
-  order: { /* 轮询结束时的查询结果，如有 */ }
-  // Google 另有 paymentMethodData / billingAddress / email / raw
-  // Apple 另有 billingContact / shippingContact / raw
+  order: { /* 查单结果，如有；可看 orderState */ }
 }
 ```

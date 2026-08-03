@@ -2092,37 +2092,34 @@ apple-pay-button {
       this.pollDelayResolve = null;
       resume == null ? void 0 : resume();
     }
-    finish(walletResult, paymentResponse, order) {
-      var _a, _b, _c, _d, _e2;
-      if (this.destroyed || this.settledPayment) return;
-      this.settledPayment = true;
-      this.stopPolling();
-      this.actionView.destroy();
-      this.paymentInFlight = false;
-      this.earlyPayPromise = null;
-      const result = {
-        ...walletResult,
+    settleResult(order) {
+      var _a;
+      return {
         orderNo: (_a = this.order) == null ? void 0 : _a.orderNo,
-        paymentResponse,
         order
       };
-      void ((_c = (_b = this.config).onSuccess) == null ? void 0 : _c.call(_b, result));
-      (_e2 = (_d = this.config).onComplete) == null ? void 0 : _e2.call(_d, result);
     }
-    complete(walletResult, paymentResponse, order) {
-      var _a, _b, _c;
+    finish(_walletResult, _paymentResponse, order) {
+      var _a, _b, _c, _d;
       if (this.destroyed || this.settledPayment) return;
       this.settledPayment = true;
       this.stopPolling();
       this.actionView.destroy();
       this.paymentInFlight = false;
       this.earlyPayPromise = null;
-      (_c = (_b = this.config).onComplete) == null ? void 0 : _c.call(_b, {
-        ...walletResult,
-        orderNo: (_a = this.order) == null ? void 0 : _a.orderNo,
-        paymentResponse,
-        order
-      });
+      const result = this.settleResult(order);
+      void ((_b = (_a = this.config).onSuccess) == null ? void 0 : _b.call(_a, result));
+      (_d = (_c = this.config).onComplete) == null ? void 0 : _d.call(_c, result);
+    }
+    complete(_walletResult, _paymentResponse, order) {
+      var _a, _b;
+      if (this.destroyed || this.settledPayment) return;
+      this.settledPayment = true;
+      this.stopPolling();
+      this.actionView.destroy();
+      this.paymentInFlight = false;
+      this.earlyPayPromise = null;
+      (_b = (_a = this.config).onComplete) == null ? void 0 : _b.call(_a, this.settleResult(order));
     }
     fail(error) {
       var _a, _b;

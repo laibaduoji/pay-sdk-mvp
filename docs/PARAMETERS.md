@@ -128,34 +128,16 @@ App 内嵌推荐在 `onAction` 里走 Native 底部抽屉：`openPayWebUrl` / `o
 
 ## 4. 成功回调结果（`onSuccess` / `onComplete`）
 
-```js
-// Google Pay
-{
-  method: ('googlePay',
-    token, // paymentData.paymentMethodData.tokenizationData.token
-    paymentMethodData,
-    billingAddress, // 创建订单要求账单地址时
-    email,
-    raw,
-    risk,
-    orderNo,
-    paymentResponse,
-    order) // 轮询结束时的状态（如有）
-}
+商户回调只返回：
 
-// Apple Pay
+```js
 {
-  method: ('applePay',
-    token,
-    billingContact,
-    shippingContact,
-    raw,
-    risk,
-    orderNo,
-    paymentResponse,
-    order)
+  orderNo: 'ord_xxx',
+  order: { /* 查单结果，如有；可看 orderState */ }
 }
 ```
+
+钱包原始授权字段（token / raw / risk 等）仅用于 SDK 内部提交支付，不再透出给 `onSuccess` / `onComplete`。
 
 ---
 

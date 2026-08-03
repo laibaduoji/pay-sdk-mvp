@@ -422,6 +422,12 @@ export interface ApplePayResult {
 
 export type PayResult = GooglePayResult | ApplePayResult
 
+/** Merchant-facing settle payload for onSuccess / onComplete. */
+export interface PaySdkSettleResult {
+  orderNo?: string
+  order?: QueryOrderResponse
+}
+
 export interface PaySdkInstance {
   ready(): Promise<true>
   mount(): this
@@ -433,9 +439,9 @@ export interface PaySdkInstance {
 }
 
 interface PaySdkCallbacks {
-  onSuccess?: (result: PayResult) => void | Promise<void>
+  onSuccess?: (result: PaySdkSettleResult) => void | Promise<void>
   /** 支付编排结束；包括 succeeded 或 s3dsComplete 但状态尚未终态。 */
-  onComplete?: (result: PayResult) => void
+  onComplete?: (result: PaySdkSettleResult) => void
   onError?: (error: Error) => void
   onCancel?: () => void
   onOrderCreated?: (order: CreateOrderResponse) => void
