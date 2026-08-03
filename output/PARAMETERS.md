@@ -11,42 +11,45 @@ SDK 编排：**商户已创建订单** → 钱包授权 → 支付 →（需要�
 
 ## 1. 顶层参数
 
-| 参数              | 类型                     |  必传  | 默认值         | 说明                                                                    |
-| ----------------- | ------------------------ | :----: | -------------- | ----------------------------------------------------------------------- |
-| `container`       | `string \| HTMLElement`  | **是** | —              | 按钮渲染容器                                                            |
-| `order`           | `object`                 | **是** | —              | 创建订单响应；须含 `orderNo` / `paymentScript` / `token`                |
-| `environment`     | `'TEST' \| 'PRODUCTION'` |   否   | `'PRODUCTION'` | 内置 API、Google Pay、Checkout Risk                                     |
-| `api`             | `object`                 |   否   | 按环境内置     | 可传 `headers` / `pollIntervalMs` / `pollTimeoutMs`；**无需** appSecret |
-| `actionMode`      | `'callback' \| 'auto'`   |   否   | `'callback'`   | 默认只回调；`auto` 才尝试打开                                           |
-| `openAction`      | `(action) => boolean?`   |   否   | —              | `auto` 时自定义打开；返回 `true` 表示已处理                             |
-| `onOrderCreated`  | `(order) => void`        |   否   | —              | ready 规范化订单后                                                      |
-| `onRiskCollected` | `(info) => void`         |   否   | —              | Fingerprint / 风控预采集结束                                            |
-| `onStatusChange`  | `(order) => void`        |   否   | —              | 每次查单成功                                                            |
-| `onAction`        | `(action) => void`       |   否   | —              | 二次动作                                                                |
-| `onSuccess`       | `(result) => void`       |   否   | —              | 直接成功或查单成功                                                      |
-| `onComplete`      | `(result) => void`       |   否   | —              | 编排结束（含非终态 `s3dsComplete`）                                     |
-| `onError`         | `(error) => void`        |   否   | —              | API / 钱包 / 超时 / 失败                                                |
-| `onCancel`        | `() => void`             |   否   | —              | 用户取消钱包                                                            |
+| 参数              | 类型                     |  必传  | 默认值     | 说明                                                                    |
+| ----------------- | ------------------------ | :----: | ---------- | ----------------------------------------------------------------------- |
+| `container`       | `string \| HTMLElement`  | **是** | —          | 按钮渲染容器                                                            |
+| `order`           | `object`                 | **是** | —          | 创建订单响应；须含 `orderNo` / `paymentScript` / `token`                |
+| `api`             | `object`                 |   否   | 内置生产域 | 可传 `headers` / `pollIntervalMs` / `pollTimeoutMs`；**无需** appSecret |
+| `onOrderCreated`  | `(order) => void`        |   否   | —          | ready 规范化订单后                                                      |
+| `onRiskCollected` | `(info) => void`         |   否   | —          | Fingerprint / 风控预采集结束                                            |
+| `onStatusChange`  | `(order) => void`        |   否   | —          | 每次查单成功                                                            |
+| `onAction`        | `(action) => void`       |   否   | —          | 需二次动作（webUrl / s3ds / threeDS / threeDSMethod）；SDK 不自动打开   |
+| `onSuccess`       | `(result) => void`       |   否   | —          | 支付直接成功，或轮询查单到成功态                                        |
+| `onComplete`      | `(result) => void`       |   否   | —          | 编排结束（含非终态 `s3dsComplete`）                                     |
+| `onError`         | `(error: Error) => void` |   否   | —          | API / 钱包失败、查单失败态、超时等                                      |
+| `onCancel`        | `() => void`             |   否   | —          | 用户关闭 Google / Apple Pay 钱包 sheet（未完成授权）                    |
 
 ### 示例
 
 ```js
 const sdk = PaySdk.init({
   container: '#pay-container',
-  environment: 'TEST',
   order: createOrderResponseFromYourServer,
   api: {
     pollIntervalMs: 2000,
     pollTimeoutMs: 300000
   },
+  // 需二次动作；App 在此调 Bridge，见 WEBVIEW.md
   onAction(action) {
     console.log(action)
   },
+  // 支付直接成功，或轮询查单到成功态
   onSuccess(result) {
     console.log(result.orderNo, result.order && result.order.orderState)
   },
+  // API / 钱包失败、查单失败态、超时等
   onError(error) {
     console.error(error)
+  },
+  // 用户关闭钱包 sheet（未完成授权）
+  onCancel() {
+    console.log('cancelled')
   }
 })
 
@@ -55,22 +58,16 @@ sdk.ready().then(function () {
 })
 ```
 
-### 环境与轮询
+### API 与轮询
 
-| 环境                 | API 根域名                        |
-| -------------------- | --------------------------------- |
-| `TEST`               | `https://api-test.alchemytech.cc` |
-| `PRODUCTION`（默认） | `https://api.alchemypay.org`      |
+API 根域名：`https://api.alchemypay.org`
 
 - 业务成功：`returnCode === '0000'`
 - 轮询默认间隔 `2000` ms，最长 `300000` ms（5 分钟）
 
 ### 二次动作
 
-| `actionMode`       | 行为                                                          |
-| ------------------ | ------------------------------------------------------------- |
-| `callback`（默认） | 只 `onAction`；不自动跳转；轮询继续                           |
-| `auto`             | 先 `onAction`，再试配置的 `openAction`；未处理则 SDK 内置打开 |
+出现二次动作时只触发 `onAction`，**不**自动跳转；原页继续轮询。
 
 App 推荐在 `onAction` 调 Bridge：`openPayWebUrl` / `openPayChallenge` / `openPayMethod`（见 [WEBVIEW.md](./WEBVIEW.md)）。  
 **不要**对 `webUrl` / `s3ds` 调 `sdk.openAction`。
@@ -85,7 +82,6 @@ App 推荐在 `onAction` 调 Bridge：`openPayWebUrl` / `openPayChallenge` / `op
 | `paymentScript`       | `object`                    | **是** | Google / Apple 原生参数      |
 | `token`               | `string`                    | **是** | 请求头 `payment-hub-token`   |
 | `method`              | `'googlePay' \| 'applePay'` |   否   | 可按 `paymentScript` 推断    |
-| `environment`         | `'TEST' \| 'PRODUCTION'`    |   否   | 可覆盖 init 环境             |
 | `risk`                | `object`                    |   否   | Forter / Checkout / WorldPay |
 | `validateMerchantUrl` | `string`                    |   否   | 仅 Apple；覆盖域名校验地址   |
 

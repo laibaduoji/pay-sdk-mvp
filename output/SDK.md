@@ -21,7 +21,7 @@
 
 **环境要求：**
 
-- 页面须 **HTTPS**（本地可用 localhost）
+- 页面须 **HTTPS**
 - Google Pay / Apple Pay 依赖官方脚本（SDK 运行时从 CDN 加载，无需商户再引）
 - Apple Pay：Safari / 已校验域名；Google Pay：支持的浏览器与账号环境
 
@@ -38,7 +38,7 @@
   → 用户点击并授权钱包
   → SDK 提交支付 / 查单（请求头 payment-hub-token = order.token；Fingerprint 走 fingerprint-id）
   → 若无二次动作：onSuccess / onComplete
-  → 若有 webUrl / 3DS 等：onAction（默认不自动跳转）+ 后台轮询
+  → 若有 webUrl / 3DS 等：onAction（不自动跳转）+ 后台轮询
        · App：Native 底部抽屉打开（webUrl / Challenge·Method 壳页）；原页继续 poll
        · 二级页命中 redirectUrl/callbackUrl → Native 关栏 → 主 WebView 调 __paySdkSecondaryReturn() 催查单
   → 轮询到成功/失败：onSuccess 或 onError / onComplete
@@ -72,19 +72,21 @@ SDK **不**调用创建订单、**不**签名、**不**需要 `appId` / `appSecr
 
       const sdk = PaySdk.init({
         container: '#pay-container',
-        environment: 'TEST', // 联调用 TEST；上线用 PRODUCTION 或不传（默认生产）
         order: order,
+        // 支付直接成功，或轮询查单到成功态
         onSuccess(result) {
           console.log('支付成功', result.orderNo, result.order && result.order.orderState)
         },
+        // API / 钱包失败、查单失败态、超时等
         onError(error) {
           console.error(error.message)
         },
+        // 用户关闭 Google / Apple Pay 钱包 sheet（未完成授权）
         onCancel() {
           console.log('用户取消')
         },
+        // 需二次动作（webUrl / s3ds / threeDS / threeDSMethod）；SDK 不自动打开，App 在此调 Bridge
         onAction(action) {
-          // 默认只回调，不自动打开；App 见 WEBVIEW.md
           console.log('二次动作', action)
         }
       })
@@ -102,22 +104,18 @@ SDK **不**调用创建订单、**不**签名、**不**需要 `appId` / `appSecr
 </html>
 ```
 
-也可直接 `sdk.mount()`（内部会自动 `ready()`）；推荐先 `ready()` 再 `mount()`，便于处理「当前环境不支持钱包」。
-
 完整参数见 [PARAMETERS.md](./PARAMETERS.md)。
 
 ---
 
 ## 4. 初始化参数（摘要）
 
-| 参数                                 | 类型                     | 必传 | 默认值         | 说明                             |
-| ------------------------------------ | ------------------------ | :--: | -------------- | -------------------------------- |
-| `container`                          | `string \| HTMLElement`  |  是  | —              | 按钮挂载节点                     |
-| `order`                              | `object`                 |  是  | —              | 创建订单响应，须含 `token`       |
-| `environment`                        | `'TEST' \| 'PRODUCTION'` |  否  | `'PRODUCTION'` | API / Google Pay / Checkout 环境 |
-| `actionMode`                         | `'callback' \| 'auto'`   |  否  | `'callback'`   | 二次动作是否自动打开             |
-| `onAction`                           | `(action) => void`       |  否  | —              | webUrl / 3DS 等                  |
-| `onSuccess` / `onError` / `onCancel` | function                 |  否  | —              | 成功 / 失败 / 用户取消钱包       |
+| 参数                                 | 类型                    | 必传 | 默认值 | 说明                       |
+| ------------------------------------ | ----------------------- | :--: | ------ | -------------------------- |
+| `container`                          | `string \| HTMLElement` |  是  | —      | 按钮挂载节点               |
+| `order`                              | `object`                |  是  | —      | 创建订单响应，须含 `token` |
+| `onAction`                           | `(action) => void`      |  否  | —      | webUrl / 3DS 等二次动作    |
+| `onSuccess` / `onError` / `onCancel` | function                |  否  | —      | 成功 / 失败 / 用户取消钱包 |
 
 ### `order` 必含字段
 
@@ -136,10 +134,7 @@ SDK **不**调用创建订单、**不**签名、**不**需要 `appId` / `appSecr
 | 查询订单       | `GET {根}/payment-hub/order/detail`           | SDK            |
 | Apple 域名校验 | `POST {根}/payment-hub/domain/verify`         | SDK            |
 
-| 环境                 | 根域名                            |
-| -------------------- | --------------------------------- |
-| `TEST`               | `https://api-test.alchemytech.cc` |
-| `PRODUCTION`（默认） | `https://api.alchemypay.org`      |
+API 根域名：`https://api.alchemypay.org`
 
 ---
 
@@ -157,7 +152,7 @@ SDK **不**调用创建订单、**不**签名、**不**需要 `appId` / `appSecr
 
 ## 6. 二次动作（摘要）
 
-默认 `actionMode: 'callback'`：只触发 `onAction`，**不**自动跳转。
+出现二次动作时只触发 `onAction`，**不**自动跳转。
 
 | `action.type`     | App（推荐）                                                 | 纯 H5                         |
 | ----------------- | ----------------------------------------------------------- | ----------------------------- |
@@ -175,24 +170,15 @@ SDK **不**调用创建订单、**不**签名、**不**需要 `appId` / `appSecr
 
 编排成功时一般看 `orderNo`、`order.orderState`；不必再自己调支付接口。
 
-- `onSuccess(result)`：直接成功或查单成功态
+- `onSuccess(result)`：支付直接成功，或轮询查单到成功态
 - `onComplete(result)`：编排结束（含 `s3dsComplete` 但未必终态）
-- `onError(error)`：`error.message` 可读
-- `onCancel()`：用户关闭钱包 sheet
+- `onError(error)`：API / 钱包失败、查单失败态、超时等；`error.message` 可读
+- `onCancel()`：用户关闭 Google / Apple Pay 钱包 sheet（未完成授权）
+- `onAction(action)`：需二次动作（`webUrl` / `s3ds` / `threeDS` / `threeDSMethod`）；SDK 不自动打开，App 在此调 Bridge
 
 ---
 
-## 8. 环境与联调
-
-### `TEST`
-
-- 测试 API；Google Pay `TEST`；缺省商户信息时 SDK 可补齐测试默认值
-
-### `PRODUCTION`（默认）
-
-- 生产 API；须使用创建订单下发的真实 Google `merchantId` / 网关配置
-
-### 风控
+## 8. 风控
 
 - Fingerprint：`init` 采集，请求头 `fingerprint-id`
 - Forter / Checkout / WorldPay：创建订单 `risk.*.enabled === true` 时在 `ready()` 预采集
@@ -204,8 +190,8 @@ SDK **不**调用创建订单、**不**签名、**不**需要 `appId` / `appSecr
 - [ ] 已引入同目录或 CDN 的 `pay-sdk.js`，页面 HTTPS
 - [ ] `container` 存在且可见
 - [ ] **服务端**创建订单响应含 `orderNo` / `paymentScript` / `token`
-- [ ] `PaySdk.init({ order })` 传入完整响应；联调 `environment: 'TEST'`
-- [ ] 实现 `onSuccess` / `onError` / `onCancel`
+- [ ] `PaySdk.init({ order })` 传入完整响应
+- [ ] 实现 `onSuccess` / `onError` / `onCancel` / `onAction`
 - [ ] App：按 [WEBVIEW.md](./WEBVIEW.md) 实现 Bridge；`webUrl`/`s3ds` 不要 `sdk.openAction`
 - [ ] 创建订单带 `redirectUrl`（及如需的 `callbackUrl`）；回跳后调 `__paySdkSecondaryReturn()`
 - [ ] 离开支付页 `sdk.destroy()`，并关闭未关的抽屉

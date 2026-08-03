@@ -21,12 +21,9 @@ H5 接入见 [SDK.md](./SDK.md)；App Bridge 见 [WEBVIEW.md](./WEBVIEW.md)。
 
 ---
 
-## 2. 环境根域名
+## 2. API 根域名
 
-| 环境         | API 根域名                        |
-| ------------ | --------------------------------- |
-| `TEST`       | `https://api-test.alchemytech.cc` |
-| `PRODUCTION` | `https://api.alchemypay.org`      |
+`https://api.alchemypay.org`
 
 完整 URL = 根域名 + 路径。
 
@@ -101,7 +98,6 @@ App 场景请保证 `redirectUrl`（及如需的 `callbackUrl`）可被 Native `
 | `paymentScript`       | 是   | Google / Apple 原生唤起参数              |
 | `token`               | 是   | SDK 后续请求头 `payment-hub-token`       |
 | `method`              | 否   | 可省略；SDK 按 `paymentScript` 推断      |
-| `environment`         | 否   | `TEST` / `PRODUCTION`                    |
 | `risk`                | 否   | 风控开关（Forter / Checkout / WorldPay） |
 | `validateMerchantUrl` | 否   | 仅 Apple；覆盖 SDK 内置域名校验地址      |
 
@@ -114,5 +110,4 @@ App 场景请保证 `redirectUrl`（及如需的 `callbackUrl`）可被 Native `
 - [ ] 按 API Sign 签名调用创建订单
 - [ ] 响应含 `orderNo` / `paymentScript` / `token`，安全下发给 H5（勿把 `appSecret` 放到前端）
 - [ ] `redirectUrl` / `callbackUrl` 填写正确，App 可识别
-- [ ] TEST / PRODUCTION 根域名与 `PaySdk.init({ environment })` 一致
 - [ ] 不在前端使用 `appSecret`；不要求 H5 自签支付 / 查单接口
