@@ -1,6 +1,6 @@
 /**
  * Demo-only AlchemyPay API Sign + signed fetch.
- * Port of https://alchemypay.readme.io/docs/api-sign (same algorithm as src/sign.ts).
+ * Port of https://alchemypay.readme.io/docs/api-sign.
  * Not used by the SDK runtime.
  */
 ;(function (global) {

@@ -14,7 +14,7 @@ window.PaySdkDemoConfig = {
 
   googlePay: {
     /**
-     * Google Pay TEST — Unlimint PAYMENT_GATEWAY（与 live create-order / CREATE-ORDER-RESPONSE 一致）
+     * Google Pay TEST — Unlimint PAYMENT_GATEWAY（与 live create-order 一致）
      * 勿用 Shift4 DIRECT 的 merchantId(123456…) 搭配 unlimint，WebView 下易异常。
      */
     merchantName: 'Example Merchant',

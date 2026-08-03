@@ -13,8 +13,6 @@ import type {
   PayResponse,
   QueryOrderResponse
 } from './types.js'
-// legacy: SDK runtime no longer signs; demo may still use apiSign via demo/signed-api.js
-// import { apiSign } from './sign.js'
 
 const SUCCESS_RETURN_CODE = '0000'
 
@@ -266,15 +264,7 @@ export class PayApiClient {
     const headers: Record<string, string> =
       bodyString !== '' ? { 'Content-Type': 'application/json', ...configured } : { ...configured }
 
-    // SDK runtime: no API Sign. Demo signs create-order itself.
-    // const { appId, appSecret } = this.config
-    // if (appId && appSecret) {
-    //   const timestamp = String(Date.now())
-    //   const sign = await apiSign(timestamp, _method, _url, bodyString, appSecret)
-    //   headers.appid = appId
-    //   headers.timestamp = timestamp
-    //   headers.sign = sign
-    // }
+    // SDK runtime does not sign; demo signs create-order via demo/signed-api.js.
 
     if (this.paymentHubToken) {
       headers['payment-hub-token'] = this.paymentHubToken
