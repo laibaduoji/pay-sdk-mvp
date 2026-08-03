@@ -451,7 +451,7 @@ var PaySdk = function(exports) {
     return collectRisk(config.risk, config.environment);
   }
   const GOOGLE_PAY_TEST_DEFAULTS = {
-    merchantId: "12345678901234567890",
+    merchantId: "863513232473669406",
     merchantName: "Example Merchant",
     gateway: "unlimint",
     gatewayMerchantId: "googletest"

@@ -2,9 +2,9 @@ import type { GooglePayParams, PayResult, RuntimeWalletConfig } from './types.js
 import { normalizeGoogleResult, isGoogleCancel, toError } from './normalize.js'
 import { resolveRiskCollection } from './risk/index.js'
 
-/** Google Pay TEST 环境默认（创建订单未下发时补齐） */
+/** Google Pay TEST 环境默认（Unlimint；与 create-order Unlimint TEST 一致） */
 export const GOOGLE_PAY_TEST_DEFAULTS = {
-  merchantId: '12345678901234567890',
+  merchantId: '863513232473669406',
   merchantName: 'Example Merchant',
   gateway: 'unlimint',
   gatewayMerchantId: 'googletest'

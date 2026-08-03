@@ -67,12 +67,12 @@ SDK 自动带 `payment-hub-token: <order.token>`（订单详情凭 token 查，�
 
 Google Pay **TEST** 环境默认（创建订单未下发时 SDK 补齐，有值则保留）：
 
-| 字段                | 默认值                 |
-| ------------------- | ---------------------- |
-| `merchantId`        | `12345678901234567890` |
-| `merchantName`      | `Example Merchant`     |
-| `gateway`           | `unlimint`             |
-| `gatewayMerchantId` | `googletest`           |
+| 字段                | 默认值                           |
+| ------------------- | -------------------------------- |
+| `merchantId`        | `863513232473669406`（Unlimint） |
+| `merchantName`      | `Example Merchant`               |
+| `gateway`           | `unlimint`                       |
+| `gatewayMerchantId` | `googletest`                     |
 
 `ready()` 使用传入的创建订单响应加载钱包并检查可用性；`mount()` 也可直接调用。  
 业务接口统一响应须满足 `returnCode === '0000'`。轮询默认每 2 秒一次，最长 5 分钟。

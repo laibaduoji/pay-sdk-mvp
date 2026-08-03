@@ -87,6 +87,7 @@
         phoneNumberRequired: false
       }
     }
+    // 与真实 create-order 一致：不在 paymentScript 里预置 callbackIntents（由 SDK 固定补齐）
     return {
       apiVersion: 2,
       apiVersionMinor: 0,
@@ -113,8 +114,7 @@
       merchantInfo: {
         merchantId: merchantId,
         merchantName: merchantName
-      },
-      callbackIntents: ['PAYMENT_AUTHORIZATION']
+      }
     }
   }
 

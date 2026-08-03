@@ -192,7 +192,7 @@ SDK 在 `ready()` 时调用；用响应渲染 Google / Apple 按钮，并按 `ri
 | 字段 / 路径                                               | 必填 | 说明                                                               |
 | --------------------------------------------------------- | ---- | ------------------------------------------------------------------ |
 | `apiVersion` / `apiVersionMinor`                          | 是   | 一般为 `2` / `0`                                                   |
-| `merchantInfo.merchantId`                                 | 是*  | TEST 未下发时 SDK 默认 `12345678901234567890`                      |
+| `merchantInfo.merchantId`                                 | 是*  | TEST 未下发时 SDK 默认 `863513232473669406`（Unlimint）            |
 | `merchantInfo.merchantName`                               | 是*  | TEST 未下发时 SDK 默认 `Example Merchant`                          |
 | `transactionInfo.totalPrice`                              | 是   | 与订单金额一致                                                     |
 | `transactionInfo.currencyCode` / `countryCode`            | 是   |                                                                    |
@@ -255,7 +255,7 @@ TEST 环境缺省时 SDK 会补齐；PRODUCTION 请务必下发真实商户信�
         "totalPriceLabel": "Total"
       },
       "merchantInfo": {
-        "merchantId": "12345678901234567890",
+        "merchantId": "863513232473669406",
         "merchantName": "Example Merchant"
       },
       "callbackIntents": ["PAYMENT_AUTHORIZATION"]
