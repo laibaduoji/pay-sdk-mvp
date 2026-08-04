@@ -8,7 +8,8 @@ Written in **TypeScript**; bundled to a single IIFE file with Vite.
 
 商户参数说明见 [output/PARAMETERS.md](output/PARAMETERS.md)（与
 [docs/PARAMETERS.md](docs/PARAMETERS.md) 对齐）。接口契约见
-[docs/pay-api/](docs/pay-api/)。
+[docs/pay-api/](docs/pay-api/)。内部未完成功能 / 后续迭代见
+[docs/BACKLOG.md](docs/BACKLOG.md)。
 
 ## Build
 
