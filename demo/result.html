@@ -1,0 +1,146 @@
+<!doctype html>
+<html lang="zh-CN">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>订单结果 — Pay SDK Demo</title>
+    <link rel="stylesheet" href="./common.css" />
+  </head>
+  <body>
+    <p class="meta">
+      <a href="./index.html">创建订单</a> · <a href="./confirm.html">确认订单</a> ·
+      <a href="./result.html">订单结果</a>
+    </p>
+    <h1>订单结果</h1>
+    <p class="meta">展示支付终态订单信息。右下角 vConsole 可查看接口日志。</p>
+
+    <p id="status">加载中…</p>
+    <div class="trace-row">
+      <span class="label">traceId</span>
+      <code id="trace-id">—</code>
+      <button type="button" id="trace-copy">复制</button>
+    </div>
+
+    <div id="order-summary" class="panel">—</div>
+
+    <div class="demo-actions">
+      <button type="button" id="again-btn">再来一单</button>
+    </div>
+
+    <details class="json-fold">
+      <summary class="section-title">结果 JSON</summary>
+      <pre id="result-json">—</pre>
+    </details>
+
+    <details class="json-fold">
+      <summary class="section-title">订单详情 JSON</summary>
+      <pre id="detail-json">—</pre>
+    </details>
+
+    <script src="./vendor/vconsole.min.js"></script>
+    <script src="./demo-vconsole.js"></script>
+    <script src="./config.js"></script>
+    <script src="./signed-api.js"></script>
+    <script src="./demo-session.js"></script>
+    <script src="./demo-ui.js"></script>
+    <script>
+      const ui = window.PaySdkDemoUI
+      const signedApi = window.PaySdkDemoSignedApi
+      const session = window.PaySdkDemoSession
+
+      const statusEl = document.getElementById('status')
+      const summaryEl = document.getElementById('order-summary')
+      const resultJsonEl = document.getElementById('result-json')
+      const detailJsonEl = document.getElementById('detail-json')
+
+      ui.bindTraceCopy()
+
+      function setStatus(text, highlight) {
+        statusEl.textContent = text
+        if (highlight) statusEl.classList.add('status-highlight')
+        else statusEl.classList.remove('status-highlight')
+      }
+
+      async function boot() {
+        const saved = session.getResult()
+        const flow = session.getFlow()
+        if (!saved && !flow) {
+          summaryEl.textContent = '暂无结果，请先完成一笔支付。'
+          setStatus('无结果会话', false)
+          return
+        }
+
+        const orderRequest = (saved && saved.orderRequest) || (flow && flow.orderRequest) || {}
+        const environment = (saved && saved.environment) || (flow && flow.environment) || 'TEST'
+        const token =
+          (saved && saved.token) ||
+          (flow && flow.createOrderResponse && flow.createOrderResponse.token) ||
+          ''
+
+        if (saved) {
+          resultJsonEl.textContent = JSON.stringify(saved, null, 2)
+          const source = saved.source || '—'
+          const state =
+            saved.orderState != null
+              ? saved.orderState + ' · ' + session.orderStateLabel(saved.orderState)
+              : '—'
+          setStatus('来源：' + source + ' · 状态：' + state, true)
+        } else {
+          setStatus('无终态回调，尝试刷新订单详情…', false)
+        }
+
+        let detail = (saved && saved.orderDetail) || null
+        if (token) {
+          try {
+            const detailResult = await signedApi.queryOrder({
+              environment: environment,
+              token: token
+            })
+            detail = detailResult.data
+            detailJsonEl.textContent = JSON.stringify(
+              detailResult.envelope || detailResult.data,
+              null,
+              2
+            )
+            ui.showTraceId(detailResult.traceId)
+            console.log('[demo] result order detail', detailResult.envelope || detail)
+            if (detail && detail.orderState != null) {
+              setStatus(
+                '订单状态：' +
+                  detail.orderState +
+                  ' · ' +
+                  session.orderStateLabel(detail.orderState),
+                true
+              )
+            }
+          } catch (err) {
+            console.error('[demo] result queryOrder failed', err)
+            detailJsonEl.textContent = JSON.stringify(
+              (err && err.envelope) || { message: String(err && err.message) },
+              null,
+              2
+            )
+            ui.showTraceId(err && err.traceId)
+            if (!detail) {
+              setStatus('刷新详情失败：' + (err.message || err), false)
+            }
+          }
+        } else if (detail) {
+          detailJsonEl.textContent = JSON.stringify(detail, null, 2)
+        }
+
+        session.renderOrderSummary(summaryEl, {
+          detail: detail || {},
+          orderRequest: orderRequest
+        })
+      }
+
+      document.getElementById('again-btn').addEventListener('click', function () {
+        session.clearOrderSession()
+        location.href = './index.html'
+      })
+
+      void boot()
+    </script>
+  </body>
+</html>

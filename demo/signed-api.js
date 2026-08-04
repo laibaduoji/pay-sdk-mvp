@@ -138,6 +138,12 @@
    * @param {string} opts.appSecret
    * @param {Record<string, string>} [opts.headers]
    */
+  function logApi(method, url, payload) {
+    try {
+      console.log('[demo-api]', method, url, payload)
+    } catch (_) {}
+  }
+
   async function signedFetch(opts) {
     const method = (opts.method || 'POST').toUpperCase()
     const bodyString = opts.body === undefined ? '' : JSON.stringify(opts.body)
@@ -152,12 +158,20 @@
         sign: sign
       }
     )
+    logApi(method, opts.url, { request: opts.body })
     const response = await fetch(opts.url, {
       method: method,
       headers: headers,
       body: bodyString === '' ? undefined : bodyString
     })
-    const envelope = await response.json()
+    let envelope = null
+    try {
+      envelope = await response.json()
+    } catch (err) {
+      logApi(method, opts.url, { error: 'invalid json', status: response.status })
+      throw err
+    }
+    logApi(method, opts.url, { status: response.status, envelope: envelope })
     return { response: response, envelope: envelope }
   }
 
@@ -258,12 +272,42 @@
     return { data: envelope.data, traceId: envelope.traceId, envelope: envelope }
   }
 
+  /**
+   * Demo: GET /payment-hub/order/detail with payment-hub-token (no API sign).
+   */
+  async function queryOrder(opts) {
+    const base = apiBase(opts.environment)
+    const url = opts.queryOrderUrl || base + '/payment-hub/order/detail'
+    const token = opts.token && String(opts.token).trim()
+    if (!token) {
+      throw new Error('queryOrder requires token (request header payment-hub-token)')
+    }
+    logApi('GET', url, { request: { 'payment-hub-token': '(set)' } })
+    const response = await fetch(url, {
+      method: 'GET',
+      headers: { 'payment-hub-token': token }
+    })
+    let envelope = null
+    try {
+      envelope = await response.json()
+    } catch (err) {
+      logApi('GET', url, { error: 'invalid json', status: response.status })
+      throw err
+    }
+    logApi('GET', url, { status: response.status, envelope: envelope })
+    if (!response.ok || !envelope || envelope.returnCode !== '0000') {
+      throwApiError(envelope, response, 'Query order failed')
+    }
+    return { data: envelope.data, traceId: envelope.traceId, envelope: envelope }
+  }
+
   global.PaySdkDemoSignedApi = {
     apiSign: apiSign,
     signedFetch: signedFetch,
     getToken: getToken,
     ensureAccessToken: ensureAccessToken,
     createOrder: createOrder,
+    queryOrder: queryOrder,
     apiBase: apiBase
   }
 })(window)

@@ -3,7 +3,7 @@
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>SDK Managed Flow — Live API</title>
+    <title>创建订单 — Pay SDK Demo</title>
     <link rel="stylesheet" href="./common.css" />
     <style>
       .panel label.field {
@@ -29,20 +29,23 @@
     </style>
   </head>
   <body>
-    <p class="meta"><a href="./index.html">← Demos</a> · PARAMETERS</p>
-    <h1>SDK 完整支付编排（真实 API）</h1>
+    <p class="meta">
+      <a href="./index.html">创建订单</a> · <a href="./confirm.html">确认订单</a> ·
+      <a href="./result.html">订单结果</a>
+    </p>
+    <h1>创建订单</h1>
     <details class="json-fold">
       <summary class="section-title">说明</summary>
       <p class="meta">
         Demo 用 <code>appId</code> / <code>appSecret</code> 签名创建订单（TEST：
         <code>https://api-test.alchemytech.cc</code>），请求头另带
-        <code>access-token</code>（建议手填；否则 email/uid 先 getToken）。创建订单响应含
-        <code>token</code> 后交给 SDK；SDK 不签名、不调创建订单，后续接口带头
-        <code>payment-hub-token</code>。
+        <code>access-token</code>（建议手填；否则 email/uid 先 getToken）。创建成功后跳转确认页，由
+        SDK 用响应里的 <code>token</code>（<code>payment-hub-token</code>）继续支付。右下角 vConsole
+        可查看接口日志。
       </p>
     </details>
 
-    <details class="json-fold">
+    <details class="json-fold" open>
       <summary class="section-title">参数配置</summary>
       <form id="controls" class="panel" onsubmit="return false">
         <fieldset>
@@ -184,7 +187,7 @@
 
     <div class="demo-actions">
       <button type="button" id="regen-order-no">重新生成 merchantOrderNo</button>
-      <button type="button" id="apply-btn">创建订单并挂载 SDK</button>
+      <button type="button" id="apply-btn">确认创建订单</button>
     </div>
 
     <details class="json-fold">
@@ -193,86 +196,36 @@
     </details>
 
     <details class="json-fold">
-      <summary class="section-title">创建订单响应（传给 SDK）</summary>
+      <summary class="section-title">创建订单响应</summary>
       <pre id="order-response">—</pre>
     </details>
 
-    <p id="status">未挂载</p>
+    <p id="status">填写参数后点击「确认创建订单」</p>
     <div class="trace-row">
       <span class="label">traceId</span>
       <code id="trace-id">—</code>
       <button type="button" id="trace-copy">复制</button>
     </div>
-    <div id="pay-container"></div>
-    <p class="meta">
-      下方「确认」为商户自定义按钮示例（ready 前为加载中；点击同步调 sdk.pay()）。上方为 SDK mount
-      的官方按钮。
-    </p>
-    <button type="button" id="custom-pay-btn" disabled>加载中</button>
-    <h2 class="section-title">风控数据</h2>
-    <pre id="risk">挂载后采集 Fingerprint（请求头 fingerprint-id）…</pre>
-    <h2 class="section-title">onAction / 打开的链接</h2>
-    <p class="meta" id="bridge-hint">
-      App 内（原页继续 poll）：webUrl/s3ds → openPayWebUrl；threeDS → openPayChallenge(壳页)；
-      threeDSMethod → openPayMethod(壳页)。终态 onSuccess/onError → closePayWebUrl。二级页命中
-      redirect/callback → Native 关栏并 __paySdkSecondaryReturn。参考壳页
-      <a href="./3ds-challenge.html">3ds-challenge.html</a> /
-      <a href="./3ds-method.html">3ds-method.html</a>（商户可改名自托管）。
-    </p>
-    <p class="meta">
-      <strong>当前打开的二级页：</strong>
-      <code id="opened-web-url" style="word-break: break-all">—</code>
-    </p>
-    <pre id="action">—</pre>
-    <h2 class="section-title">结果</h2>
-    <pre id="output">—</pre>
 
-    <script src="./pay-sdk.js"></script>
+    <script src="./vendor/vconsole.min.js"></script>
+    <script src="./demo-vconsole.js"></script>
     <script src="./config.js"></script>
     <script src="./signed-api.js"></script>
+    <script src="./demo-session.js"></script>
     <script src="./demo-ui.js"></script>
     <script>
-      const SS_APP_ID = 'paySdkDemo.appId'
-      const SS_APP_SECRET = 'paySdkDemo.appSecret'
-      const SS_ACCESS_TOKEN = 'paySdkDemo.accessToken'
-      const SS_EMAIL = 'paySdkDemo.email'
-      const SS_UID = 'paySdkDemo.uid'
-
       const ui = window.PaySdkDemoUI
       const signedApi = window.PaySdkDemoSignedApi
-      const sdkRef = { current: null }
-      const handlers = ui.handlers(sdkRef)
+      const session = window.PaySdkDemoSession
       const form = document.getElementById('controls')
       const previewEl = document.getElementById('preview')
       const orderResponseEl = document.getElementById('order-response')
-      const riskEl = document.getElementById('risk')
-      const actionEl = document.getElementById('action')
-      const openedWebUrlEl = document.getElementById('opened-web-url')
-      const outputEl = document.getElementById('output')
       const statusEl = document.getElementById('status')
-
-      let sdk = null
-      let lastRiskConfig = null
-      const customPayBtn = document.getElementById('custom-pay-btn')
 
       ui.bindTraceCopy()
 
-      function setCustomPayBtnLoading() {
-        customPayBtn.disabled = true
-        customPayBtn.textContent = '加载中'
-      }
-
-      function setCustomPayBtnReady() {
-        customPayBtn.disabled = false
-        customPayBtn.textContent = '确认'
-      }
-
       function el(name) {
         return form.elements.namedItem(name)
-      }
-
-      function clearStatusHighlight() {
-        statusEl.classList.remove('status-highlight')
       }
 
       function setStatus(text, highlight) {
@@ -285,12 +238,10 @@
         return method === 'applePay' ? '501' : '701'
       }
 
-      /** Apple 设备（iOS / iPadOS / macOS）预选 Apple Pay，其余 Google Pay */
       function isApplePlatform() {
         const ua = navigator.userAgent || ''
         const platform = navigator.platform || ''
         if (/iPhone|iPad|iPod/i.test(ua)) return true
-        // iPadOS 13+ 常报 MacIntel + 触控
         if (platform === 'MacIntel' && Number(navigator.maxTouchPoints || 0) > 1) return true
         if (/Macintosh|Mac OS X/i.test(ua)) return true
         return false
@@ -334,31 +285,14 @@
         selectWalletMethod(detectPreferredWalletMethod())
 
         const cfgApi = (window.PaySdkDemoConfig && window.PaySdkDemoConfig.api) || {}
-        let appId = cfgApi.appId || ''
-        let appSecret = cfgApi.appSecret || ''
-        try {
-          const savedId = sessionStorage.getItem(SS_APP_ID)
-          const savedSecret = sessionStorage.getItem(SS_APP_SECRET)
-          if (savedId) appId = savedId
-          if (savedSecret) appSecret = savedSecret
-        } catch (_) {}
-        el('appId').value = appId
-        el('appSecret').value = appSecret
+        const saved = session.readSavedCreds()
+        el('appId').value = saved.appId || cfgApi.appId || ''
+        el('appSecret').value = saved.appSecret || cfgApi.appSecret || ''
 
-        let accessToken = ''
-        let email = 'demo001@example.com'
-        let uid = ''
-        try {
-          const savedToken = sessionStorage.getItem(SS_ACCESS_TOKEN)
-          const savedEmail = sessionStorage.getItem(SS_EMAIL)
-          const savedUid = sessionStorage.getItem(SS_UID)
-          if (savedToken) accessToken = savedToken
-          if (savedEmail != null && savedEmail !== '') email = savedEmail
-          if (savedUid) uid = savedUid
-        } catch (_) {}
-        el('accessToken').value = accessToken
-        el('email').value = email
-        el('uid').value = uid
+        const identity = session.readSavedIdentity()
+        el('accessToken').value = identity.accessToken || ''
+        el('email').value = identity.email || 'demo001@example.com'
+        el('uid').value = identity.uid || ''
       }
 
       async function fillClientIp() {
@@ -381,7 +315,9 @@
       }
 
       function readOrderFromForm() {
-        const v = (name) => String(el(name).value || '').trim()
+        const v = function (name) {
+          return String(el(name).value || '').trim()
+        }
         const order = {
           side: v('side') || 'BUY',
           merchantOrderNo: v('merchantOrderNo') || newMerchantOrderNo(),
@@ -424,41 +360,13 @@
         }
       }
 
-      function persistCreds(creds) {
-        try {
-          sessionStorage.setItem(SS_APP_ID, creds.appId)
-          sessionStorage.setItem(SS_APP_SECRET, creds.appSecret)
-        } catch (_) {}
-      }
-
-      function persistIdentity(identity) {
-        try {
-          sessionStorage.setItem(SS_ACCESS_TOKEN, identity.accessToken || '')
-          sessionStorage.setItem(SS_EMAIL, identity.email || '')
-          sessionStorage.setItem(SS_UID, identity.uid || '')
-        } catch (_) {}
-      }
-
       function refreshPreview() {
         syncPayWayCode()
         previewEl.textContent = JSON.stringify(readOrderFromForm(), null, 2)
       }
 
-      function renderRisk(info) {
-        riskEl.textContent = JSON.stringify(
-          {
-            note: 'Fingerprint 仅请求头 fingerprint-id，不在支付 body',
-            fingerprintId: (info && info.fingerprintId) || null,
-            orderRiskConfig: lastRiskConfig,
-            payBodyRisk: (info && info.risk) || null
-          },
-          null,
-          2
-        )
-      }
-
-      async function mountSdk() {
-        clearStatusHighlight()
+      async function createOrderAndGo() {
+        statusEl.classList.remove('status-highlight')
         const creds = readCreds()
         if (!creds.appId || !creds.appSecret) {
           setStatus('请填写 appId 与 appSecret', false)
@@ -469,8 +377,8 @@
           setStatus('请填写 accessToken，或 email / uid（创建订单需要 access-token）', false)
           return
         }
-        persistCreds(creds)
-        persistIdentity(identity)
+        session.persistCreds(creds)
+        session.persistIdentity(identity)
 
         const clientIp = await fillClientIp()
         if (!clientIp) {
@@ -478,17 +386,10 @@
           return
         }
 
-        if (sdk) {
-          try {
-            sdk.destroy()
-          } catch (_) {}
-          sdk = null
-        }
-        setCustomPayBtnLoading()
-
         const fd = new FormData(form)
         const environment = fd.get('environment') || 'TEST'
         const actionMode = fd.get('actionMode') || 'callback'
+        const method = fd.get('method') || 'googlePay'
         const orderRequest = readOrderFromForm()
         if (!orderRequest.merchantOrderNo) {
           orderRequest.merchantOrderNo = newMerchantOrderNo()
@@ -496,12 +397,7 @@
         }
 
         refreshPreview()
-        lastRiskConfig = null
-        actionEl.textContent = '—'
-        outputEl.textContent = '—'
         orderResponseEl.textContent = '—'
-        riskEl.textContent = '挂载后采集中…'
-        document.getElementById('pay-container').innerHTML = ''
         ui.showTraceId(null, null)
 
         let accessToken
@@ -520,7 +416,7 @@
           accessToken = ensured.accessToken
           if (ensured.from === 'getToken') {
             el('accessToken').value = accessToken
-            persistIdentity(readIdentity())
+            session.persistIdentity(readIdentity())
             if (ensured.traceId) ui.showTraceId(ensured.traceId)
           }
         } catch (err) {
@@ -562,158 +458,22 @@
         ui.showTraceId(createResult.traceId)
 
         if (!orderResponse || !orderResponse.token) {
-          statusEl.textContent = '创建订单成功但缺少 token，无法挂载 SDK'
+          statusEl.textContent = '创建订单成功但缺少 token，无法进入确认页'
           return
         }
 
-        statusEl.textContent = '创建订单成功，挂载 SDK…'
-
-        const bridge = window.NativeBridge
-        // 商户自配壳页 URL；Demo 用同目录参考页（可改名/自托管）
-        const challengeShell = new URL('./3ds-challenge.html', location.href).href
-        const methodShell = new URL('./3ds-method.html', location.href).href
-        function canOpenPayWebUrl() {
-          return !!(bridge && typeof bridge.openPayWebUrl === 'function')
-        }
-        function canOpenPayChallenge() {
-          return !!(bridge && typeof bridge.openPayChallenge === 'function')
-        }
-        function canOpenPayMethod() {
-          return !!(bridge && typeof bridge.openPayMethod === 'function')
-        }
-        function closePayDrawer() {
-          if (bridge && typeof bridge.closePayWebUrl === 'function') {
-            bridge.closePayWebUrl()
-          }
-        }
-        function browserOpenAction(action) {
-          if (actionMode !== 'callback') return
-          if (confirm('收到二次动作 ' + action.type + '，是否 sdk.openAction？（浏览器 Demo）')) {
-            sdk.openAction(action)
-          }
-        }
-
-        sdk = PaySdk.init({
-          container: '#pay-container',
+        session.clearResult()
+        session.setFlow({
           environment: environment,
           actionMode: actionMode,
-          order: orderResponse,
-          api: {
-            pollIntervalMs: 2000,
-            pollTimeoutMs: 300000
-          },
-          onAction(action) {
-            actionEl.textContent = JSON.stringify(action, null, 2)
-            // App：webUrl/s3ds → 抽屉 loadUrl；轮询中新 s3dsUrl 同路替换抽屉
-            if (action.type === 'webUrl' || action.type === 's3ds') {
-              if (openedWebUrlEl) openedWebUrlEl.textContent = action.url || '—'
-              statusEl.textContent =
-                'onAction ' +
-                action.type +
-                ' → 打开二级页（原页继续 poll；终态 closePayWebUrl）: ' +
-                (action.url || '')
-              if (canOpenPayWebUrl()) {
-                bridge.openPayWebUrl(
-                  action.url,
-                  String(el('redirectUrl').value || '').trim(),
-                  String(el('callbackUrl').value || '').trim()
-                )
-                return
-              }
-              browserOpenAction(action)
-              return
-            }
-            // App：Challenge → 壳页 + Bridge 注入；原页 poll
-            if (action.type === 'threeDS') {
-              if (openedWebUrlEl) openedWebUrlEl.textContent = challengeShell
-              statusEl.textContent =
-                'onAction threeDS → openPayChallenge（原页 poll；终态 closePayWebUrl）'
-              if (canOpenPayChallenge()) {
-                bridge.openPayChallenge(
-                  challengeShell,
-                  JSON.stringify({
-                    MD: action.MD,
-                    JWT: action.JWT,
-                    action: action.action
-                  })
-                )
-                return
-              }
-              browserOpenAction(action)
-              return
-            }
-            // App：Method → 壳页 + Bridge 注入；原页 poll；其后可能再出 s3ds/webUrl
-            if (action.type === 'threeDSMethod') {
-              if (openedWebUrlEl) openedWebUrlEl.textContent = methodShell
-              statusEl.textContent =
-                'onAction threeDSMethod → openPayMethod（原页 poll；终态 closePayWebUrl）'
-              if (canOpenPayMethod()) {
-                bridge.openPayMethod(
-                  methodShell,
-                  JSON.stringify({
-                    threeDSMethodData: action.threeDSMethodData,
-                    methodUrl: action.methodUrl
-                  })
-                )
-                return
-              }
-              browserOpenAction(action)
-            }
-          },
-          onOrderCreated(orderRes) {
-            statusEl.textContent = 'Order ' + orderRes.orderNo + ' ready (' + orderRes.method + ').'
-            lastRiskConfig = orderRes.risk || null
-            renderRisk({ fingerprintId: null, risk: null })
-            ui.showTraceId(null, sdk)
-          },
-          onRiskCollected(info) {
-            renderRisk(info)
-          },
-          onStatusChange(orderStatus) {
-            clearStatusHighlight()
-            statusEl.textContent =
-              'Payment status: ' +
-              orderStatus.orderState +
-              (orderStatus.s3dsUrl ? ' · s3dsUrl' : '')
-            ui.showTraceId(null, sdk)
-          },
-          onComplete(result) {
-            outputEl.textContent = JSON.stringify(result, null, 2)
-            ui.showTraceId(null, sdk)
-          },
-          onSuccess(result) {
-            closePayDrawer()
-            if (openedWebUrlEl) {
-              openedWebUrlEl.textContent =
-                '(已 closePayWebUrl) ' + (openedWebUrlEl.textContent || '')
-            }
-            handlers.onSuccess(result)
-            const state =
-              result && result.order && result.order.orderState != null
-                ? result.order.orderState
-                : ''
-            setStatus(
-              state !== '' ? 'Payment status: ' + state + ' · authorized' : 'Payment authorized.',
-              true
-            )
-          },
-          onError(error) {
-            closePayDrawer()
-            handlers.onError(error)
-            setStatus('Error: ' + ui.formatError(error), true)
-          },
-          onCancel: handlers.onCancel
+          method: method,
+          orderRequest: orderRequest,
+          createOrderResponse: orderResponse,
+          accessToken: accessToken,
+          createdAt: Date.now()
         })
-        sdkRef.current = sdk
-
-        ui.run(sdk).then(
-          function () {
-            setCustomPayBtnReady()
-          },
-          function () {
-            setCustomPayBtnLoading()
-          }
-        )
+        setStatus('创建成功，跳转确认订单…', true)
+        location.href = './confirm.html'
       }
 
       applyDefaults()
@@ -724,17 +484,8 @@
         refreshPreview()
       })
       document.getElementById('apply-btn').addEventListener('click', function () {
-        void mountSdk()
+        void createOrderAndGo()
       })
-      customPayBtn.addEventListener('click', function () {
-        if (!sdk || customPayBtn.disabled) return
-        try {
-          sdk.pay()
-        } catch (err) {
-          setStatus('pay() 失败：' + (err && err.message ? err.message : err), true)
-        }
-      })
-      setCustomPayBtnLoading()
       refreshPreview()
       void fillClientIp().then(function () {
         refreshPreview()

@@ -21,11 +21,13 @@ npm run format     # prettier write
 
 ## Demos
 
-| 文件                               | 说明                                                  |
-| ---------------------------------- | ----------------------------------------------------- |
-| [demo/index.html](demo/index.html) | 真实 openapi 联调（demo 签名创建订单 → 响应交给 SDK） |
+| 文件                                   | 说明                                                    |
+| -------------------------------------- | ------------------------------------------------------- |
+| [demo/index.html](demo/index.html)     | 创建订单（demo 签名）；成功后跳确认页                   |
+| [demo/confirm.html](demo/confirm.html) | 查一次 order/detail → 挂载 SDK → 确认支付；终态跳结果页 |
+| [demo/result.html](demo/result.html)   | 展示订单状态与金额等信息；可再来一单                    |
 
-共享凭据与签名见 [`demo/config.js`](demo/config.js)、[`demo/signed-api.js`](demo/signed-api.js)（仅 demo；生产勿用）。
+三页右下角带 **vConsole**。共享凭据与签名见 [`demo/config.js`](demo/config.js)、[`demo/signed-api.js`](demo/signed-api.js)（仅 demo；生产勿用）。
 
 ## Usage
 

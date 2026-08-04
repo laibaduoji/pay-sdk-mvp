@@ -1,0 +1,376 @@
+<!doctype html>
+<html lang="zh-CN">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>确认订单 — Pay SDK Demo</title>
+    <link rel="stylesheet" href="./common.css" />
+  </head>
+  <body class="page-confirm">
+    <p class="meta">
+      <a href="./index.html">创建订单</a> · <a href="./confirm.html">确认订单</a> ·
+      <a href="./result.html">订单结果</a>
+    </p>
+    <h1>确认订单</h1>
+    <p class="meta">
+      进入本页后调用一次订单详情；底部「确认」在 SDK ready 后可点（同步
+      <code>sdk.pay()</code>）。支付终态跳转结果页。右下角 vConsole 可查看日志。
+    </p>
+
+    <div id="order-summary" class="panel">加载订单详情…</div>
+
+    <p id="status">准备中…</p>
+    <div class="trace-row">
+      <span class="label">traceId</span>
+      <code id="trace-id">—</code>
+      <button type="button" id="trace-copy">复制</button>
+    </div>
+
+    <details class="json-fold">
+      <summary class="section-title">订单详情 JSON</summary>
+      <pre id="detail-json">—</pre>
+    </details>
+
+    <details class="json-fold">
+      <summary class="section-title">onAction / 二级页</summary>
+      <p class="meta">
+        App：webUrl/s3ds → openPayWebUrl；threeDS → openPayChallenge；threeDSMethod →
+        openPayMethod。终态 closePayWebUrl。壳页
+        <a href="./3ds-challenge.html">3ds-challenge.html</a> /
+        <a href="./3ds-method.html">3ds-method.html</a>。
+      </p>
+      <p class="meta">
+        <strong>当前打开的二级页：</strong>
+        <code id="opened-web-url" style="word-break: break-all">—</code>
+      </p>
+      <pre id="action">—</pre>
+    </details>
+
+    <details class="json-fold">
+      <summary class="section-title">风控 / 输出</summary>
+      <pre id="risk">—</pre>
+      <pre id="output">—</pre>
+    </details>
+
+    <div class="confirm-footer">
+      <div id="pay-container"></div>
+      <button type="button" id="custom-pay-btn" disabled>加载中</button>
+    </div>
+
+    <script src="./vendor/vconsole.min.js"></script>
+    <script src="./demo-vconsole.js"></script>
+    <script src="./pay-sdk.js"></script>
+    <script src="./config.js"></script>
+    <script src="./signed-api.js"></script>
+    <script src="./demo-session.js"></script>
+    <script src="./demo-ui.js"></script>
+    <script>
+      const ui = window.PaySdkDemoUI
+      const signedApi = window.PaySdkDemoSignedApi
+      const session = window.PaySdkDemoSession
+      const sdkRef = { current: null }
+      const handlers = ui.handlers(sdkRef)
+
+      const statusEl = document.getElementById('status')
+      const summaryEl = document.getElementById('order-summary')
+      const detailJsonEl = document.getElementById('detail-json')
+      const actionEl = document.getElementById('action')
+      const openedWebUrlEl = document.getElementById('opened-web-url')
+      const riskEl = document.getElementById('risk')
+      const outputEl = document.getElementById('output')
+      const customPayBtn = document.getElementById('custom-pay-btn')
+
+      let sdk = null
+      let lastRiskConfig = null
+      let lastOrderDetail = null
+      let navigatedToResult = false
+
+      ui.bindTraceCopy()
+
+      function setCustomPayBtnLoading() {
+        customPayBtn.disabled = true
+        customPayBtn.textContent = '加载中'
+      }
+
+      function setCustomPayBtnReady() {
+        customPayBtn.disabled = false
+        customPayBtn.textContent = '确认'
+      }
+
+      function clearStatusHighlight() {
+        statusEl.classList.remove('status-highlight')
+      }
+
+      function setStatus(text, highlight) {
+        statusEl.textContent = text
+        if (highlight) statusEl.classList.add('status-highlight')
+        else statusEl.classList.remove('status-highlight')
+      }
+
+      function renderRisk(info) {
+        riskEl.textContent = JSON.stringify(
+          {
+            note: 'Fingerprint 仅请求头 fingerprint-id，不在支付 body',
+            fingerprintId: (info && info.fingerprintId) || null,
+            orderRiskConfig: lastRiskConfig,
+            payBodyRisk: (info && info.risk) || null
+          },
+          null,
+          2
+        )
+      }
+
+      function goResult(payload) {
+        if (navigatedToResult) return
+        navigatedToResult = true
+        session.setResult(payload)
+        location.href = './result.html'
+      }
+
+      async function boot() {
+        const flow = session.getFlow()
+        if (!flow || !flow.createOrderResponse || !flow.createOrderResponse.token) {
+          summaryEl.textContent = '缺少创建订单会话，请先创建订单。'
+          setStatus('无有效会话', false)
+          return
+        }
+
+        const environment = flow.environment || 'TEST'
+        const actionMode = flow.actionMode || 'callback'
+        const orderRequest = flow.orderRequest || {}
+        const orderResponse = flow.createOrderResponse
+        const redirectUrl = orderRequest.redirectUrl || ''
+        const callbackUrl = orderRequest.callbackUrl || ''
+
+        setCustomPayBtnLoading()
+        setStatus('查询订单详情…', false)
+
+        try {
+          const detailResult = await signedApi.queryOrder({
+            environment: environment,
+            token: orderResponse.token
+          })
+          lastOrderDetail = detailResult.data
+          detailJsonEl.textContent = JSON.stringify(
+            detailResult.envelope || detailResult.data,
+            null,
+            2
+          )
+          session.renderOrderSummary(summaryEl, {
+            detail: lastOrderDetail,
+            orderRequest: orderRequest
+          })
+          ui.showTraceId(detailResult.traceId)
+          console.log('[demo] order detail', detailResult.envelope || detailResult.data)
+        } catch (err) {
+          console.error('[demo] order detail failed', err)
+          lastOrderDetail = null
+          detailJsonEl.textContent = JSON.stringify(
+            (err && err.envelope) || { message: String(err && err.message) },
+            null,
+            2
+          )
+          session.renderOrderSummary(summaryEl, {
+            detail: {
+              orderNo: orderResponse.orderNo,
+              merchantOrderNo: orderRequest.merchantOrderNo
+            },
+            orderRequest: orderRequest
+          })
+          setStatus('订单详情失败：' + (err.message || err) + '，仍尝试挂载 SDK', false)
+          ui.showTraceId(err && err.traceId)
+        }
+
+        setStatus('挂载 SDK…', false)
+
+        const bridge = window.NativeBridge
+        const challengeShell = new URL('./3ds-challenge.html', location.href).href
+        const methodShell = new URL('./3ds-method.html', location.href).href
+
+        function canOpenPayWebUrl() {
+          return !!(bridge && typeof bridge.openPayWebUrl === 'function')
+        }
+        function canOpenPayChallenge() {
+          return !!(bridge && typeof bridge.openPayChallenge === 'function')
+        }
+        function canOpenPayMethod() {
+          return !!(bridge && typeof bridge.openPayMethod === 'function')
+        }
+        function closePayDrawer() {
+          if (bridge && typeof bridge.closePayWebUrl === 'function') {
+            bridge.closePayWebUrl()
+          }
+        }
+        function browserOpenAction(action) {
+          if (actionMode !== 'callback') return
+          if (confirm('收到二次动作 ' + action.type + '，是否 sdk.openAction？（浏览器 Demo）')) {
+            sdk.openAction(action)
+          }
+        }
+
+        sdk = PaySdk.init({
+          container: '#pay-container',
+          environment: environment,
+          actionMode: actionMode,
+          order: orderResponse,
+          api: {
+            pollIntervalMs: 2000,
+            pollTimeoutMs: 300000
+          },
+          onAction(action) {
+            console.log('[demo] onAction', action)
+            actionEl.textContent = JSON.stringify(action, null, 2)
+            if (action.type === 'webUrl' || action.type === 's3ds') {
+              if (openedWebUrlEl) openedWebUrlEl.textContent = action.url || '—'
+              statusEl.textContent =
+                'onAction ' +
+                action.type +
+                ' → 打开二级页（原页继续 poll；终态 closePayWebUrl）: ' +
+                (action.url || '')
+              if (canOpenPayWebUrl()) {
+                bridge.openPayWebUrl(action.url, redirectUrl, callbackUrl)
+                return
+              }
+              browserOpenAction(action)
+              return
+            }
+            if (action.type === 'threeDS') {
+              if (openedWebUrlEl) openedWebUrlEl.textContent = challengeShell
+              statusEl.textContent =
+                'onAction threeDS → openPayChallenge（原页 poll；终态 closePayWebUrl）'
+              if (canOpenPayChallenge()) {
+                bridge.openPayChallenge(
+                  challengeShell,
+                  JSON.stringify({
+                    MD: action.MD,
+                    JWT: action.JWT,
+                    action: action.action
+                  })
+                )
+                return
+              }
+              browserOpenAction(action)
+              return
+            }
+            if (action.type === 'threeDSMethod') {
+              if (openedWebUrlEl) openedWebUrlEl.textContent = methodShell
+              statusEl.textContent =
+                'onAction threeDSMethod → openPayMethod（原页 poll；终态 closePayWebUrl）'
+              if (canOpenPayMethod()) {
+                bridge.openPayMethod(
+                  methodShell,
+                  JSON.stringify({
+                    threeDSMethodData: action.threeDSMethodData,
+                    methodUrl: action.methodUrl
+                  })
+                )
+                return
+              }
+              browserOpenAction(action)
+            }
+          },
+          onOrderCreated(orderRes) {
+            console.log('[demo] onOrderCreated', orderRes)
+            statusEl.textContent = 'Order ' + orderRes.orderNo + ' ready (' + orderRes.method + ').'
+            lastRiskConfig = orderRes.risk || null
+            renderRisk({ fingerprintId: null, risk: null })
+            ui.showTraceId(null, sdk)
+          },
+          onRiskCollected(info) {
+            console.log('[demo] onRiskCollected', info)
+            renderRisk(info)
+          },
+          onStatusChange(orderStatus) {
+            console.log('[demo] onStatusChange', orderStatus)
+            clearStatusHighlight()
+            lastOrderDetail = Object.assign({}, lastOrderDetail || {}, orderStatus)
+            session.renderOrderSummary(summaryEl, {
+              detail: lastOrderDetail,
+              orderRequest: orderRequest
+            })
+            statusEl.textContent =
+              'Payment status: ' +
+              orderStatus.orderState +
+              (orderStatus.s3dsUrl ? ' · s3dsUrl' : '')
+            ui.showTraceId(null, sdk)
+          },
+          onComplete(result) {
+            console.log('[demo] onComplete', result)
+            outputEl.textContent = JSON.stringify(result, null, 2)
+            ui.showTraceId(null, sdk)
+          },
+          onSuccess(result) {
+            console.log('[demo] onSuccess', result)
+            closePayDrawer()
+            if (openedWebUrlEl) {
+              openedWebUrlEl.textContent =
+                '(已 closePayWebUrl) ' + (openedWebUrlEl.textContent || '')
+            }
+            handlers.onSuccess(result)
+            const order = (result && result.order) || lastOrderDetail || {}
+            const orderState = order.orderState
+            setStatus(
+              orderState != null
+                ? 'Payment status: ' + orderState + ' · authorized'
+                : 'Payment authorized.',
+              true
+            )
+            goResult({
+              source: 'onSuccess',
+              result: result,
+              orderDetail: Object.assign({}, lastOrderDetail || {}, order),
+              orderState: orderState,
+              environment: environment,
+              token: orderResponse.token,
+              orderRequest: orderRequest
+            })
+          },
+          onError(error) {
+            console.log('[demo] onError', error)
+            closePayDrawer()
+            handlers.onError(error)
+            setStatus('Error: ' + ui.formatError(error), true)
+            const order = (error && error.order) || lastOrderDetail || {}
+            goResult({
+              source: 'onError',
+              result: {
+                message: error && error.message,
+                returnCode: error && error.returnCode,
+                traceId: error && error.traceId,
+                status: error && error.status,
+                order: order
+              },
+              orderDetail: Object.assign({}, lastOrderDetail || {}, order),
+              orderState: order.orderState,
+              environment: environment,
+              token: orderResponse.token,
+              orderRequest: orderRequest
+            })
+          },
+          onCancel: handlers.onCancel
+        })
+        sdkRef.current = sdk
+
+        ui.run(sdk).then(
+          function () {
+            setCustomPayBtnReady()
+          },
+          function () {
+            setCustomPayBtnLoading()
+          }
+        )
+      }
+
+      customPayBtn.addEventListener('click', function () {
+        if (!sdk || customPayBtn.disabled) return
+        try {
+          sdk.pay()
+        } catch (err) {
+          setStatus('pay() 失败：' + (err && err.message ? err.message : err), true)
+        }
+      })
+
+      void boot()
+    </script>
+  </body>
+</html>
