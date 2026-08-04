@@ -794,6 +794,9 @@ apple-pay-button {
     return button
   }
   function renderButton(config, onClick) {
+    if (!config.container) {
+      throw new Error('config.container is required to render the official wallet button')
+    }
     const el = resolveContainer(config.container)
     el.innerHTML = ''
     if (config.method === 'googlePay') return renderGoogleButton(el, config, onClick)
@@ -1992,9 +1995,6 @@ apple-pay-button {
     if (!config || typeof config !== 'object') {
       throw new Error('PaySdk.init requires a config object')
     }
-    if (!config.container) {
-      throw new Error('config.container is required')
-    }
     const order = config.order
     if (!order || typeof order !== 'object') {
       throw new Error('config.order is required (create-order response)')
@@ -2175,16 +2175,17 @@ apple-pay-button {
       }
       return ready(this.runtimeConfig)
     }
-    _pay() {
+    /**
+     * Synchronously open the wallet sheet. Must run inside a user-gesture stack
+     * (e.g. button click). Call only after `ready()` has resolved.
+     */
+    pay() {
       const config = this.runtimeConfig
       if (!config) {
-        void this.ready()
-          .then(() => this._pay())
-          .catch((error) => {
-            var _a, _b
-            return (_b = (_a = this.config).onError) == null ? void 0 : _b.call(_a, toError(error))
-          })
-        return
+        throw new Error('Pay SDK is not ready; call ready() first')
+      }
+      if (this.destroyed) {
+        throw new Error('Pay SDK has been destroyed')
       }
       if (config.method === 'googlePay') {
         void payWithGoogle(config)
@@ -2193,6 +2194,11 @@ apple-pay-button {
       payWithApple(config)
     }
     mount() {
+      if (!this.config.container) {
+        throw new Error(
+          'config.container is required for mount(); omit mount and call pay() for a custom button'
+        )
+      }
       if (this.runtimeConfig) {
         this.render()
       } else {
@@ -2225,8 +2231,8 @@ apple-pay-button {
       return 'opened'
     }
     render() {
-      if (this.destroyed || !this.runtimeConfig) return
-      this._button = renderButton(this.runtimeConfig, () => this._pay())
+      if (this.destroyed || !this.runtimeConfig || !this.runtimeConfig.container) return
+      this._button = renderButton(this.runtimeConfig, () => this.pay())
     }
     /**
      * 钱包授权后、关 sheet 前调用：await api.pay，缓存到 earlyPayPromise。
@@ -2483,7 +2489,7 @@ apple-pay-button {
       ;(_b = (_a = this.config).onError) == null ? void 0 : _b.call(_a, error)
     }
     destroy() {
-      var _a
+      var _a, _b
       this.destroyed = true
       this.unbindSecondaryReturnHook()
       this.stopPolling()
@@ -2492,7 +2498,7 @@ apple-pay-button {
       this.earlyPayPromise = null
       ;(_a = this._button) == null ? void 0 : _a.remove()
       this._button = null
-      if (this.runtimeConfig) {
+      if ((_b = this.runtimeConfig) == null ? void 0 : _b.container) {
         resolveContainer(this.runtimeConfig.container).replaceChildren()
       }
     }

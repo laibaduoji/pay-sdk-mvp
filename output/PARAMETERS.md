@@ -1,11 +1,16 @@
 # PaySdk.init 参数说明（商户最终版）
 
-图例：**必传** = 必须提供，否则 `init` 抛错。
+图例：**必传** = 必须提供，否则 `init` 抛错；**条件** = 某种用法下必传。
 
 SDK 编排：**商户已创建订单** → 钱包授权 → 支付 →（需要时）查询。  
 `order` 为创建订单**响应**。SDK **不**调创建订单、**不**签名；后续接口带头 `payment-hub-token`。
 
 接入流程见 [SDK.md](./SDK.md)；App 二次动作见 [WEBVIEW.md](./WEBVIEW.md)。
+
+唤起钱包有两种方式（可只选其一，也可同时提供官方按钮与自定义入口）：
+
+- **SDK 渲染官方按钮**：传 `container`，`ready()` 后 `mount()`
+- **商户自定义按钮**：可不传 `container`；`ready()` resolve 表示可点击；用户点击时同步调 `pay()`
 
 ---
 
@@ -13,7 +18,7 @@ SDK 编排：**商户已创建订单** → 钱包授权 → 支付 →（需要�
 
 | 参数             | 类型                     |  必传  | 默认值     | 说明                                                                    |
 | ---------------- | ------------------------ | :----: | ---------- | ----------------------------------------------------------------------- |
-| `container`      | `string \| HTMLElement`  | **是** | —          | 按钮渲染容器                                                            |
+| `container`      | `string \| HTMLElement`  |  条件  | —          | 使用 `mount()` 时必传；仅自定义按钮 + `pay()` 时可省略                  |
 | `order`          | `object`                 | **是** | —          | 创建订单响应；须含 `orderNo` / `paymentScript` / `token`                |
 | `api`            | `object`                 |   否   | 内置生产域 | 可传 `headers` / `pollIntervalMs` / `pollTimeoutMs`；**无需** appSecret |
 | `onStatusChange` | `(order) => void`        |   否   | —          | 每次查单成功                                                            |
@@ -23,7 +28,7 @@ SDK 编排：**商户已创建订单** → 钱包授权 → 支付 →（需要�
 | `onError`        | `(error: Error) => void` |   否   | —          | API / 钱包失败、查单失败态、超时等                                      |
 | `onCancel`       | `() => void`             |   否   | —          | 用户关闭 Google / Apple Pay 钱包 sheet（未完成授权）                    |
 
-### 示例
+### 示例：SDK 渲染官方按钮
 
 ```js
 const sdk = PaySdk.init({
@@ -33,19 +38,15 @@ const sdk = PaySdk.init({
     pollIntervalMs: 2000,
     pollTimeoutMs: 300000
   },
-  // 需二次动作；App 在此调 Bridge，见 WEBVIEW.md
   onAction(action) {
     console.log(action)
   },
-  // 支付直接成功，或轮询查单到成功态
   onSuccess(result) {
     console.log(result.orderNo, result.order && result.order.orderState)
   },
-  // API / 钱包失败、查单失败态、超时等
   onError(error) {
     console.error(error)
   },
-  // 用户关闭钱包 sheet（未完成授权）
   onCancel() {
     console.log('cancelled')
   }
@@ -55,6 +56,49 @@ sdk.ready().then(function () {
   sdk.mount()
 })
 ```
+
+### 示例：商户自定义按钮
+
+```js
+const btn = document.getElementById('pay-now')
+btn.disabled = true
+btn.textContent = '加载中'
+
+const sdk = PaySdk.init({
+  // 可不传 container
+  order: createOrderResponseFromYourServer,
+  onSuccess(result) {
+    console.log(result.orderNo)
+  },
+  onError(error) {
+    console.error(error)
+  },
+  onCancel() {
+    console.log('cancelled')
+  },
+  onAction(action) {
+    console.log(action)
+  }
+})
+
+// ready() resolve = 可点击通知
+sdk
+  .ready()
+  .then(function () {
+    btn.disabled = false
+    btn.textContent = '确认'
+  })
+  .catch(function (err) {
+    console.warn(err.message)
+  })
+
+// 须在用户点击的同步栈内调用
+btn.addEventListener('click', function () {
+  sdk.pay()
+})
+```
+
+实例方法完整说明见 [SDK.md §5](./SDK.md)：`ready` / `mount` / `pay` / `destroy`。
 
 ### API 与轮询
 

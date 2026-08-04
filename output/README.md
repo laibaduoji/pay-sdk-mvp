@@ -30,7 +30,8 @@ sequenceDiagram
   participant PaySdk
   participant NativeApp
   MerchantServer->>CashierH5: createOrder data plus token
-  CashierH5->>PaySdk: init order ready mount
+  CashierH5->>PaySdk: init order ready
+  CashierH5->>PaySdk: mount or pay
   PaySdk->>PaySdk: wallet pay poll
   PaySdk->>CashierH5: onAction
   CashierH5->>NativeApp: Bridge open drawer
@@ -40,7 +41,7 @@ sequenceDiagram
 
 ## 一句话流程
 
-商户服务端签名**创建订单** → 把响应（含 `token`）交给 H5 → `PaySdk.init({ order })` → `ready()` / `mount()` → 用户授权钱包 → SDK 支付 / 查单 → 若有二次动作则 `onAction`（App 用 Bridge 开抽屉）→ `onSuccess` / `onError`。
+商户服务端签名**创建订单** → 把响应（含 `token`）交给 H5 → `PaySdk.init({ order })` → `ready()` → **`mount()`（官方按钮）或自定义按钮 + `pay()`** → 用户授权钱包 → SDK 支付 / 查单 → 若有二次动作则 `onAction`（App 用 Bridge 开抽屉）→ `onSuccess` / `onError`。
 
 ## 引用 SDK
 

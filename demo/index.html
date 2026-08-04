@@ -204,6 +204,11 @@
       <button type="button" id="trace-copy">复制</button>
     </div>
     <div id="pay-container"></div>
+    <p class="meta">
+      下方「确认」为商户自定义按钮示例（ready 前为加载中；点击同步调 sdk.pay()）。上方为 SDK mount
+      的官方按钮。
+    </p>
+    <button type="button" id="custom-pay-btn" disabled>加载中</button>
     <h2 class="section-title">风控数据</h2>
     <pre id="risk">挂载后采集 Fingerprint（请求头 fingerprint-id）…</pre>
     <h2 class="section-title">onAction / 打开的链接</h2>
@@ -248,8 +253,19 @@
 
       let sdk = null
       let lastRiskConfig = null
+      const customPayBtn = document.getElementById('custom-pay-btn')
 
       ui.bindTraceCopy()
+
+      function setCustomPayBtnLoading() {
+        customPayBtn.disabled = true
+        customPayBtn.textContent = '加载中'
+      }
+
+      function setCustomPayBtnReady() {
+        customPayBtn.disabled = false
+        customPayBtn.textContent = '确认'
+      }
 
       function el(name) {
         return form.elements.namedItem(name)
@@ -468,6 +484,7 @@
           } catch (_) {}
           sdk = null
         }
+        setCustomPayBtnLoading()
 
         const fd = new FormData(form)
         const environment = fd.get('environment') || 'TEST'
@@ -689,7 +706,14 @@
         })
         sdkRef.current = sdk
 
-        ui.run(sdk)
+        ui.run(sdk).then(
+          function () {
+            setCustomPayBtnReady()
+          },
+          function () {
+            setCustomPayBtnLoading()
+          }
+        )
       }
 
       applyDefaults()
@@ -702,6 +726,15 @@
       document.getElementById('apply-btn').addEventListener('click', function () {
         void mountSdk()
       })
+      customPayBtn.addEventListener('click', function () {
+        if (!sdk || customPayBtn.disabled) return
+        try {
+          sdk.pay()
+        } catch (err) {
+          setStatus('pay() 失败：' + (err && err.message ? err.message : err), true)
+        }
+      })
+      setCustomPayBtnLoading()
       refreshPreview()
       void fillClientIp().then(function () {
         refreshPreview()

@@ -429,8 +429,18 @@ export interface PaySdkSettleResult {
 }
 
 export interface PaySdkInstance {
+  /**
+   * 规范化订单、预采风控、检查钱包可用。
+   * Promise resolve 表示可挂载官方按钮，或启用商户自定义按钮并调用 `pay()`。
+   */
   ready(): Promise<true>
+  /** 在 `container` 中渲染官方 Google/Apple Pay 按钮（须先传 container） */
   mount(): this
+  /**
+   * 同步唤起钱包 sheet。须在用户点击回调的同步调用栈内调用；调用前须 `await ready()`。
+   * 用于商户自定义按钮（可不传 container / 不调 mount）。
+   */
+  pay(): void
   /** 商户授权后可让 SDK（或内置实现）打开二次动作页面 */
   openAction(action: PaymentAction): void
   /** 最近一次 openapi 响应的 traceId（成功或失败） */
@@ -459,7 +469,10 @@ interface PaySdkCallbacks {
 }
 
 interface PaySdkBaseConfig extends PaySdkCallbacks {
-  container: string | HTMLElement
+  /**
+   * 官方按钮挂载节点。使用 `mount()` 时必传；仅用自定义按钮 + `pay()` 时可省略。
+   */
+  container?: string | HTMLElement
 }
 
 /**
@@ -499,7 +512,8 @@ export type ApiPaySdkConfig = PaySdkConfig
  * 创建订单成功后的内部运行时配置（供 Google/Apple 模块使用，非 init 入参）。
  */
 export interface RuntimeWalletConfig {
-  container: string | HTMLElement
+  /** 官方按钮容器；自定义按钮路径可为 undefined */
+  container?: string | HTMLElement
   method: PayMethod
   payment: PaymentConfig
   environment?: Environment

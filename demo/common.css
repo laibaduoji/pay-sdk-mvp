@@ -22,8 +22,28 @@ h1 {
 }
 
 #pay-container {
-  margin: 24px 0;
+  margin: 24px 0 8px;
   min-height: 44px;
+}
+
+#custom-pay-btn {
+  display: block;
+  width: 100%;
+  margin: 0 0 24px;
+  padding: 12px 16px;
+  font-size: 15px;
+  font-weight: 600;
+  border: none;
+  border-radius: 6px;
+  background: #111;
+  color: #fff;
+  cursor: pointer;
+}
+
+#custom-pay-btn:disabled {
+  background: #bbb;
+  color: #666;
+  cursor: not-allowed;
 }
 
 #status {

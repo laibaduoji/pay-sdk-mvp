@@ -55,6 +55,9 @@ function renderGoogleButton(
 
 // Renders the official wallet button into the container and returns the node.
 export function renderButton(config: RuntimeWalletConfig, onClick: () => void): HTMLElement {
+  if (!config.container) {
+    throw new Error('config.container is required to render the official wallet button')
+  }
   const el = resolveContainer(config.container)
   el.innerHTML = ''
 

@@ -207,6 +207,8 @@ sdk.ready().then(function () {
 })
 ```
 
+也可用商户自有按钮：`ready()` 成功后启用按钮，在点击回调里同步调 `sdk.pay()`（可不传 `container` / 不调 `mount`）。按钮与唤起细节见 [SDK.md](./SDK.md)。Bridge / 抽屉流程不变。
+
 ### 无 Bridge 时
 
 正式 App WebView 必须注入完整 `NativeBridge`。缺失时提示用户升级 App，**不要**在收银台页做整页跳转打开 `webUrl` / `s3ds`。

@@ -99,9 +99,6 @@ function validateConfig(config: PaySdkConfig): void {
   if (!config || typeof config !== 'object') {
     throw new Error('PaySdk.init requires a config object')
   }
-  if (!config.container) {
-    throw new Error('config.container is required')
-  }
   const order = config.order
   if (!order || typeof order !== 'object') {
     throw new Error('config.order is required (create-order response)')
@@ -299,13 +296,17 @@ class PaySdk implements PaySdkInstance {
     return detectReady(this.runtimeConfig)
   }
 
-  private _pay(): void {
+  /**
+   * Synchronously open the wallet sheet. Must run inside a user-gesture stack
+   * (e.g. button click). Call only after `ready()` has resolved.
+   */
+  pay(): void {
     const config = this.runtimeConfig
     if (!config) {
-      void this.ready()
-        .then(() => this._pay())
-        .catch((error) => this.config.onError?.(toError(error)))
-      return
+      throw new Error('Pay SDK is not ready; call ready() first')
+    }
+    if (this.destroyed) {
+      throw new Error('Pay SDK has been destroyed')
     }
     if (config.method === 'googlePay') {
       void payWithGoogle(config)
@@ -315,6 +316,11 @@ class PaySdk implements PaySdkInstance {
   }
 
   mount(): this {
+    if (!this.config.container) {
+      throw new Error(
+        'config.container is required for mount(); omit mount and call pay() for a custom button'
+      )
+    }
     if (this.runtimeConfig) {
       this.render()
     } else {
@@ -352,8 +358,8 @@ class PaySdk implements PaySdkInstance {
   }
 
   private render(): void {
-    if (this.destroyed || !this.runtimeConfig) return
-    this._button = renderButton(this.runtimeConfig, () => this._pay())
+    if (this.destroyed || !this.runtimeConfig || !this.runtimeConfig.container) return
+    this._button = renderButton(this.runtimeConfig, () => this.pay())
   }
 
   /**
@@ -659,7 +665,7 @@ class PaySdk implements PaySdkInstance {
     this.earlyPayPromise = null
     this._button?.remove()
     this._button = null
-    if (this.runtimeConfig) {
+    if (this.runtimeConfig?.container) {
       resolveContainer(this.runtimeConfig.container).replaceChildren()
     }
   }

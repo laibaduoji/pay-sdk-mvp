@@ -31,10 +31,12 @@
 ```text
 商户服务端签名创建订单 → 拿到 data（含 paymentScript / risk / token）
   → 引入 SDK
-  → PaySdk.init({ order: 创建订单响应 })
-  → ready()：用传入订单选钱包 → 预采风控 → 检查可用
-  → mount()：渲染官方支付按钮
-  → 用户点击并授权钱包
+  → PaySdk.init({ order: 创建订单响应 })  // 用 mount 时再传 container
+  → ready()：用传入订单选钱包 → 预采风控 → 检查可用（resolve = 可点击 / 可唤起）
+  → 二选一唤起钱包：
+       · mount()：在 container 渲染官方 Google / Apple Pay 按钮，用户点击官方按钮
+       · 或商户自有按钮：ready 成功后启用按钮，用户点击时同步调用 pay()
+  → 用户授权钱包
   → SDK 提交支付 / 查单（请求头 payment-hub-token = order.token；Fingerprint 走 fingerprint-id）
   → 若无二次动作：onSuccess / onComplete
   → 若有 webUrl / 3DS 等：onAction（不自动跳转）+ 后台轮询
@@ -50,9 +52,20 @@ SDK **不**调用创建订单、**不**签名、**不**需要 `appId` / `appSecr
 钱包类型、令牌化、Forter/Checkout/WorldPay 开关由**创建订单接口响应**决定。  
 **Fingerprint** 由 SDK 在 `init` 时用内置默认自动采集，并通过请求头 `fingerprint-id` 带到支付相关 API。
 
+**按钮两种用法：**
+
+| 方式             | 做法                                                                                          |
+| ---------------- | --------------------------------------------------------------------------------------------- |
+| SDK 渲染官方按钮 | 传 `container`，`ready()` 后 `mount()`                                                        |
+| 商户自定义按钮   | 可不传 `container`；以 `ready()` resolve 为「可点击」通知；在用户点击回调里**同步**调 `pay()` |
+
+自定义 CTA 的 Google / Apple 品牌合规由商户自行负责。`pay()` 必须在点击事件的同步调用栈内执行（不可先 `await` 再唤起）。
+
 ---
 
 ## 3. 最小接入示例
+
+### 3.1 SDK 渲染官方按钮（传 DOM）
 
 ```html
 <!doctype html>
@@ -104,18 +117,62 @@ SDK **不**调用创建订单、**不**签名、**不**需要 `appId` / `appSecr
 </html>
 ```
 
+### 3.2 商户自定义按钮
+
+```html
+<button id="pay-now" disabled>加载中</button>
+<script src="./pay-sdk.js"></script>
+<script>
+  const order = window.__CREATE_ORDER_DATA__
+  const btn = document.getElementById('pay-now')
+
+  const sdk = PaySdk.init({
+    // 可不传 container
+    order: order,
+    onSuccess(result) {
+      console.log('支付成功', result.orderNo)
+    },
+    onError(error) {
+      console.error(error.message)
+    },
+    onCancel() {
+      console.log('用户取消')
+    },
+    onAction(action) {
+      console.log('二次动作', action)
+    }
+  })
+
+  // ready() resolve = 通知商户「可点击」
+  sdk
+    .ready()
+    .then(function () {
+      btn.disabled = false
+      btn.textContent = '确认'
+    })
+    .catch(function (err) {
+      console.warn('支付不可用', err.message)
+    })
+
+  // 须在用户点击的同步栈内调用 pay()
+  btn.addEventListener('click', function () {
+    sdk.pay()
+  })
+</script>
+```
+
 完整参数见 [PARAMETERS.md](./PARAMETERS.md)。
 
 ---
 
 ## 4. 初始化参数（摘要）
 
-| 参数                                 | 类型                    | 必传 | 默认值 | 说明                       |
-| ------------------------------------ | ----------------------- | :--: | ------ | -------------------------- |
-| `container`                          | `string \| HTMLElement` |  是  | —      | 按钮挂载节点               |
-| `order`                              | `object`                |  是  | —      | 创建订单响应，须含 `token` |
-| `onAction`                           | `(action) => void`      |  否  | —      | webUrl / 3DS 等二次动作    |
-| `onSuccess` / `onError` / `onCancel` | function                |  否  | —      | 成功 / 失败 / 用户取消钱包 |
+| 参数                                 | 类型                    | 必传 | 默认值 | 说明                                                   |
+| ------------------------------------ | ----------------------- | :--: | ------ | ------------------------------------------------------ |
+| `container`                          | `string \| HTMLElement` | 条件 | —      | 使用 `mount()` 时必传；仅自定义按钮 + `pay()` 时可省略 |
+| `order`                              | `object`                |  是  | —      | 创建订单响应，须含 `token`                             |
+| `onAction`                           | `(action) => void`      |  否  | —      | webUrl / 3DS 等二次动作                                |
+| `onSuccess` / `onError` / `onCancel` | function                |  否  | —      | 成功 / 失败 / 用户取消钱包                             |
 
 ### `order` 必含字段
 
@@ -140,12 +197,13 @@ API 根域名：`https://api.alchemypay.org`
 
 ## 5. 实例方法
 
-| 方法                  | 说明                               |
-| --------------------- | ---------------------------------- |
-| `PaySdk.init(config)` | 校验配置并返回实例                 |
-| `sdk.ready()`         | 规范化订单、预采风控、检查钱包可用 |
-| `sdk.mount()`         | 渲染支付按钮                       |
-| `sdk.destroy()`       | 移除按钮、清理 iframe 与轮询       |
+| 方法                  | 说明                                                               |
+| --------------------- | ------------------------------------------------------------------ |
+| `PaySdk.init(config)` | 校验配置并返回实例                                                 |
+| `sdk.ready()`         | 规范化订单、预采风控、检查钱包可用；**resolve = 可点击 / 可唤起**  |
+| `sdk.mount()`         | 在 `container` 渲染官方支付按钮（须先传 `container`）              |
+| `sdk.pay()`           | 同步唤起钱包 sheet；自定义按钮在用户点击回调内调用；须先 `ready()` |
+| `sdk.destroy()`       | 移除官方按钮（若有）、清理 iframe 与轮询                           |
 
 二次动作打开方式见 §6 与 [WEBVIEW.md](./WEBVIEW.md)；**不要**在收银台 WebView 内对 `webUrl` / `s3ds` 做整页跳转。
 
@@ -189,7 +247,7 @@ API 根域名：`https://api.alchemypay.org`
 ## 9. 接入检查清单
 
 - [ ] 已引入同目录或 CDN 的 `pay-sdk.js`，页面 HTTPS
-- [ ] `container` 存在且可见
+- [ ] 使用 `mount()`：`container` 存在且可见；或使用自定义按钮：`ready` 后启用按钮并在点击时同步调 `pay()`
 - [ ] **服务端**创建订单响应含 `orderNo` / `paymentScript` / `token`
 - [ ] `PaySdk.init({ order })` 传入完整响应
 - [ ] 实现 `onSuccess` / `onError` / `onCancel` / `onAction`
