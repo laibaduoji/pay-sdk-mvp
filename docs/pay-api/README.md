@@ -106,14 +106,14 @@ sequenceDiagram
 
 ### 响应 `data`
 
-| 字段                  | 说明                                                     |
-| --------------------- | -------------------------------------------------------- |
-| `orderNo`             | 订单号，后续接口必带                                     |
-| `paymentScript`       | 钱包原生唤起参数（见下）                                 |
-| `method`              | 可选 `'googlePay'` \| `'applePay'`；可不传，SDK 可推断   |
-| `environment`         | 可选 `'TEST'` \| `'PRODUCTION'`，不传默认 `'PRODUCTION'` |
-| `risk`                | 风控开关与可覆盖配置                                     |
-| `validateMerchantUrl` | 仅 Apple Pay，可选；有值则覆盖 SDK 当前环境的接口 2 地址 |
+| 字段                  | 说明                                                                                                                                                                                                                        |
+| --------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `orderNo`             | 订单号，后续接口必带                                                                                                                                                                                                        |
+| `paymentScript`       | 钱包原生唤起参数（见下）                                                                                                                                                                                                    |
+| `method`              | 可选 `'googlePay'` \| `'applePay'`；可不传，SDK 可推断                                                                                                                                                                      |
+| `environment`         | 可选 `'TEST'` \| `'PRODUCTION'`，不传默认 `'PRODUCTION'`；供 Google Pay `PaymentsClient.environment`（也可写在 `paymentScript` 内，SDK 提升到 `order.environment`）。TEST 联调须返回该字段，否则 GP 按 PRODUCTION 建 client |
+| `risk`                | 风控开关与可覆盖配置                                                                                                                                                                                                        |
+| `validateMerchantUrl` | 仅 Apple Pay，可选；有值则覆盖 SDK 当前环境的接口 2 地址                                                                                                                                                                    |
 
 #### `paymentScript` — Google Pay
 
@@ -240,6 +240,6 @@ SDK 从钱包结果映射：`encryptedData` → `customParam`；账单扁平进 
 
 ## 7. 备注
 
-- `environment`：钱包 + 风控共用；Google Pay 创建 `PaymentsClient` 时使用，不在 `paymentScript` 内。
+- `environment`（创单响应）：决定 Google Pay `PaymentsClient.environment`（及 TEST 缺省补齐）；可从顶层或 `paymentScript.environment` 提升。与 `PaySdk.init({ environment })` **无关**——后者主要用于内置 API 根域名与 Checkout Risk 沙盒选择。
 - 含 `PAYMENT_AUTHORIZATION` 时须提供 `onPaymentAuthorized`，否则 sheet 会失败或卡住。
 - 与历史 payment-hub 字段映射由服务端完成；联调以本目录与 ramp-vue 为准。

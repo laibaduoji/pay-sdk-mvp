@@ -2032,10 +2032,10 @@ apple-pay-button {
   }
   function runtimeConfigFromOrder(config, order, api, onWalletAuthorized, onAuthorizePay) {
     var _a
-    const environment = resolveEnvironment(config.environment || order.environment)
+    const walletEnvironment = resolveEnvironment(order.environment)
     const common = {
       container: config.container,
-      environment,
+      environment: walletEnvironment,
       risk: order.risk,
       onAuthorizePay,
       onSuccess: onWalletAuthorized,
@@ -2044,7 +2044,7 @@ apple-pay-button {
     }
     if (order.method === 'googlePay') {
       const paymentScript2 =
-        environment === 'TEST'
+        walletEnvironment === 'TEST'
           ? applyGooglePayTestDefaults(order.paymentScript)
           : order.paymentScript
       const card = paymentScript2.allowedPaymentMethods[0]
@@ -2140,9 +2140,9 @@ apple-pay-button {
         const order = normalizeCreateOrderResponse(this.config.order)
         this.order = order
         ;(_b = (_a = this.config).onOrderCreated) == null ? void 0 : _b.call(_a, order)
-        const environment = resolveEnvironment(this.config.environment || order.environment)
+        const apiEnvironment = resolveEnvironment(this.config.environment || order.environment)
         const prevTraceId = this.api.getLastTraceId()
-        this.api = new PayApiClient(this.buildApiConfig(environment))
+        this.api = new PayApiClient(this.buildApiConfig(apiEnvironment))
         this.api.restoreLastTraceId(prevTraceId)
         this.api.setPaymentHubToken(order.token)
         this.runtimeConfig = runtimeConfigFromOrder(
@@ -2156,10 +2156,7 @@ apple-pay-button {
             await this.authorizePay(result)
           }
         )
-        this.runtimeConfig.riskCollection = collectRisk(
-          this.runtimeConfig.risk,
-          this.runtimeConfig.environment
-        )
+        this.runtimeConfig.riskCollection = collectRisk(this.runtimeConfig.risk, apiEnvironment)
         void Promise.all([this.fingerprintIdPromise, this.runtimeConfig.riskCollection]).then(
           ([fingerprintId, risk]) => {
             var _a2, _b2

@@ -16,18 +16,19 @@ SDK 编排：**商户已创建订单** → 钱包授权 → 支付 →（需要�
 
 ## 1. 顶层参数
 
-| 参数         | 类型                     |  必传  | 默认值       | 说明                                                                      |
-| ------------ | ------------------------ | :----: | ------------ | ------------------------------------------------------------------------- |
-| `container`  | `string \| HTMLElement`  |  条件  | —            | 使用 `mount()` 时必传；仅自定义按钮 + `pay()` 时可省略                    |
-| `order`      | `object`                 | **是** | —            | 创建订单响应；须含 `orderNo` / `paymentScript` / `token`                  |
-| `api`        | `object`                 |   否   | 内置生产域   | 可传 `headers` / `pollIntervalMs` / `pollTimeoutMs`；**无需** appSecret   |
-| `actionMode` | `'callback' \| 'auto'`   |   否   | `'callback'` | 二次动作如何打开，见下方「二次动作」；**App WebView 请用 `callback`**     |
-| `openAction` | `(action) => boolean…`   |   否   | —            | `auto` 时先调用；返回 `true` 表示已处理（如 Bridge），SDK 不再内置打开    |
-| `onAction`   | `(action) => void`       |   否   | —            | 出现二次动作时始终回调；默认 `callback` 下由商户自行打开（App 调 Bridge） |
-| `onSuccess`  | `(result) => void`       |   否   | —            | 支付直接成功，或轮询查单到成功态                                          |
-| `onComplete` | `(result) => void`       |   否   | —            | 编排结束（含非终态 `s3dsComplete`）                                       |
-| `onError`    | `(error: Error) => void` |   否   | —            | API / 钱包失败、查单失败态、超时等                                        |
-| `onCancel`   | `() => void`             |   否   | —            | 用户关闭 Google / Apple Pay 钱包 sheet（未完成授权）                      |
+| 参数          | 类型                     |  必传  | 默认值         | 说明                                                                                                                         |
+| ------------- | ------------------------ | :----: | -------------- | ---------------------------------------------------------------------------------------------------------------------------- |
+| `container`   | `string \| HTMLElement`  |  条件  | —              | 使用 `mount()` 时必传；仅自定义按钮 + `pay()` 时可省略                                                                       |
+| `order`       | `object`                 | **是** | —              | 创建订单响应；须含 `orderNo` / `paymentScript` / `token`                                                                     |
+| `environment` | `'TEST' \| 'PRODUCTION'` |   否   | `'PRODUCTION'` | 内置 API 根域名（及 Checkout Risk 等）；**不**决定 Google Pay `PaymentsClient.environment`（见创单响应 `order.environment`） |
+| `api`         | `object`                 |   否   | 内置生产域     | 可传 `headers` / `pollIntervalMs` / `pollTimeoutMs`；**无需** appSecret                                                      |
+| `actionMode`  | `'callback' \| 'auto'`   |   否   | `'callback'`   | 二次动作如何打开，见下方「二次动作」；**App WebView 请用 `callback`**                                                        |
+| `openAction`  | `(action) => boolean…`   |   否   | —              | `auto` 时先调用；返回 `true` 表示已处理（如 Bridge），SDK 不再内置打开                                                       |
+| `onAction`    | `(action) => void`       |   否   | —              | 出现二次动作时始终回调；默认 `callback` 下由商户自行打开（App 调 Bridge）                                                    |
+| `onSuccess`   | `(result) => void`       |   否   | —              | 支付直接成功，或轮询查单到成功态                                                                                             |
+| `onComplete`  | `(result) => void`       |   否   | —              | 编排结束（含非终态 `s3dsComplete`）                                                                                          |
+| `onError`     | `(error: Error) => void` |   否   | —              | API / 钱包失败、查单失败态、超时等                                                                                           |
+| `onCancel`    | `() => void`             |   否   | —              | 用户关闭 Google / Apple Pay 钱包 sheet（未完成授权）                                                                         |
 
 ### 示例：SDK 渲染官方按钮
 
@@ -139,12 +140,13 @@ API 根域名：`https://api.alchemypay.org`
 
 ## 2. `order`（创建订单响应）
 
-| 参数            | 类型     |  必传  | 说明                         |
-| --------------- | -------- | :----: | ---------------------------- |
-| `orderNo`       | `string` | **是** | 平台订单号                   |
-| `paymentScript` | `object` | **是** | Google / Apple 原生参数      |
-| `token`         | `string` | **是** | 请求头 `payment-hub-token`   |
-| `risk`          | `object` |   否   | Forter / Checkout / WorldPay |
+| 参数            | 类型     |  必传  | 说明                                                                                                                                  |
+| --------------- | -------- | :----: | ------------------------------------------------------------------------------------------------------------------------------------- |
+| `orderNo`       | `string` | **是** | 平台订单号                                                                                                                            |
+| `paymentScript` | `object` | **是** | Google / Apple 原生参数                                                                                                               |
+| `token`         | `string` | **是** | 请求头 `payment-hub-token`                                                                                                            |
+| `environment`   | `string` |   否   | `'TEST'` \| `'PRODUCTION'`；决定 Google Pay `PaymentsClient.environment`；也可写在 `paymentScript` 内由 SDK 提升；缺省按 `PRODUCTION` |
+| `risk`          | `object` |   否   | Forter / Checkout / WorldPay                                                                                                          |
 
 创建订单**请求**字段由服务端调用 openapi，不传入 SDK。见 [SERVER.md](./SERVER.md)。
 

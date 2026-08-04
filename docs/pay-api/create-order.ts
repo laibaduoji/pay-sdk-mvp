@@ -53,7 +53,7 @@ export interface GooglePayParams {
   }
   /** SDK 固定覆盖为 ['PAYMENT_AUTHORIZATION'] */
   callbackIntents?: string[]
-  /** 部分服务端会塞进 paymentScript；SDK 提升为 order.environment */
+  /** 部分服务端会塞进 paymentScript；SDK 提升为 order.environment，供 Google Pay PaymentsClient 使用 */
   environment?: Environment
 }
 
@@ -133,7 +133,10 @@ export interface CreateOrderRequest {
 export interface CreateOrderResponseGooglePay {
   orderNo: string
   method: 'googlePay'
-  /** 不传时客户端按 PRODUCTION */
+  /**
+   * Google Pay `PaymentsClient.environment`；不传时 SDK 按 PRODUCTION。
+   * 也可写在 paymentScript.environment，规范化时提升到本字段。
+   */
   environment?: Environment
   paymentScript: GooglePayParams
   /** 后续 verify / pay / detail 请求头 `payment-hub-token` */
@@ -144,6 +147,7 @@ export interface CreateOrderResponseGooglePay {
 export interface CreateOrderResponseApplePay {
   orderNo: string
   method: 'applePay'
+  /** 可选；与 Google 路径同样可从创单下发（Apple 不读 PaymentsClient.environment） */
   environment?: Environment
   paymentScript: ApplePayParams
   /** 后续 verify / pay / detail 请求头 `payment-hub-token` */

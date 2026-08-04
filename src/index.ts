@@ -144,10 +144,11 @@ function runtimeConfigFromOrder(
   onWalletAuthorized: (result: PayResult) => void | Promise<void>,
   onAuthorizePay: (result: PayResult) => void | Promise<void>
 ): RuntimeWalletConfig {
-  const environment = resolveEnvironment(config.environment || order.environment)
+  // Google Pay PaymentsClient.environment + TEST defaults: create-order only (not init.environment)
+  const walletEnvironment = resolveEnvironment(order.environment)
   const common = {
     container: config.container,
-    environment,
+    environment: walletEnvironment,
     risk: order.risk,
     onAuthorizePay,
     onSuccess: onWalletAuthorized,
@@ -157,7 +158,9 @@ function runtimeConfigFromOrder(
 
   if (order.method === 'googlePay') {
     const paymentScript =
-      environment === 'TEST' ? applyGooglePayTestDefaults(order.paymentScript) : order.paymentScript
+      walletEnvironment === 'TEST'
+        ? applyGooglePayTestDefaults(order.paymentScript)
+        : order.paymentScript
     const card = paymentScript.allowedPaymentMethods[0]
     if (!card?.tokenizationSpecification) {
       throw new Error('Create order response is missing Google Pay tokenizationSpecification')
@@ -261,9 +264,10 @@ class PaySdk implements PaySdkInstance {
       this.order = order
       this.config.onOrderCreated?.(order)
 
-      const environment = resolveEnvironment(this.config.environment || order.environment)
+      // API / Checkout Risk: init.environment, else create-order environment
+      const apiEnvironment = resolveEnvironment(this.config.environment || order.environment)
       const prevTraceId = this.api.getLastTraceId()
-      this.api = new PayApiClient(this.buildApiConfig(environment))
+      this.api = new PayApiClient(this.buildApiConfig(apiEnvironment))
       this.api.restoreLastTraceId(prevTraceId)
       this.api.setPaymentHubToken(order.token)
 
@@ -279,10 +283,7 @@ class PaySdk implements PaySdkInstance {
         }
       )
 
-      this.runtimeConfig.riskCollection = collectRisk(
-        this.runtimeConfig.risk,
-        this.runtimeConfig.environment
-      )
+      this.runtimeConfig.riskCollection = collectRisk(this.runtimeConfig.risk, apiEnvironment)
       void Promise.all([this.fingerprintIdPromise, this.runtimeConfig.riskCollection]).then(
         ([fingerprintId, risk]) => {
           this.config.onRiskCollected?.({

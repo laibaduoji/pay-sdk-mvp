@@ -75,6 +75,6 @@
 
 ### 10. PARAMETERS 与真实 init 表面对齐
 
-- **现状**：`actionMode` / `openAction` 及浏览器/App 双轨二次动作说明已写入 [`PARAMETERS.md`](./PARAMETERS.md) / [`output/PARAMETERS.md`](../output/PARAMETERS.md) 与 [`output/SDK.md`](../output/SDK.md) §6。
-- **缺口**：`environment`、`onStatusChange`、`onRiskCollected` 等仍可能未完整列入参数表。
+- **现状**：`actionMode` / `openAction` / `environment`（API 域名语义）及创单 `order.environment`（Google Pay）已写入 PARAMETERS / SERVER / pay-api；浏览器/App 双轨二次动作见 SDK.md §6。
+- **缺口**：`onStatusChange`、`onRiskCollected` 等仍可能未完整列入参数表。
 - **后续计划**：继续对齐其余 init 表面字段。

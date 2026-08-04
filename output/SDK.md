@@ -168,20 +168,22 @@ SDK **不**调用创建订单、**不**签名、**不**需要 `appId` / `appSecr
 
 ## 4. 初始化参数（摘要）
 
-| 参数                                 | 类型                    | 必传 | 默认值 | 说明                                                   |
-| ------------------------------------ | ----------------------- | :--: | ------ | ------------------------------------------------------ |
-| `container`                          | `string \| HTMLElement` | 条件 | —      | 使用 `mount()` 时必传；仅自定义按钮 + `pay()` 时可省略 |
-| `order`                              | `object`                |  是  | —      | 创建订单响应，须含 `token`                             |
-| `onAction`                           | `(action) => void`      |  否  | —      | webUrl / 3DS 等二次动作                                |
-| `onSuccess` / `onError` / `onCancel` | function                |  否  | —      | 成功 / 失败 / 用户取消钱包                             |
+| 参数                                 | 类型                    | 必传 | 默认值         | 说明                                                                |
+| ------------------------------------ | ----------------------- | :--: | -------------- | ------------------------------------------------------------------- |
+| `container`                          | `string \| HTMLElement` | 条件 | —              | 使用 `mount()` 时必传；仅自定义按钮 + `pay()` 时可省略              |
+| `order`                              | `object`                |  是  | —              | 创建订单响应，须含 `token`                                          |
+| `environment`                        | `'TEST'\|'PRODUCTION'`  |  否  | `'PRODUCTION'` | 内置 API 域名等；**不**决定 Google Pay `PaymentsClient.environment` |
+| `onAction`                           | `(action) => void`      |  否  | —              | webUrl / 3DS 等二次动作                                             |
+| `onSuccess` / `onError` / `onCancel` | function                |  否  | —              | 成功 / 失败 / 用户取消钱包                                          |
 
 ### `order` 必含字段
 
-| 字段            | 说明                           |
-| --------------- | ------------------------------ |
-| `orderNo`       | 平台订单号                     |
-| `paymentScript` | Google / Apple 原生唤起参数    |
-| `token`         | 后续请求头 `payment-hub-token` |
+| 字段            | 说明                                                             |
+| --------------- | ---------------------------------------------------------------- |
+| `orderNo`       | 平台订单号                                                       |
+| `paymentScript` | Google / Apple 原生唤起参数                                      |
+| `token`         | 后续请求头 `payment-hub-token`                                   |
+| `environment`   | 可选；Google Pay `PaymentsClient.environment`（缺省 PRODUCTION） |
 
 ### SDK 内置 API（谁调用）
 

@@ -92,9 +92,20 @@
         </fieldset>
 
         <fieldset>
-          <legend>环境</legend>
-          <label><input type="radio" name="environment" value="TEST" checked /> TEST</label>
-          <label><input type="radio" name="environment" value="PRODUCTION" /> PRODUCTION</label>
+          <legend>API / 请求域名</legend>
+          <p class="meta">
+            仅切换 getToken / 创建订单 / SDK 业务接口域名；Google Pay
+            <code>PaymentsClient.environment</code> 取自创建订单响应的
+            <code>environment</code>，不受此项影响。
+          </p>
+          <label
+            ><input type="radio" name="environment" value="TEST" checked />
+            TEST（api-test.alchemytech.cc）</label
+          >
+          <label
+            ><input type="radio" name="environment" value="PRODUCTION" />
+            PRODUCTION（api.alchemypay.org）</label
+          >
         </fieldset>
 
         <fieldset>

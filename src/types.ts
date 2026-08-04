@@ -157,7 +157,7 @@ export interface GooglePayParams {
    * 并配置 PaymentsClient.paymentDataCallbacks.onPaymentAuthorized。
    */
   callbackIntents?: google.payments.api.CallbackIntent[]
-  /** 部分服务端会把环境塞进 paymentScript；SDK 会提升到 order.environment */
+  /** 部分服务端会把环境塞进 paymentScript；SDK 会提升到 order.environment，供 Google Pay PaymentsClient */
   environment?: Environment
 }
 
@@ -173,6 +173,7 @@ export interface ApplePayParams {
 export interface CreateOrderResponseGooglePay {
   orderNo: string
   method: 'googlePay'
+  /** Google Pay PaymentsClient.environment；缺省 PRODUCTION；也可从 paymentScript 提升 */
   environment?: Environment
   paymentScript: GooglePayParams
   /** 创建订单下发；后续 verify / pay / detail 请求头 `payment-hub-token` */
@@ -183,11 +184,12 @@ export interface CreateOrderResponseGooglePay {
 export interface CreateOrderResponseApplePay {
   orderNo: string
   method: 'applePay'
+  /** 可选创单环境；与 init.environment（API 域名）分离 */
   environment?: Environment
   paymentScript: ApplePayParams
   /** 创建订单下发；后续 verify / pay / detail 请求头 `payment-hub-token` */
   token: string
-  /** 可选覆盖；未下发时使用当前环境在 endpoints.ts 中的内置地址。 */
+  /** 可选覆盖；未下发时使用当前 API 环境在 endpoints.ts 中的内置地址。 */
   validateMerchantUrl?: string
   risk?: CreateOrderRisk
 }
@@ -483,8 +485,10 @@ export interface PaySdkConfig extends PaySdkBaseConfig {
   /** 商户侧创建订单响应（须含 `token`）；`paymentScript` 支持对象或 JSON 字符串 */
   order: CreateOrderResponse | CreateOrderInput
   /**
-   * SDK 运行环境，默认 `PRODUCTION`。
-   * 决定内置 API 地址、Google Pay 环境、Checkout Risk 沙盒/生产等。
+   * 可选。默认 `PRODUCTION`。
+   * 主要用于内置 API 根域名（及 Checkout Risk 沙盒/生产选择等）。
+   * **不**决定 Google Pay `PaymentsClient.environment`——该值只取自创建订单响应的
+   * `order.environment`（可含从 `paymentScript.environment` 提升的字段）。
    */
   environment?: Environment
   /**
@@ -516,6 +520,7 @@ export interface RuntimeWalletConfig {
   container?: string | HTMLElement
   method: PayMethod
   payment: PaymentConfig
+  /** 钱包环境：来自创建订单 `order.environment`（Google Pay PaymentsClient 使用） */
   environment?: Environment
   billingAddressRequired?: boolean
   googlePay?: GooglePayConfig
