@@ -40,26 +40,13 @@ function splitName(name?: string): { firstName: string; lastName: string } {
   }
 }
 
-function onlyCompleteBillingAddress(address: BillingAddress): BillingAddress | undefined {
-  const required = [
-    address.addressLine1,
-    address.city,
-    address.state,
-    address.zip,
-    address.country,
-    address.firstName,
-    address.lastName
-  ]
-  return required.every((value) => value.trim().length > 0) ? address : undefined
-}
-
 export function normalizeGoogleBillingAddress(
   address?: google.payments.api.Address,
   email?: string
 ): BillingAddress | undefined {
   if (!address) return undefined
   const name = splitName(address.name)
-  return onlyCompleteBillingAddress({
+  return {
     addressLine1: address.address1 || '',
     addressLine2: [address.address2, address.address3].filter(Boolean).join(' '),
     city: address.locality || '',
@@ -70,7 +57,7 @@ export function normalizeGoogleBillingAddress(
     lastName: name.lastName,
     phone: address.phoneNumber,
     email
-  })
+  }
 }
 
 export function normalizeAppleBillingAddress(
@@ -78,7 +65,7 @@ export function normalizeAppleBillingAddress(
 ): BillingAddress | undefined {
   if (!contact) return undefined
   const lines = contact.addressLines || []
-  return onlyCompleteBillingAddress({
+  return {
     addressLine1: lines[0] || '',
     addressLine2: lines.slice(1).join(' '),
     city: contact.locality || '',
@@ -89,7 +76,7 @@ export function normalizeAppleBillingAddress(
     lastName: contact.familyName || '',
     phone: contact.phoneNumber || undefined,
     email: contact.emailAddress || undefined
-  })
+  }
 }
 
 export function normalizeAppleToken(

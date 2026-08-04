@@ -86,22 +86,10 @@ var PaySdk = (function (exports) {
       lastName: parts.join(' ')
     }
   }
-  function onlyCompleteBillingAddress(address) {
-    const required = [
-      address.addressLine1,
-      address.city,
-      address.state,
-      address.zip,
-      address.country,
-      address.firstName,
-      address.lastName
-    ]
-    return required.every((value) => value.trim().length > 0) ? address : void 0
-  }
   function normalizeGoogleBillingAddress(address, email) {
     if (!address) return void 0
     const name = splitName(address.name)
-    return onlyCompleteBillingAddress({
+    return {
       addressLine1: address.address1 || '',
       addressLine2: [address.address2, address.address3].filter(Boolean).join(' '),
       city: address.locality || '',
@@ -112,12 +100,12 @@ var PaySdk = (function (exports) {
       lastName: name.lastName,
       phone: address.phoneNumber,
       email
-    })
+    }
   }
   function normalizeAppleBillingAddress(contact) {
     if (!contact) return void 0
     const lines = contact.addressLines || []
-    return onlyCompleteBillingAddress({
+    return {
       addressLine1: lines[0] || '',
       addressLine2: lines.slice(1).join(' '),
       city: contact.locality || '',
@@ -128,7 +116,7 @@ var PaySdk = (function (exports) {
       lastName: contact.familyName || '',
       phone: contact.phoneNumber || void 0,
       email: contact.emailAddress || void 0
-    })
+    }
   }
   function normalizeAppleToken(token) {
     return {
