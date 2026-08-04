@@ -2278,7 +2278,10 @@ apple-pay-button {
         }
         const action = describePayResponse(paymentResponse)
         if (this.destroyed || this.settledPayment) return
-        if (action) await this.dispatchAction(action)
+        if (action) {
+          const outcome = await this.dispatchAction(action)
+          if (outcome === 'navigated') return
+        }
         void this.pollOrder(walletResult, paymentResponse)
       } catch (error) {
         this.earlyPayPromise = null

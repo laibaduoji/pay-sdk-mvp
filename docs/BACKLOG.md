@@ -63,9 +63,9 @@
 
 ### 8. `actionMode: 'auto'` 与 App WebView
 
-- **现状**：默认 `callback`（只触发 `onAction`）；`auto` 会对 `webUrl` / `s3ds` 做整页 `location.assign`。
-- **缺口**：与 App WebView 规范（勿在收银台内整页跳转、应走 Bridge 开抽屉）冲突，易误配。
-- **后续计划**：交付文档约束 App 场景禁用 `auto`，或 SDK 侧对 WebView 场景降级为 `callback`。
+- **现状**：默认 `callback`；`auto` 会对 `webUrl` / `s3ds` 做整页 `location.assign` 并停止 poll；threeDS/Method 页内打开并继续 poll。交付文档已约束 App 用 `callback`（见 `output/WEBVIEW.md` / `SDK.md` §6）；demo 在检测到 Bridge 时强制 `callback`。
+- **缺口**：SDK **尚未**在运行时检测 `NativeBridge` 并强制降级为 `callback`。
+- **后续计划**：若商户仍误配，再考虑运行时降级；当前以文档 + demo 约束为准。
 
 ### 9. 错误信息可观测性
 
@@ -75,6 +75,6 @@
 
 ### 10. PARAMETERS 与真实 init 表面对齐
 
-- **现状**：类型与 demo 已有 `actionMode`、`openAction`、`environment`、`onStatusChange`、`onRiskCollected` 等。
-- **缺口**：[`docs/PARAMETERS.md`](./PARAMETERS.md) / [`output/PARAMETERS.md`](../output/PARAMETERS.md) 未完整列出。
-- **后续计划**：对齐参数表与类型 / demo，避免商户漏接能力。
+- **现状**：`actionMode` / `openAction` 及浏览器/App 双轨二次动作说明已写入 [`PARAMETERS.md`](./PARAMETERS.md) / [`output/PARAMETERS.md`](../output/PARAMETERS.md) 与 [`output/SDK.md`](../output/SDK.md) §6。
+- **缺口**：`environment`、`onStatusChange`、`onRiskCollected` 等仍可能未完整列入参数表。
+- **后续计划**：继续对齐其余 init 表面字段。

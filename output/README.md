@@ -17,11 +17,11 @@
 
 ## 角色与阅读顺序
 
-| 角色                 | 建议阅读                                                    |
-| -------------------- | ----------------------------------------------------------- |
-| 商户服务端           | ① [`SERVER.md`](./SERVER.md)                                |
-| 收银台 H5            | ② [`SDK.md`](./SDK.md) → [`PARAMETERS.md`](./PARAMETERS.md) |
-| App（Android / iOS） | ③ [`WEBVIEW.md`](./WEBVIEW.md) + [`html/`](./html/)         |
+| 角色                     | 建议阅读                                                                                   |
+| ------------------------ | ------------------------------------------------------------------------------------------ |
+| 商户服务端               | ① [`SERVER.md`](./SERVER.md)                                                               |
+| 纯浏览器收银台 H5        | ② [`SDK.md`](./SDK.md)（含 §6.1 `actionMode: 'auto'`）→ [`PARAMETERS.md`](./PARAMETERS.md) |
+| App（Android / iOS）内嵌 | ③ [`WEBVIEW.md`](./WEBVIEW.md) + [`html/`](./html/)；`actionMode` 用默认 `callback`        |
 
 ```mermaid
 sequenceDiagram

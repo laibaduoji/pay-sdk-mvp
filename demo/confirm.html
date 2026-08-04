@@ -136,13 +136,21 @@
         }
 
         const environment = flow.environment || 'TEST'
-        const actionMode = flow.actionMode || 'callback'
+        const requestedActionMode = flow.actionMode || 'callback'
         const orderRequest = flow.orderRequest || {}
         const orderResponse = flow.createOrderResponse
         const redirectUrl = orderRequest.redirectUrl || ''
         const callbackUrl = orderRequest.callbackUrl || ''
 
         const bridge = window.NativeBridge
+        const hasBridge = !!(
+          bridge &&
+          (typeof bridge.openPayWebUrl === 'function' ||
+            typeof bridge.openPayChallenge === 'function' ||
+            typeof bridge.openPayMethod === 'function')
+        )
+        // App WebView: never use auto with Bridge-in-onAction (would double-open / location.assign)
+        const actionMode = hasBridge ? 'callback' : requestedActionMode
         const challengeShell = new URL('./3ds-challenge.html', location.href).href
         const methodShell = new URL('./3ds-method.html', location.href).href
 
@@ -161,6 +169,7 @@
           }
         }
         function browserOpenAction(action) {
+          // callback-only: auto lets SDK open after onAction
           if (actionMode !== 'callback') return
           if (confirm('收到二次动作 ' + action.type + '，是否 sdk.openAction？（浏览器 Demo）')) {
             sdk.openAction(action)
@@ -234,7 +243,15 @@
           ui.showTraceId(err && err.traceId)
         }
 
-        setStatus('挂载 SDK…', false)
+        if (hasBridge && requestedActionMode === 'auto') {
+          console.warn(
+            '[demo] NativeBridge 存在：已强制 actionMode=callback，避免 auto 内置 location.assign 双开'
+          )
+        }
+        setStatus(
+          '挂载 SDK…（actionMode=' + actionMode + (hasBridge ? ' · Bridge' : ' · 纯浏览器') + '）',
+          false
+        )
 
         sdk = PaySdk.init({
           container: '#pay-container',
@@ -246,27 +263,37 @@
             pollTimeoutMs: 300000
           },
           onAction(action) {
-            console.log('[demo] onAction', action)
+            console.log('[demo] onAction', action, { actionMode: actionMode, hasBridge: hasBridge })
             actionEl.textContent = JSON.stringify(action, null, 2)
             if (action.type === 'webUrl' || action.type === 's3ds') {
               if (openedWebUrlEl) openedWebUrlEl.textContent = action.url || '—'
-              statusEl.textContent =
-                'onAction ' +
-                action.type +
-                ' → 打开二级页（原页继续 poll；终态 closePayWebUrl）: ' +
-                (action.url || '')
               if (canOpenPayWebUrl()) {
+                statusEl.textContent =
+                  'onAction ' +
+                  action.type +
+                  ' → Bridge 二级页（原页继续 poll；终态 closePayWebUrl）: ' +
+                  (action.url || '')
                 bridge.openPayWebUrl(action.url, redirectUrl, callbackUrl)
                 return
               }
+              if (actionMode === 'auto') {
+                statusEl.textContent =
+                  'onAction ' +
+                  action.type +
+                  ' → SDK auto 整页打开（对齐收银台；不再 poll）: ' +
+                  (action.url || '')
+                return
+              }
+              statusEl.textContent =
+                'onAction ' + action.type + ' → 浏览器 callback，可手动 openAction'
               browserOpenAction(action)
               return
             }
             if (action.type === 'threeDS') {
               if (openedWebUrlEl) openedWebUrlEl.textContent = challengeShell
-              statusEl.textContent =
-                'onAction threeDS → openPayChallenge（原页 poll；终态 closePayWebUrl）'
               if (canOpenPayChallenge()) {
+                statusEl.textContent =
+                  'onAction threeDS → openPayChallenge（原页 poll；终态 closePayWebUrl）'
                 bridge.openPayChallenge(
                   challengeShell,
                   JSON.stringify({
@@ -277,14 +304,19 @@
                 )
                 return
               }
+              if (actionMode === 'auto') {
+                statusEl.textContent = 'onAction threeDS → SDK auto 页内 iframe + 继续 poll'
+                return
+              }
+              statusEl.textContent = 'onAction threeDS → 浏览器 callback，可手动 openAction'
               browserOpenAction(action)
               return
             }
             if (action.type === 'threeDSMethod') {
               if (openedWebUrlEl) openedWebUrlEl.textContent = methodShell
-              statusEl.textContent =
-                'onAction threeDSMethod → openPayMethod（原页 poll；终态 closePayWebUrl）'
               if (canOpenPayMethod()) {
+                statusEl.textContent =
+                  'onAction threeDSMethod → openPayMethod（原页 poll；终态 closePayWebUrl）'
                 bridge.openPayMethod(
                   methodShell,
                   JSON.stringify({
@@ -294,6 +326,11 @@
                 )
                 return
               }
+              if (actionMode === 'auto') {
+                statusEl.textContent = 'onAction threeDSMethod → SDK auto 隐藏 iframe + 继续 poll'
+                return
+              }
+              statusEl.textContent = 'onAction threeDSMethod → 浏览器 callback，可手动 openAction'
               browserOpenAction(action)
             }
           },

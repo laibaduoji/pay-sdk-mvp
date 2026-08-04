@@ -39,10 +39,11 @@
   → 用户授权钱包
   → SDK 提交支付 / 查单（请求头 payment-hub-token = order.token；Fingerprint 走 fingerprint-id）
   → 若无二次动作：onSuccess / onComplete
-  → 若有 webUrl / 3DS 等：onAction（不自动跳转）+ 后台轮询
-       · App：Native 底部抽屉打开（webUrl / Challenge·Method 壳页）；原页继续 poll
+  → 若有 webUrl / 3DS 等：始终 onAction；打开方式见 actionMode（§6）
+       · 纯浏览器 auto：webUrl/s3ds 整页跳转（停 poll）；threeDS/Method 页内打开并继续 poll
+       · App callback（默认）：Native 底部抽屉打开；原页继续 poll
        · 二级页命中 redirectUrl/callbackUrl → Native 关栏 → 主 WebView 调 __paySdkSecondaryReturn() 催查单
-  → 轮询到成功/失败：onSuccess 或 onError / onComplete
+  → 轮询到成功/失败（或浏览器整页离开后由落地页处理）：onSuccess 或 onError / onComplete
 ```
 
 商户须在**服务端**调用创建订单（按 [API Sign](https://alchemypay.readme.io/docs/api-sign) 签名），把响应（含 **`token`**）传入 `PaySdk.init`。详见 [SERVER.md](./SERVER.md)。
@@ -205,13 +206,44 @@ API 根域名：`https://api.alchemypay.org`
 | `sdk.pay()`           | 同步唤起钱包 sheet；自定义按钮在用户点击回调内调用；须先 `ready()` |
 | `sdk.destroy()`       | 移除官方按钮（若有）、清理 iframe 与轮询                           |
 
-二次动作打开方式见 §6 与 [WEBVIEW.md](./WEBVIEW.md)；**不要**在收银台 WebView 内对 `webUrl` / `s3ds` 做整页跳转。
+二次动作见 §6：纯浏览器可用 `actionMode: 'auto'`；App 见 [WEBVIEW.md](./WEBVIEW.md)。**不要**在收银台 WebView 内对 `webUrl` / `s3ds` 做整页跳转。
 
 ---
 
 ## 6. 二次动作（摘要）
 
-出现二次动作时只触发 `onAction`，**不**自动跳转；App 在 `onAction` 中走 Native Bridge。
+出现二次动作时**始终**回调 `onAction`。是否由 SDK 自动打开取决于 `actionMode`（默认 `'callback'`）。参数详见 [PARAMETERS.md](./PARAMETERS.md)。
+
+### 6.1 纯浏览器（`actionMode: 'auto'`）
+
+行为对齐收银台支付二次动作（**不含 KYC**）：
+
+| `action.type`     | SDK 内置行为                 | 原页 poll |
+| ----------------- | ---------------------------- | --------- |
+| `webUrl` / `s3ds` | `location.assign` 整页离开   | **停**    |
+| `threeDS`         | 页内遮罩 + named iframe POST | 继续      |
+| `threeDSMethod`   | 隐藏 iframe POST             | 继续      |
+
+```js
+PaySdk.init({
+  container: '#pay-container',
+  order: createOrderResponseFromYourServer,
+  actionMode: 'auto',
+  onAction(action) {
+    console.log('二次动作', action.type)
+  },
+  onSuccess(result) {
+    // 自行跳转结果页（SDK 不调用 getRedirectUrl）
+  },
+  onError(error) {
+    console.error(error)
+  }
+})
+```
+
+### 6.2 App WebView（`actionMode: 'callback'`，默认）
+
+只 `onAction`，**不**自动打开；原页继续 poll。App 在 `onAction` 中走 Native Bridge：
 
 | `action.type`     | App                                                         |
 | ----------------- | ----------------------------------------------------------- |
@@ -219,7 +251,7 @@ API 根域名：`https://api.alchemypay.org`
 | `threeDS`         | `openPayChallenge(壳页, payload)`                           |
 | `threeDSMethod`   | `openPayMethod(壳页, payload)`                              |
 
-**禁止**在收银台 WebView 内对 `webUrl` / `s3ds` 做整页跳转（会中断原页轮询）。
+**禁止**在收银台 WebView 内对 `webUrl` / `s3ds` 做整页跳转；**禁止** `auto` + 仅在 `onAction` 开 Bridge（会双开）。
 
 完整 Bridge、壳页与关栏流程 → **[WEBVIEW.md](./WEBVIEW.md)**。参考壳页 → [`html/`](./html/)。
 
@@ -233,7 +265,7 @@ API 根域名：`https://api.alchemypay.org`
 - `onComplete(result)`：编排结束（含 `s3dsComplete` 但未必终态）
 - `onError(error)`：API / 钱包失败、查单失败态、超时等；`error.message` 可读
 - `onCancel()`：用户关闭 Google / Apple Pay 钱包 sheet（未完成授权）
-- `onAction(action)`：需二次动作（`webUrl` / `s3ds` / `threeDS` / `threeDSMethod`）；SDK 不自动打开，App 在此调 Bridge
+- `onAction(action)`：需二次动作（`webUrl` / `s3ds` / `threeDS` / `threeDSMethod`）；默认由商户打开，或见 §6 `actionMode`
 
 ---
 
@@ -251,7 +283,8 @@ API 根域名：`https://api.alchemypay.org`
 - [ ] **服务端**创建订单响应含 `orderNo` / `paymentScript` / `token`
 - [ ] `PaySdk.init({ order })` 传入完整响应
 - [ ] 实现 `onSuccess` / `onError` / `onCancel` / `onAction`
-- [ ] App：按 [WEBVIEW.md](./WEBVIEW.md) 实现 Bridge；`webUrl`/`s3ds` 不在收银台做整页跳转
+- [ ] 纯浏览器：需要 SDK 自动打开二次动作时设 `actionMode: 'auto'`（见 §6.1）
+- [ ] App：`actionMode: 'callback'`（默认）+ 按 [WEBVIEW.md](./WEBVIEW.md) 实现 Bridge；`webUrl`/`s3ds` 不在收银台做整页跳转
 - [ ] 创建订单带 `redirectUrl`（及如需的 `callbackUrl`）；回跳后调 `__paySdkSecondaryReturn()`
 - [ ] 离开支付页 `sdk.destroy()`，并关闭未关的抽屉
 - [ ] 业务接口 `returnCode === '0000'` 联调通过

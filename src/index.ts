@@ -413,7 +413,12 @@ class PaySdk implements PaySdkInstance {
 
       const action = describePayResponse(paymentResponse)
       if (this.destroyed || this.settledPayment) return
-      if (action) await this.dispatchAction(action)
+      // auto + webUrl/s3ds → location.assign ('navigated'): page is leaving; do not poll
+      // callback / Bridge openAction / threeDS·Method → keep poll (WebView unchanged)
+      if (action) {
+        const outcome = await this.dispatchAction(action)
+        if (outcome === 'navigated') return
+      }
       void this.pollOrder(walletResult, paymentResponse)
     } catch (error) {
       this.earlyPayPromise = null

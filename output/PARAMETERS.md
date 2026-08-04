@@ -16,16 +16,18 @@ SDK 编排：**商户已创建订单** → 钱包授权 → 支付 →（需要�
 
 ## 1. 顶层参数
 
-| 参数         | 类型                     |  必传  | 默认值     | 说明                                                                    |
-| ------------ | ------------------------ | :----: | ---------- | ----------------------------------------------------------------------- |
-| `container`  | `string \| HTMLElement`  |  条件  | —          | 使用 `mount()` 时必传；仅自定义按钮 + `pay()` 时可省略                  |
-| `order`      | `object`                 | **是** | —          | 创建订单响应；须含 `orderNo` / `paymentScript` / `token`                |
-| `api`        | `object`                 |   否   | 内置生产域 | 可传 `headers` / `pollIntervalMs` / `pollTimeoutMs`；**无需** appSecret |
-| `onAction`   | `(action) => void`       |   否   | —          | 需二次动作（webUrl / s3ds / threeDS / threeDSMethod）；SDK 不自动打开   |
-| `onSuccess`  | `(result) => void`       |   否   | —          | 支付直接成功，或轮询查单到成功态                                        |
-| `onComplete` | `(result) => void`       |   否   | —          | 编排结束（含非终态 `s3dsComplete`）                                     |
-| `onError`    | `(error: Error) => void` |   否   | —          | API / 钱包失败、查单失败态、超时等                                      |
-| `onCancel`   | `() => void`             |   否   | —          | 用户关闭 Google / Apple Pay 钱包 sheet（未完成授权）                    |
+| 参数         | 类型                     |  必传  | 默认值       | 说明                                                                      |
+| ------------ | ------------------------ | :----: | ------------ | ------------------------------------------------------------------------- |
+| `container`  | `string \| HTMLElement`  |  条件  | —            | 使用 `mount()` 时必传；仅自定义按钮 + `pay()` 时可省略                    |
+| `order`      | `object`                 | **是** | —            | 创建订单响应；须含 `orderNo` / `paymentScript` / `token`                  |
+| `api`        | `object`                 |   否   | 内置生产域   | 可传 `headers` / `pollIntervalMs` / `pollTimeoutMs`；**无需** appSecret   |
+| `actionMode` | `'callback' \| 'auto'`   |   否   | `'callback'` | 二次动作如何打开，见下方「二次动作」；**App WebView 请用 `callback`**     |
+| `openAction` | `(action) => boolean…`   |   否   | —            | `auto` 时先调用；返回 `true` 表示已处理（如 Bridge），SDK 不再内置打开    |
+| `onAction`   | `(action) => void`       |   否   | —            | 出现二次动作时始终回调；默认 `callback` 下由商户自行打开（App 调 Bridge） |
+| `onSuccess`  | `(result) => void`       |   否   | —            | 支付直接成功，或轮询查单到成功态                                          |
+| `onComplete` | `(result) => void`       |   否   | —            | 编排结束（含非终态 `s3dsComplete`）                                       |
+| `onError`    | `(error: Error) => void` |   否   | —            | API / 钱包失败、查单失败态、超时等                                        |
+| `onCancel`   | `() => void`             |   否   | —            | 用户关闭 Google / Apple Pay 钱包 sheet（未完成授权）                      |
 
 ### 示例：SDK 渲染官方按钮
 
@@ -108,10 +110,30 @@ API 根域名：`https://api.alchemypay.org`
 
 ### 二次动作
 
-出现二次动作时只触发 `onAction`，**不**自动跳转；原页继续轮询。
+无论 `actionMode` 为何，出现二次动作时都会先触发 `onAction`。打开方式分两轨：
 
-App 推荐在 `onAction` 调 Bridge：`openPayWebUrl` / `openPayChallenge` / `openPayMethod`（见 [WEBVIEW.md](./WEBVIEW.md)）。  
-**不要**在收银台 WebView 内对 `webUrl` / `s3ds` 做整页跳转。
+#### 纯浏览器（可对齐收银台 H5）
+
+设 `actionMode: 'auto'`（可与收银台支付二次动作对齐，**不含 KYC**）：
+
+| `action.type`   | SDK 内置行为                           | 原页 poll |
+| --------------- | -------------------------------------- | --------- |
+| `webUrl`/`s3ds` | `location.assign` 整页离开             | **停**    |
+| `threeDS`       | 页内遮罩 + named iframe POST（MD/JWT） | 继续      |
+| `threeDSMethod` | 隐藏 iframe POST                       | 继续      |
+
+结算时 SDK 会清理页内遮罩；**不会**代调结果跳转 URL，由商户在 `onSuccess` / `onComplete` 自行处理。
+
+#### App WebView（默认）
+
+保持 `actionMode: 'callback'`（默认）：只 `onAction`，**不**自动打开；原页继续轮询。  
+在 `onAction` 调 Bridge：`openPayWebUrl` / `openPayChallenge` / `openPayMethod`（见 [WEBVIEW.md](./WEBVIEW.md)）。
+
+**禁止**：
+
+- 在收银台 WebView 内对 `webUrl` / `s3ds` 做整页跳转
+- `actionMode: 'auto'` 却只在 `onAction` 里开 Bridge（会双开 / 整页跳走）
+  - 正确：App 用 `callback`；或 `auto` + `openAction` 返回 `true` 接管打开
 
 ---
 

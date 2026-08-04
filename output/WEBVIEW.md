@@ -5,6 +5,13 @@
 
 SDK 出现二次动作时**只回调** `onAction`，**不会**自动打开页面，并在需二次动作时继续轮询订单状态。App 须在 `onAction` 中调 Native Bridge。
 
+**`actionMode` 要求（重要）**
+
+- App **必须**使用默认 `actionMode: 'callback'`（或显式传入 `'callback'`）
+- **不要**在 App 里设 `actionMode: 'auto'` 却只在 `onAction` 开 Bridge：`auto` 会对 `webUrl`/`s3ds` 做收银台内 `location.assign`，打断原页轮询并可能与抽屉双开
+- 若确需 `auto`，须同时提供 `openAction` 且返回 `true` 表示 Bridge 已处理
+- 纯浏览器收银台用 `auto` 的说明见 [SDK.md §6.1](./SDK.md) / [PARAMETERS.md](./PARAMETERS.md)，**不是**本文 App 路径
+
 H5 SDK 接入见 [SDK.md](./SDK.md)；参考壳页见 [`html/`](./html/)。
 
 ---
