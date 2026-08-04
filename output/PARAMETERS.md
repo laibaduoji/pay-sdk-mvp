@@ -16,17 +16,16 @@ SDK 编排：**商户已创建订单** → 钱包授权 → 支付 →（需要�
 
 ## 1. 顶层参数
 
-| 参数             | 类型                     |  必传  | 默认值     | 说明                                                                    |
-| ---------------- | ------------------------ | :----: | ---------- | ----------------------------------------------------------------------- |
-| `container`      | `string \| HTMLElement`  |  条件  | —          | 使用 `mount()` 时必传；仅自定义按钮 + `pay()` 时可省略                  |
-| `order`          | `object`                 | **是** | —          | 创建订单响应；须含 `orderNo` / `paymentScript` / `token`                |
-| `api`            | `object`                 |   否   | 内置生产域 | 可传 `headers` / `pollIntervalMs` / `pollTimeoutMs`；**无需** appSecret |
-| `onStatusChange` | `(order) => void`        |   否   | —          | 每次查单成功                                                            |
-| `onAction`       | `(action) => void`       |   否   | —          | 需二次动作（webUrl / s3ds / threeDS / threeDSMethod）；SDK 不自动打开   |
-| `onSuccess`      | `(result) => void`       |   否   | —          | 支付直接成功，或轮询查单到成功态                                        |
-| `onComplete`     | `(result) => void`       |   否   | —          | 编排结束（含非终态 `s3dsComplete`）                                     |
-| `onError`        | `(error: Error) => void` |   否   | —          | API / 钱包失败、查单失败态、超时等                                      |
-| `onCancel`       | `() => void`             |   否   | —          | 用户关闭 Google / Apple Pay 钱包 sheet（未完成授权）                    |
+| 参数         | 类型                     |  必传  | 默认值     | 说明                                                                    |
+| ------------ | ------------------------ | :----: | ---------- | ----------------------------------------------------------------------- |
+| `container`  | `string \| HTMLElement`  |  条件  | —          | 使用 `mount()` 时必传；仅自定义按钮 + `pay()` 时可省略                  |
+| `order`      | `object`                 | **是** | —          | 创建订单响应；须含 `orderNo` / `paymentScript` / `token`                |
+| `api`        | `object`                 |   否   | 内置生产域 | 可传 `headers` / `pollIntervalMs` / `pollTimeoutMs`；**无需** appSecret |
+| `onAction`   | `(action) => void`       |   否   | —          | 需二次动作（webUrl / s3ds / threeDS / threeDSMethod）；SDK 不自动打开   |
+| `onSuccess`  | `(result) => void`       |   否   | —          | 支付直接成功，或轮询查单到成功态                                        |
+| `onComplete` | `(result) => void`       |   否   | —          | 编排结束（含非终态 `s3dsComplete`）                                     |
+| `onError`    | `(error: Error) => void` |   否   | —          | API / 钱包失败、查单失败态、超时等                                      |
+| `onCancel`   | `() => void`             |   否   | —          | 用户关闭 Google / Apple Pay 钱包 sheet（未完成授权）                    |
 
 ### 示例：SDK 渲染官方按钮
 

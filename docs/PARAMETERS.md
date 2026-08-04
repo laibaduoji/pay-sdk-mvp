@@ -1,43 +1,39 @@
 # 参数说明文档
 
-> **商户请优先阅读 [`output/PARAMETERS.md`](../output/PARAMETERS.md)**（最终版交付包）。  
-> 下文为仓库内部完整参数说明，可与 `output/` 对照；二次动作 App 接入见 [`output/WEBVIEW.md`](../output/WEBVIEW.md)。
+> 与商户交付包 [`output/PARAMETERS.md`](../output/PARAMETERS.md) **对齐**（同一套对外参数表面）。  
+> 完整 TypeScript 类型见 [`src/types.ts`](../src/types.ts)；二次动作 App 接入见 [`output/WEBVIEW.md`](../output/WEBVIEW.md)。
 
-`PaySdk.init(config)` 的完整参数说明。图例：**必传** = 必须提供，否则 `init` 抛错；可选 = 不传则使用默认值。
+图例：**必传** = 必须提供，否则 `init` 抛错；**条件** = 某种用法下必传。
 
 SDK 编排：**商户已创建订单** → 钱包授权 → 支付 →（需要时）查询。  
-`order` 为创建订单**响应**（含 `token` / `paymentScript` / `risk`）。SDK **不**调创建订单、**不**签名；后续接口带头 `payment-hub-token`。
+`order` 为创建订单**响应**。SDK **不**调创建订单、**不**签名；后续接口带头 `payment-hub-token`。
+
+唤起钱包有两种方式（可只选其一，也可同时提供官方按钮与自定义入口）：
+
+- **SDK 渲染官方按钮**：传 `container`，`ready()` 后 `mount()`
+- **商户自定义按钮**：可不传 `container`；`ready()` resolve 表示可点击；用户点击时同步调 `pay()`
 
 ---
 
 ## 1. 顶层参数（`config`）
 
-| 参数             | 类型                     |  必传  | 默认值         | 说明                                                                                                         |
-| ---------------- | ------------------------ | :----: | -------------- | ------------------------------------------------------------------------------------------------------------ |
-| `container`      | `string \| HTMLElement`  | **是** | —              | 按钮渲染容器                                                                                                 |
-| `order`          | `CreateOrderResponse`    | **是** | —              | 商户侧创建订单响应；须含 `orderNo` / `paymentScript` / `token`                                               |
-| `environment`    | `'TEST' \| 'PRODUCTION'` |   否   | `'PRODUCTION'` | 决定内置 API、Google Pay、Checkout Risk                                                                      |
-| `api`            | `Partial<PayApiConfig>`  |   否   | 按环境内置     | 默认用 `src/endpoints.ts`；可只传 headers / 轮询 / 覆盖 URL；**无需** appId/appSecret                        |
-| `onOrderCreated` | `(order) => void`        |   否   | —              | `ready()` 规范化订单后回调（订单已由商户创建）                                                               |
-| `onStatusChange` | `(order) => void`        |   否   | —              | 接口 4 每次轮询成功后回调                                                                                    |
-| `onAction`       | `(action) => void`       |   否   | —              | 二次动作回调；含 `MD`/`JWT`/`action`/`webUrl` 等完整字段                                                     |
-| `actionMode`     | `'callback' \| 'auto'`   |   否   | `'callback'`   | 默认只回调；`auto` 才尝试打开                                                                                |
-| `openAction`     | `(action) => boolean?`   |   否   | —              | `actionMode: 'auto'` 时自定义打开（如 JS Bridge）；也可随时 `sdk.openAction(action)`；返回 `true` 表示已处理 |
-| `onComplete`     | `(result) => void`       |   否   | —              | 编排结束；包括非终态的 `s3dsComplete`                                                                        |
-| `onSuccess`      | `(result) => void`       |   否   | —              | 接口 3 直接成功或查询状态为 `succeeded`                                                                      |
-| `onError`        | `(error: Error) => void` |   否   | —              | API、钱包或终态失败                                                                                          |
-| `onCancel`       | `() => void`             |   否   | —              | 用户取消钱包                                                                                                 |
+| 参数         | 类型                     |  必传  | 默认值     | 说明                                                                    |
+| ------------ | ------------------------ | :----: | ---------- | ----------------------------------------------------------------------- |
+| `container`  | `string \| HTMLElement`  |  条件  | —          | 使用 `mount()` 时必传；仅自定义按钮 + `pay()` 时可省略                  |
+| `order`      | `object`                 | **是** | —          | 创建订单响应；须含 `orderNo` / `paymentScript` / `token`                |
+| `api`        | `object`                 |   否   | 内置生产域 | 可传 `headers` / `pollIntervalMs` / `pollTimeoutMs`；**无需** appSecret |
+| `onAction`   | `(action) => void`       |   否   | —          | 需二次动作（webUrl / s3ds / threeDS / threeDSMethod）；SDK 不自动打开   |
+| `onSuccess`  | `(result) => void`       |   否   | —          | 支付直接成功，或轮询查单到成功态                                        |
+| `onComplete` | `(result) => void`       |   否   | —          | 编排结束（含非终态 `s3dsComplete`）                                     |
+| `onError`    | `(error: Error) => void` |   否   | —          | API / 钱包失败、查单失败态、超时等                                      |
+| `onCancel`   | `() => void`             |   否   | —          | 用户关闭 Google / Apple Pay 钱包 sheet（未完成授权）                    |
 
-### 1.1 示例
+### 示例：SDK 渲染官方按钮
 
 ```js
-// 商户服务端已创建订单，拿到 data（含 token）
-const order = createOrderResponseFromYourServer
-
 const sdk = PaySdk.init({
   container: '#pay-container',
-  environment: 'TEST',
-  order: order,
+  order: createOrderResponseFromYourServer,
   api: {
     pollIntervalMs: 2000,
     pollTimeoutMs: 300000
@@ -45,65 +41,89 @@ const sdk = PaySdk.init({
   onAction(action) {
     console.log(action)
   },
-  onOrderCreated: (order) => console.log(order.orderNo, order.token),
-  onStatusChange: (order) => console.log(order.orderState),
-  onComplete: (result) => console.log('flow complete', result.order?.orderState),
-  onSuccess: (result) => console.log(result.orderNo, result.order?.orderState),
-  onError: (error) => console.error(error)
+  onSuccess(result) {
+    console.log(result.orderNo, result.order && result.order.orderState)
+  },
+  onError(error) {
+    console.error(error)
+  },
+  onCancel() {
+    console.log('cancelled')
+  }
 })
 
-sdk.ready().then(() => sdk.mount())
+sdk.ready().then(function () {
+  sdk.mount()
+})
 ```
 
-内置地址（见 [`src/endpoints.ts`](../src/endpoints.ts)）：
+### 示例：商户自定义按钮
 
-| 环境                 | API 根域名                        |
-| -------------------- | --------------------------------- |
-| `TEST`               | `https://api-test.alchemytech.cc` |
-| `PRODUCTION`（默认） | `https://api.alchemypay.org`      |
+```js
+const btn = document.getElementById('pay-now')
+btn.disabled = true
+btn.textContent = '加载中'
 
-路径：`/payment-hub/domain/verify`、`/payment-hub/alchemy-pay`、
-`/payment-hub/order/detail`。  
-SDK 自动带 `payment-hub-token: <order.token>`（订单详情凭 token 查，不传 orderNo）。创建订单路径仍内置，供 demo / 商户服务端参考，**SDK 编排不调用**。
+const sdk = PaySdk.init({
+  // 可不传 container
+  order: createOrderResponseFromYourServer,
+  onSuccess(result) {
+    console.log(result.orderNo)
+  },
+  onError(error) {
+    console.error(error)
+  },
+  onCancel() {
+    console.log('cancelled')
+  },
+  onAction(action) {
+    console.log(action)
+  }
+})
 
-> 创建订单若返回 `validateMerchantUrl`，优先使用响应值；未返回则使用环境内置地址。
+sdk
+  .ready()
+  .then(function () {
+    btn.disabled = false
+    btn.textContent = '确认'
+  })
+  .catch(function (err) {
+    console.warn(err.message)
+  })
 
-Google Pay **TEST** 环境默认（创建订单未下发时 SDK 补齐，有值则保留）：
+btn.addEventListener('click', function () {
+  sdk.pay()
+})
+```
 
-| 字段                | 默认值                           |
-| ------------------- | -------------------------------- |
-| `merchantId`        | `863513232473669406`（Unlimint） |
-| `merchantName`      | `Example Merchant`               |
-| `gateway`           | `unlimint`                       |
-| `gatewayMerchantId` | `googletest`                     |
+实例方法见 [`output/SDK.md`](../output/SDK.md)：`ready` / `mount` / `pay` / `destroy`。
 
-`ready()` 使用传入的创建订单响应加载钱包并检查可用性；`mount()` 也可直接调用。  
-业务接口统一响应须满足 `returnCode === '0000'`。轮询默认每 2 秒一次，最长 5 分钟。
+### API 与轮询
 
-创建订单响应中的 `risk.*.enabled` 会在 `ready()` 时**立即预采集**；支付时复用。
+API 根域名：`https://api.alchemypay.org`（内置见 [`src/endpoints.ts`](../src/endpoints.ts)）。
 
-二次动作（WebView 友好）：
+- 业务成功：`returnCode === '0000'`
+- 轮询默认间隔 `2000` ms，最长 `300000` ms（5 分钟）
+- 路径：`/payment-hub/domain/verify`、`/payment-hub/alchemy-pay`、`/payment-hub/order/detail`
+- SDK 自动带 `payment-hub-token: <order.token>`（订单详情凭 token 查，不传 orderNo）
 
-| `actionMode`       | 行为                                                                  |
-| ------------------ | --------------------------------------------------------------------- |
-| `callback`（默认） | 只调用 `onAction(action)`，**不**自动跳转 / 开 iframe；轮询继续       |
-| `auto`             | 先调 `onAction`，再试 `openAction`（Bridge）；未处理则用 SDK 内置打开 |
+### 二次动作
 
-App 内嵌推荐在 `onAction` 里走 Native 底部抽屉：`openPayWebUrl` / `openPayChallenge` / `openPayMethod`（见 [`output/WEBVIEW.md`](../output/WEBVIEW.md)、[`output/SDK.md`](../output/SDK.md)）。  
-`sdk.openAction` 仅作浏览器 / Demo fallback；**不要**对 `webUrl` / `s3ds` 调用（会 `location.assign`）。
+出现二次动作时只触发 `onAction`，**不**自动跳转；原页继续轮询。
+
+App 推荐在 `onAction` 调 Bridge：`openPayWebUrl` / `openPayChallenge` / `openPayMethod`（见 [`output/WEBVIEW.md`](../output/WEBVIEW.md)）。  
+**不要**在收银台 WebView 内对 `webUrl` / `s3ds` 做整页跳转。
+
 ---
 
 ## 2. `order`（创建订单响应）
 
-| 参数                  | 类型                        |  必传  | 说明                                |
-| --------------------- | --------------------------- | :----: | ----------------------------------- |
-| `orderNo`             | `string`                    | **是** | 平台订单号                          |
-| `paymentScript`       | `object`                    | **是** | Google / Apple 原生参数             |
-| `token`               | `string`                    | **是** | 写入后续请求头 `payment-hub-token`  |
-| `method`              | `'googlePay' \| 'applePay'` |   否   | 可省略；SDK 按 `paymentScript` 推断 |
-| `environment`         | `'TEST' \| 'PRODUCTION'`    |   否   | 可覆盖 init `environment`           |
-| `risk`                | `object`                    |   否   | Forter / Checkout / WorldPay        |
-| `validateMerchantUrl` | `string`                    |   否   | 仅 Apple；覆盖内置域名校验地址      |
+| 参数            | 类型     |  必传  | 说明                         |
+| --------------- | -------- | :----: | ---------------------------- |
+| `orderNo`       | `string` | **是** | 平台订单号                   |
+| `paymentScript` | `object` | **是** | Google / Apple 原生参数      |
+| `token`         | `string` | **是** | 请求头 `payment-hub-token`   |
+| `risk`          | `object` |   否   | Forter / Checkout / WorldPay |
 
 创建订单**请求**字段（`side` / `amount` / …）由商户服务端调用 openapi，不传入 SDK。契约见 [`docs/pay-api/`](./pay-api/)。
 
@@ -111,24 +131,19 @@ App 内嵌推荐在 `onAction` 里走 Native 底部抽屉：`openPayWebUrl` / `o
 
 ## 3. `risk`（创建订单下发）
 
-创建订单 `data.risk` 由 SDK 自动使用。仅 `enabled === true` 的厂商会采集并写入**支付 body**；失败不阻断支付。
+仅 `enabled === true` 的厂商会在 `ready()` 预采集并写入支付 body；失败不阻断支付。
 
-**Fingerprint 不在创建订单下发**：SDK `init` 用内置默认采集，仅通过请求头 `fingerprint-id` 传递。
+Fingerprint **不在**创建订单下发：SDK `init` 采集，仅请求头 `fingerprint-id`。
 
-| 块         | 上送字段（支付 body）           | 可覆盖配置（有值覆盖 SDK 默认）         |
-| ---------- | ------------------------------- | --------------------------------------- |
-| `forter`   | `risk.forter.token`             | `siteId`                                |
-| `checkout` | `risk.checkout.deviceSessionId` | `publicKey`、`scriptUrl`、`integrity`   |
-| `worldPay` | `risk.worldPay.sessionId`       | `jwt`（必填才能采）、`bin`、`actionUrl` |
-
-`forter` / `checkout` 可只传 `{ enabled: true }` 使用内置默认。  
-`worldPay` 至少需要服务端下发的动态 `jwt`。
+| 块         | 支付 body 字段                  | 说明                       |
+| ---------- | ------------------------------- | -------------------------- |
+| `forter`   | `risk.forter.token`             | 可只传 `{ enabled: true }` |
+| `checkout` | `risk.checkout.deviceSessionId` | 可覆盖 `publicKey` 等      |
+| `worldPay` | `risk.worldPay.sessionId`       | 至少需要动态 `jwt`         |
 
 ---
 
 ## 4. 成功回调结果（`onSuccess` / `onComplete`）
-
-商户回调只返回：
 
 ```js
 {

@@ -6,7 +6,8 @@ the merchant server). Works when loaded via `<script>` in a browser or an app We
 
 Written in **TypeScript**; bundled to a single IIFE file with Vite.
 
-完整参数说明见 [docs/PARAMETERS.md](docs/PARAMETERS.md)。接口契约见
+商户参数说明见 [output/PARAMETERS.md](output/PARAMETERS.md)（与
+[docs/PARAMETERS.md](docs/PARAMETERS.md) 对齐）。接口契约见
 [docs/pay-api/](docs/pay-api/)。
 
 ## Build
@@ -38,7 +39,6 @@ npm run format     # prettier write
   // Merchant server already created the order (signed). Pass response data here.
   const order = {
     orderNo: 'ord_xxx',
-    method: 'googlePay',
     token: 'payment-hub-token-from-create-order',
     paymentScript: {/* Google PaymentDataRequest from create-order */},
     risk: {/* optional */}
@@ -46,7 +46,6 @@ npm run format     # prettier write
 
   const sdk = PaySdk.init({
     container: '#pay-container',
-    environment: 'TEST',
     order: order,
     api: {
       pollIntervalMs: 2000,
@@ -54,12 +53,6 @@ npm run format     # prettier write
     },
     onAction(action) {
       console.log(action)
-    },
-    onOrderCreated(order) {
-      console.log(order.orderNo, order.method)
-    },
-    onStatusChange(order) {
-      console.log(order.orderState)
     },
     onComplete(result) {
       console.log('flow complete', result.order?.orderState)
@@ -69,6 +62,9 @@ npm run format     # prettier write
     },
     onError(error) {
       console.error(error)
+    },
+    onCancel() {
+      console.log('cancelled')
     }
   })
 
@@ -76,57 +72,39 @@ npm run format     # prettier write
 </script>
 ```
 
-Built-in API hosts live in [`src/endpoints.ts`](src/endpoints.ts)
-(`TEST` → `api-test.alchemytech.cc`, `PRODUCTION` → `api.alchemypay.org`).
-
 **Create-order** is performed by the merchant server (API Sign). Pass the response
 (including `token`) to `PaySdk.init({ order })`. The SDK does **not** sign and does
 **not** call create-order; verify / pay / detail requests send header
 `payment-hub-token: <token>`.
 
-Pass `environment` on `init`; omit `api` URLs unless you need a proxy override.
-Init `environment` also drives Google Pay and Checkout Risk (sandbox vs prod).
-In Google Pay **TEST**, SDK fills defaults when create-order omits them:
-`merchantId=863513232473669406`, `merchantName=Example Merchant`,
-`gateway=unlimint`, `gatewayMerchantId=googletest`.
-Apple Pay merchant validation URL is built in; if create-order returns
-`validateMerchantUrl`, that value takes precedence.
+Default API host is production (`api.alchemypay.org`; see [`src/endpoints.ts`](src/endpoints.ts)).
+Omit `api` URLs unless you need a proxy override.
 
 The create-order response selects Google Pay or Apple Pay and supplies wallet
 `paymentScript`, `risk`, and `token`. Risk collection starts in `ready()` for
 `enabled` vendors; the pay request awaits or reuses that result.
 
-Secondary actions (`webUrl` / 3DS / method / `s3dsUrl`) default to **callback-only**
-via `onAction`. Set `actionMode: 'auto'` or call `sdk.openAction(action)` to open
-frames / navigate.
+Secondary actions (`webUrl` / 3DS / method / `s3dsUrl`) trigger **`onAction` only**
+(SDK does not auto-open). In App WebView, open a secondary WebView via Native
+Bridge — see [output/WEBVIEW.md](output/WEBVIEW.md). Do **not** navigate the
+cashier WebView to `webUrl` / `s3ds`.
 
 ## API
 
-| Method                   | Description                                                                                                     |
-| ------------------------ | --------------------------------------------------------------------------------------------------------------- |
-| `PaySdk.init(config)`    | Validates `order` (+ optional `environment` / `api`) and returns an SDK instance.                               |
-| `sdk.ready()`            | Uses the passed create-order response, starts risk prefetch, loads the selected wallet, checks availability.    |
-| `sdk.mount()`            | Renders the wallet button. May be called before `ready()`; preparation then runs automatically.                 |
-| `sdk.openAction(action)` | Opens a secondary action (challenge iframe / method iframe / navigate). Use after merchant / Bridge permission. |
-| `sdk.destroy()`          | Clears the button, payment-action iframe and active order polling timer.                                        |
+| Method                | Description                                                                                                  |
+| --------------------- | ------------------------------------------------------------------------------------------------------------ |
+| `PaySdk.init(config)` | Validates `order` (+ optional `api`) and returns an SDK instance.                                            |
+| `sdk.ready()`         | Uses the passed create-order response, starts risk prefetch, loads the selected wallet, checks availability. |
+| `sdk.mount()`         | Renders the wallet button. May be called before `ready()`; preparation then runs automatically.              |
+| `sdk.pay()`           | Starts wallet authorize in the user-gesture stack (custom button). Call after `ready()` resolves.            |
+| `sdk.destroy()`       | Clears the button, payment-action iframe and active order polling timer.                                     |
 
-## Result shape (`onSuccess`)
+## Result shape (`onSuccess` / `onComplete`)
 
 ```js
-// Google Pay
 {
-  method: 'googlePay',
-  token: paymentData.paymentMethodData.tokenizationData.token,
-  paymentMethodData, billingAddress, email, raw,
-  risk, orderNo, paymentResponse, order
-}
-
-// Apple Pay
-{
-  method: 'applePay',
-  token: payment.token,
-  billingContact, shippingContact, raw,
-  risk, orderNo, paymentResponse, order
+  orderNo: 'ord_xxx',
+  order: { /* poll result when present; see orderState */ }
 }
 ```
 
@@ -135,5 +113,6 @@ frames / navigate.
 - [output/](output/) — **商户最终版交付包**（SDK 文件、接入文档、WebView、3DS 壳页）
 - [output/SDK.md](output/SDK.md) — merchant H5 / SDK
 - [output/WEBVIEW.md](output/WEBVIEW.md) — App WebView / Bridge
+- [output/PARAMETERS.md](output/PARAMETERS.md) — merchant `PaySdk.init` parameters
 - [docs/pay-api/](docs/pay-api/) — internal API contracts（详细类型）
-- [docs/PARAMETERS.md](docs/PARAMETERS.md) — internal full parameter notes（商户见 output/PARAMETERS.md）
+- [docs/PARAMETERS.md](docs/PARAMETERS.md) — same parameter surface as output/PARAMETERS.md
