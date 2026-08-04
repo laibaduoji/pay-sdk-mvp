@@ -142,47 +142,6 @@
         const redirectUrl = orderRequest.redirectUrl || ''
         const callbackUrl = orderRequest.callbackUrl || ''
 
-        setCustomPayBtnLoading()
-        setStatus('查询订单详情…', false)
-
-        try {
-          const detailResult = await signedApi.queryOrder({
-            environment: environment,
-            token: orderResponse.token
-          })
-          lastOrderDetail = detailResult.data
-          detailJsonEl.textContent = JSON.stringify(
-            detailResult.envelope || detailResult.data,
-            null,
-            2
-          )
-          session.renderOrderSummary(summaryEl, {
-            detail: lastOrderDetail,
-            orderRequest: orderRequest
-          })
-          ui.showTraceId(detailResult.traceId)
-          console.log('[demo] order detail', detailResult.envelope || detailResult.data)
-        } catch (err) {
-          console.error('[demo] order detail failed', err)
-          lastOrderDetail = null
-          detailJsonEl.textContent = JSON.stringify(
-            (err && err.envelope) || { message: String(err && err.message) },
-            null,
-            2
-          )
-          session.renderOrderSummary(summaryEl, {
-            detail: {
-              orderNo: orderResponse.orderNo,
-              merchantOrderNo: orderRequest.merchantOrderNo
-            },
-            orderRequest: orderRequest
-          })
-          setStatus('订单详情失败：' + (err.message || err) + '，仍尝试挂载 SDK', false)
-          ui.showTraceId(err && err.traceId)
-        }
-
-        setStatus('挂载 SDK…', false)
-
         const bridge = window.NativeBridge
         const challengeShell = new URL('./3ds-challenge.html', location.href).href
         const methodShell = new URL('./3ds-method.html', location.href).href
@@ -207,6 +166,75 @@
             sdk.openAction(action)
           }
         }
+
+        /** Align ramp-vue: leave confirm when orderState != PENDING(1). */
+        function maybeGoResult(source, result, orderPatch) {
+          if (navigatedToResult) return
+          const order = Object.assign({}, lastOrderDetail || {}, orderPatch || {})
+          const orderState = order.orderState
+          if (orderState == null || orderState === '') return
+          if (Number(orderState) === 1) return
+          closePayDrawer()
+          if (openedWebUrlEl) {
+            openedWebUrlEl.textContent = '(已 closePayWebUrl) ' + (openedWebUrlEl.textContent || '')
+          }
+          setStatus(
+            'Payment status: ' + orderState + ' · ' + session.orderStateLabel(orderState),
+            true
+          )
+          goResult({
+            source: source,
+            result: result != null ? result : { order: order },
+            orderDetail: order,
+            orderState: orderState,
+            environment: environment,
+            token: orderResponse.token,
+            orderRequest: orderRequest
+          })
+        }
+
+        setCustomPayBtnLoading()
+        setStatus('查询订单详情…', false)
+
+        try {
+          const detailResult = await signedApi.queryOrder({
+            environment: environment,
+            token: orderResponse.token
+          })
+          lastOrderDetail = detailResult.data
+          detailJsonEl.textContent = JSON.stringify(
+            detailResult.envelope || detailResult.data,
+            null,
+            2
+          )
+          session.renderOrderSummary(summaryEl, {
+            detail: lastOrderDetail,
+            orderRequest: orderRequest
+          })
+          ui.showTraceId(detailResult.traceId)
+          console.log('[demo] order detail', detailResult.envelope || detailResult.data)
+          maybeGoResult('orderDetail', detailResult.data, lastOrderDetail)
+          if (navigatedToResult) return
+        } catch (err) {
+          console.error('[demo] order detail failed', err)
+          lastOrderDetail = null
+          detailJsonEl.textContent = JSON.stringify(
+            (err && err.envelope) || { message: String(err && err.message) },
+            null,
+            2
+          )
+          session.renderOrderSummary(summaryEl, {
+            detail: {
+              orderNo: orderResponse.orderNo,
+              merchantOrderNo: orderRequest.merchantOrderNo
+            },
+            orderRequest: orderRequest
+          })
+          setStatus('订单详情失败：' + (err.message || err) + '，仍尝试挂载 SDK', false)
+          ui.showTraceId(err && err.traceId)
+        }
+
+        setStatus('挂载 SDK…', false)
 
         sdk = PaySdk.init({
           container: '#pay-container',
@@ -293,59 +321,58 @@
               orderStatus.orderState +
               (orderStatus.s3dsUrl ? ' · s3dsUrl' : '')
             ui.showTraceId(null, sdk)
+            maybeGoResult('onStatusChange', { order: orderStatus }, orderStatus)
           },
           onComplete(result) {
             console.log('[demo] onComplete', result)
             outputEl.textContent = JSON.stringify(result, null, 2)
             ui.showTraceId(null, sdk)
+            const order = (result && result.order) || lastOrderDetail || {}
+            maybeGoResult('onComplete', result, order)
           },
           onSuccess(result) {
             console.log('[demo] onSuccess', result)
-            closePayDrawer()
-            if (openedWebUrlEl) {
-              openedWebUrlEl.textContent =
-                '(已 closePayWebUrl) ' + (openedWebUrlEl.textContent || '')
-            }
             handlers.onSuccess(result)
             const order = (result && result.order) || lastOrderDetail || {}
-            const orderState = order.orderState
-            setStatus(
-              orderState != null
-                ? 'Payment status: ' + orderState + ' · authorized'
-                : 'Payment authorized.',
-              true
-            )
-            goResult({
-              source: 'onSuccess',
-              result: result,
-              orderDetail: Object.assign({}, lastOrderDetail || {}, order),
-              orderState: orderState,
-              environment: environment,
-              token: orderResponse.token,
-              orderRequest: orderRequest
-            })
+            maybeGoResult('onSuccess', result, order)
           },
           onError(error) {
             console.log('[demo] onError', error)
-            closePayDrawer()
             handlers.onError(error)
-            setStatus('Error: ' + ui.formatError(error), true)
             const order = (error && error.order) || lastOrderDetail || {}
-            goResult({
-              source: 'onError',
-              result: {
+            // Fail paths may omit orderState; still leave confirm once SDK settles.
+            if (order.orderState == null || order.orderState === '') {
+              closePayDrawer()
+              setStatus('Error: ' + ui.formatError(error), true)
+              goResult({
+                source: 'onError',
+                result: {
+                  message: error && error.message,
+                  returnCode: error && error.returnCode,
+                  traceId: error && error.traceId,
+                  status: error && error.status,
+                  order: order
+                },
+                orderDetail: Object.assign({}, lastOrderDetail || {}, order),
+                orderState: order.orderState,
+                environment: environment,
+                token: orderResponse.token,
+                orderRequest: orderRequest
+              })
+              return
+            }
+            setStatus('Error: ' + ui.formatError(error), true)
+            maybeGoResult(
+              'onError',
+              {
                 message: error && error.message,
                 returnCode: error && error.returnCode,
                 traceId: error && error.traceId,
                 status: error && error.status,
                 order: order
               },
-              orderDetail: Object.assign({}, lastOrderDetail || {}, order),
-              orderState: order.orderState,
-              environment: environment,
-              token: orderResponse.token,
-              orderRequest: orderRequest
-            })
+              order
+            )
           },
           onCancel: handlers.onCancel
         })
