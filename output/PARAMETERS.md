@@ -134,11 +134,11 @@ App 推荐在 `onAction` 调 Bridge：`openPayWebUrl` / `openPayChallenge` / `op
 
 Fingerprint **不在**创建订单下发：SDK `init` 采集，仅请求头 `fingerprint-id`。
 
-| 块         | 支付 body 字段                  | 说明                       |
-| ---------- | ------------------------------- | -------------------------- |
-| `forter`   | `risk.forter.token`             | 可只传 `{ enabled: true }` |
-| `checkout` | `risk.checkout.deviceSessionId` | 可覆盖 `publicKey` 等      |
-| `worldPay` | `risk.worldPay.sessionId`       | 至少需要动态 `jwt`         |
+| 块         | 采集结果（内部）                | 支付 body 上送字段              | 说明                       |
+| ---------- | ------------------------------- | ------------------------------- | -------------------------- |
+| `forter`   | `risk.forter.token`             | `businessParams.cookie`         | 可只传 `{ enabled: true }` |
+| `checkout` | `risk.checkout.deviceSessionId` | `businessParams.checkoutCookie` | 可覆盖 `publicKey` 等      |
+| `worldPay` | `risk.worldPay.sessionId`       | 顶层 `sessionId`                | 至少需要动态 `jwt`         |
 
 ---
 
